@@ -1,0 +1,191 @@
+{
+  "provenance": "Synthetic English hackathon project. Times are fictional. Generated site illustrations and computer-generated speech.",
+  "project_id": "RIV",
+  "usage": "Replay records in available_at order. Upload records under uploads/. Use the transcripts as an alternative to audio. Keep evaluation/ outside retrieval.",
+  "records": [
+    {
+      "id": "SCH",
+      "path": "uploads/registers/schedule.csv",
+      "available_at": "2026-11-06T08:00:00+01:00",
+      "type": "schedule"
+    },
+    {
+      "id": "CTR",
+      "path": "uploads/registers/contractors.csv",
+      "available_at": "2026-11-06T08:00:00+01:00",
+      "type": "register"
+    },
+    {
+      "id": "EQ",
+      "path": "uploads/registers/equipment.csv",
+      "available_at": "2026-11-06T08:00:00+01:00",
+      "type": "register"
+    },
+    {
+      "id": "PRJ",
+      "path": "uploads/registers/project.json",
+      "available_at": "2026-11-06T08:00:00+01:00",
+      "type": "project"
+    },
+    {
+      "id": "E01",
+      "path": "uploads/emails/E01-service.eml",
+      "available_at": "2026-11-06T15:30:00+01:00",
+      "type": "email"
+    },
+    {
+      "id": "M07",
+      "path": "uploads/minutes/minutes_2026-11-07_site_meeting.docx",
+      "available_at": "2026-11-07T12:40:00+01:00",
+      "type": "minutes"
+    },
+    {
+      "id": "M08",
+      "path": "uploads/minutes/minutes_2026-11-08_site_meeting.docx",
+      "available_at": "2026-11-08T12:40:00+01:00",
+      "type": "minutes"
+    },
+    {
+      "id": "R8",
+      "path": "uploads/reports/daily_report_2026-11-08.pdf",
+      "available_at": "2026-11-08T17:30:00+01:00",
+      "type": "daily_report"
+    },
+    {
+      "id": "E02",
+      "path": "uploads/emails/E02-handover.eml",
+      "available_at": "2026-11-09T14:30:00+01:00",
+      "type": "email"
+    },
+    {
+      "id": "R9",
+      "path": "uploads/reports/daily_report_2026-11-09.pdf",
+      "available_at": "2026-11-09T17:30:00+01:00",
+      "type": "daily_report"
+    },
+    {
+      "id": "V01",
+      "path": "uploads/voice/V01.wav",
+      "available_at": "2026-11-10T10:15:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V01.txt"
+    },
+    {
+      "id": "V02",
+      "path": "uploads/voice/V02.wav",
+      "available_at": "2026-11-10T10:18:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V02.txt"
+    },
+    {
+      "id": "P1",
+      "path": "uploads/photos/leaking-hose.jpg",
+      "available_at": "2026-11-10T10:20:00+01:00",
+      "type": "photo"
+    },
+    {
+      "id": "V03",
+      "path": "uploads/voice/V03.wav",
+      "available_at": "2026-11-10T10:21:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V03.txt"
+    },
+    {
+      "id": "V04",
+      "path": "uploads/voice/V04.wav",
+      "available_at": "2026-11-10T15:55:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V04.txt"
+    },
+    {
+      "id": "D10",
+      "path": "uploads/diary/2026-11-10.txt",
+      "available_at": "2026-11-10T16:05:00+01:00",
+      "type": "diary"
+    },
+    {
+      "id": "R10",
+      "path": "uploads/reports/daily_report_2026-11-10.pdf",
+      "available_at": "2026-11-10T17:30:00+01:00",
+      "type": "daily_report"
+    },
+    {
+      "id": "V05",
+      "path": "uploads/voice/V05.wav",
+      "available_at": "2026-11-11T11:35:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V05.txt"
+    },
+    {
+      "id": "E03",
+      "path": "uploads/emails/E03-delivery.eml",
+      "available_at": "2026-11-11T13:10:00+01:00",
+      "type": "email"
+    },
+    {
+      "id": "V06",
+      "path": "uploads/voice/V06.wav",
+      "available_at": "2026-11-11T14:05:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V06.txt"
+    },
+    {
+      "id": "R11",
+      "path": "uploads/reports/daily_report_2026-11-11.pdf",
+      "available_at": "2026-11-12T07:15:00+01:00",
+      "type": "daily_report"
+    },
+    {
+      "id": "P3",
+      "path": "uploads/photos/rainy-access.jpg",
+      "available_at": "2026-11-12T07:20:00+01:00",
+      "type": "photo"
+    },
+    {
+      "id": "V07",
+      "path": "uploads/voice/V07.wav",
+      "available_at": "2026-11-12T09:00:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V07.txt"
+    },
+    {
+      "id": "P2",
+      "path": "uploads/photos/slab-edge.jpg",
+      "available_at": "2026-11-12T09:05:00+01:00",
+      "type": "photo"
+    },
+    {
+      "id": "V08",
+      "path": "uploads/voice/V08.wav",
+      "available_at": "2026-11-12T09:20:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V08.txt"
+    },
+    {
+      "id": "V09",
+      "path": "uploads/voice/V09.wav",
+      "available_at": "2026-11-12T12:04:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V09.txt"
+    },
+    {
+      "id": "E04",
+      "path": "uploads/emails/E04-footer.eml",
+      "available_at": "2026-11-12T14:05:00+01:00",
+      "type": "email"
+    },
+    {
+      "id": "V10",
+      "path": "uploads/voice/V10.wav",
+      "available_at": "2026-11-12T16:00:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V10.txt"
+    },
+    {
+      "id": "R12",
+      "path": "uploads/reports/daily_report_2026-11-12.pdf",
+      "available_at": "2026-11-12T17:30:00+01:00",
+      "type": "daily_report"
+    }
+  ]
+}

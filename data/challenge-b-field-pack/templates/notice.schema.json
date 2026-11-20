@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Construction site notice",
+  "description": "Project-specific form for reviewed correspondence. Use null for an unknown cause, finish time or project delay. Evidence IDs resolve against the project index or baseline.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "notice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notice_type": {
+      "enum": [
+        "Behinderungsanzeige",
+        "Bedenkenanzeige"
+      ]
+    },
+    "review_status": {
+      "enum": [
+        "draft",
+        "reviewed",
+        "approved"
+      ]
+    },
+    "event_status": {
+      "enum": [
+        "potential",
+        "open",
+        "resolved"
+      ]
+    },
+    "trigger_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "location": {
+      "type": "string",
+      "minLength": 1
+    },
+    "affected_activity_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "affected_trades": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "affected_equipment": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "observed_facts": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cause_category": {
+      "enum": [
+        "missing_plan",
+        "weather",
+        "predecessor_delay",
+        "access",
+        "design_conflict",
+        "other",
+        "unknown"
+      ]
+    },
+    "root_cause": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "critical_path_impact": {
+      "enum": [
+        "unknown",
+        "confirmed",
+        "ruled_out"
+      ]
+    },
+    "project_delay_days": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "required_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "requested_action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recipient_role": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "notice_id",
+    "project_id",
+    "notice_type",
+    "review_status",
+    "event_status",
+    "trigger_at",
+    "as_of",
+    "resolved_at",
+    "location",
+    "affected_activity_ids",
+    "affected_trades",
+    "affected_equipment",
+    "observed_facts",
+    "cause_category",
+    "root_cause",
+    "critical_path_impact",
+    "project_delay_days",
+    "evidence_ids",
+    "required_evidence",
+    "requested_action",
+    "recipient_role"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_status": {
+            "const": "resolved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "resolved_at": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "critical_path_impact": {
+            "const": "unknown"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "project_delay_days": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

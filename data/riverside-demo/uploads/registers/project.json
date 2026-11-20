@@ -1,0 +1,16 @@
+{
+  "id": "RIV",
+  "name": "Riverside Office Block",
+  "timezone": "Europe/Vienna",
+  "calendar": "Daily shifts including Sunday 8 November for this fictional programme. Each date in the baseline task range is a working day.",
+  "sender": "Sam Reed, Site Manager, Riverside Build JV",
+  "sender_address": "12 Riverside Yard, Demo City",
+  "recipient": "Client Project Manager, Riverside Developments",
+  "recipient_address": "4 Wharf Walk, Demo City",
+  "contract_reference": null,
+  "contract_clause": null,
+  "rate_table": null,
+  "deviation_threshold_pct": 15,
+  "high_if_shortfall_pct_above": 25,
+  "zone_note": "East and west wing superstructure fronts were released before this reporting window; foundation works serve the new zones A/B."
+}

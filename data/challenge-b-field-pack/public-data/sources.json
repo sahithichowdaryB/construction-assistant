@@ -1,0 +1,74 @@
+{
+  "resources": [
+    {
+      "folder": "cambridge",
+      "creator": "Ioannis Brilakis, John Fitzsimmons, Ruodan Lu",
+      "url": "https://doi.org/10.17863/CAM.53890",
+      "download": "https://api.repository.cam.ac.uk/server/api/core/bitstreams/93825e0d-bc4a-4d8e-be4f-4be237536f1b/content",
+      "license": "CC BY 4.0",
+      "contents": "Original archive plus first 100 activities of project 26256 with original fields."
+    },
+    {
+      "folder": "safety-images",
+      "creator": "Roboflow Universe Projects; Hugging Face mirror by keremberke",
+      "url": "https://huggingface.co/datasets/keremberke/construction-safety-object-detection",
+      "license": "CC BY 4.0 per dataset card",
+      "contents": "Original archives and extracted JPEGs with COCO annotations for 307 train, 57 valid and 34 test images."
+    },
+    {
+      "folder": "ny-field-reports",
+      "creator": "Haley & Aldrich; hosted by NYSDEC",
+      "source_urls": [
+        "https://extapps.dec.ny.gov/data/DecDocs/243016/Report.RCRA.243016.2024-12-06.Daily%20Report%20_%20December%20%206%2C%202024.pdf",
+        "https://extapps.dec.ny.gov/data/DecDocs/243016/Report.RCRA.243016.2024-12-10.Daily%20Report%20-%20December%2010%2C%202024.pdf",
+        "https://extapps.dec.ny.gov/data/DecDocs/C224340/Report.BCP.C224340.2024-06-06.Daily%20Progress%20Report%20-%20May%202024.pdf"
+      ],
+      "license": "Publicly accessible. Reuse license unverified.",
+      "contents": "Two Staten Island field reports and the May 2024 Brooklyn field report bundle, including site photos."
+    },
+    {
+      "folder": "kaggle",
+      "creator": "Viero Hernández",
+      "url": "https://www.kaggle.com/datasets/vierohernandez/construction-management-terms-and-parameters",
+      "download": "https://www.kaggle.com/api/v1/datasets/download/vierohernandez/construction-management-terms-and-parameters",
+      "license": "Refer to publisher's terms; reuse license unverified.",
+      "contents": "Original archive, plus byte-for-byte TRAIN_csv and TEST_const_csv saved with .csv extensions. DELAYED is a project-level label. Dataset provenance should be checked before generalizing predictions."
+    },
+    {
+      "folder": "vob",
+      "creator": "DVA; Fachinformation Bundesbau",
+      "url": "https://www.fib-bund.de/Inhalt/Vergabe/VOB/VOB-B_2016_nichtamtliche_Fassung.pdf",
+      "contents": "Consolidated 2016 reference, nonofficial rendering of the published text. Prompts in this pack are original drafting aids."
+    },
+    {
+      "local": false,
+      "creator": "LouisChen15",
+      "url": "https://huggingface.co/datasets/LouisChen15/ConstructionSite",
+      "license": "CC BY-NC 4.0; gated access requires account holder agreement",
+      "contents": "Repository access granted. Full collection is optional for the SiteMate plan; dataset is external to this pack."
+    },
+    {
+      "local": true,
+      "creator": "Bilgin et al.",
+      "url": "https://open.metu.edu.tr/handle/11511/72415",
+      "contents": "Full eight-page 2015 paper.",
+      "folder": "bilgin",
+      "download": "https://www.citcglobal.com/_files/ugd/0d72f4_7d8bd128529b4ddd9d24542c9d72aead.pdf"
+    },
+    {
+      "folder": "notice-templates",
+      "creator": "BIB Ingenieurbüro für Bauwesen",
+      "source_urls": [
+        "https://ing-bassam.de/fachwissen/behinderungsanzeige-vob-b/",
+        "https://ing-bassam.de/fachwissen/bedenkenanzeige-vob-b-musterschreiben/"
+      ],
+      "contents": "Unmodified publisher originals in DOCX and PDF."
+    },
+    {
+      "folder": "field-photo-captions",
+      "creator": "Derived from Haley & Aldrich field reports hosted by NYSDEC",
+      "contents": "24 report photographs and their captions, linked by PDF and page. Selected pages with one embedded photograph for each caption.",
+      "license": "Publicly accessible source PDFs; reuse license unverified."
+    }
+  ]
+}

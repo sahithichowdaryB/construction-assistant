@@ -1,0 +1,25 @@
+{
+  "project": "Taylor Lumber and Treating Superfund Site",
+  "provenance": "Paraphrased historical milestones from a final construction report prepared for the US EPA in March 2009.",
+  "source": "https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=P1016U06.TXT",
+  "section": "2.1, Chronology of Events, page 2-1",
+  "events": [
+    {
+      "start": "2007-03-30",
+      "event": "Remedial construction contract awarded."
+    },
+    {
+      "start": "2007-05-10",
+      "event": "Project team held the preconstruction meeting on site."
+    },
+    {
+      "start": "2007-09-17",
+      "end": "2007-09-18",
+      "event": "Pre-final inspection took place over two days."
+    },
+    {
+      "start": "2007-10-15",
+      "event": "Final inspection took place. Some work remained under negotiation."
+    }
+  ]
+}

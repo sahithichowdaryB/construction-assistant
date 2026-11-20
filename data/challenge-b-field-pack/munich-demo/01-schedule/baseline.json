@@ -1,0 +1,262 @@
+{
+  "id": "B0",
+  "project_id": "MUC-L2",
+  "issued_at": "2026-11-06T15:30:00+01:00",
+  "project": "Neubau Bürokomplex München – Los 2 Rohbau (fiktiv)",
+  "timezone": "Europe/Berlin",
+  "calendar": "Mo–Fr, 07:00–16:00, Mittagspause 12:00–12:30",
+  "contract": "Für dieses fiktive Los ist VOB/B 2016 vereinbart. Auftraggeber: Projektgesellschaft Hofgarten (fiktiv), Empfängerrolle: AG-Projektleitung. Freigabe von Schreiben durch Bauleitung AN.",
+  "scope": "Zusätzliche Leerrohre im Bereich West, Achse W4, sind im LV-Auszug Los 2 nicht enthalten. Terminplan bildet nur diesen Bauabschnitt ab.",
+  "activities": [
+    {
+      "id": "E10",
+      "area": "Nord / N1–N3",
+      "activity": "Fundamentaushub",
+      "unit": "m³",
+      "trade": "Erdkolonne",
+      "equipment": "Kettenbagger B17",
+      "finish_to_start": [],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 80
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 110
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 100
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 80
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "id": "E20",
+      "area": "Nord / N1–N3",
+      "activity": "Planumsabnahme",
+      "unit": "Abschnitt",
+      "trade": "Vermessung",
+      "equipment": "Tachymeter",
+      "finish_to_start": [
+        "E10"
+      ],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 1
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "id": "O10",
+      "area": "Ost / B2",
+      "activity": "Randschalung Bodenplatte",
+      "unit": "m",
+      "trade": "Schalung",
+      "equipment": "Turmdrehkran K1",
+      "finish_to_start": [],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 28
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 32
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "id": "O20",
+      "area": "Ost / B2",
+      "activity": "Bewehrung Bodenplatte",
+      "unit": "t",
+      "trade": "Eisenflechter",
+      "equipment": "Turmdrehkran K1",
+      "finish_to_start": [
+        "O10"
+      ],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 3.2
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 3.6
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 1.2
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "id": "O30",
+      "area": "Ost / B2",
+      "activity": "Betonage Bodenplatte",
+      "unit": "m³",
+      "trade": "Betonkolonne",
+      "equipment": "Autobetonpumpe P4",
+      "finish_to_start": [
+        "O20"
+      ],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 50
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "id": "O40",
+      "area": "Ost / B2",
+      "activity": "Nachbehandlung dokumentieren",
+      "unit": "Kontrollgang",
+      "trade": "Betonkolonne",
+      "equipment": "Messkoffer",
+      "finish_to_start": [
+        "O30"
+      ],
+      "daily_targets": [
+        {
+          "date": "2026-11-09",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-10",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-11",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-12",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-13",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-16",
+          "quantity": 0
+        },
+        {
+          "date": "2026-11-17",
+          "quantity": 2
+        }
+      ]
+    }
+  ],
+  "interim_targets": [
+    {
+      "activity_id": "E10",
+      "checkpoint": "2026-11-11T12:00:00+01:00",
+      "planned_since_shift_start": 60,
+      "unit": "m³"
+    }
+  ]
+}

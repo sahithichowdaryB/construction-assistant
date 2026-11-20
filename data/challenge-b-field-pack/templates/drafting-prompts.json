@@ -1,0 +1,27 @@
+{
+  "language": "de-DE",
+  "legal_reference": "public-data/vob/VOB-B-2016.pdf",
+  "common": "Verwende nur zum Stichtag verfügbare Projektbelege. Schreibe aus Sicht der Bauleitung AN. Ordne Aussagen den Quellen-IDs zu. Trenne Beobachtung, Prognose und offene Frage. Markiere jeden Text als Entwurf zur Prüfung. Zeige Auftraggeber, Prüfzeitpunkt und offene Eingaben. Eine Schuldzuweisung, Anspruchshöhe, Frist oder Auswirkung auf den Endtermin benötigt eigene Belege.",
+  "templates": [
+    {
+      "type": "Behinderungsanzeige",
+      "reference": "VOB/B 2016 § 6 Abs. 1, bei Wiederaufnahme Abs. 3 prüfen",
+      "prompt": "Nenne betroffene Leistung, Arbeitsfront, Beginn und konkrete Einschränkung. Gib an, welche Arbeiten weiterlaufen, welche Ausweichmaßnahmen dokumentiert wurden und welche Mitwirkung erbeten wird. Nutze nur bereits bekannte Zeiten. Stelle am Ende die Belege und den Freigabevermerk zusammen."
+    },
+    {
+      "type": "Bedenkenanzeige",
+      "reference": "VOB/B 2016 § 4 Abs. 3",
+      "prompt": "Beschreibe anhand konkreter Zeichnungsstände oder Beobachtungen die fragliche Ausführung und die möglichen Folgen. Bitte den Auftraggeber um Klärung vor dem betroffenen Arbeitsschritt. Fordere für fehlende Maße ein Aufmaß an. Stelle bestätigte Befunde und vermutete Auswirkungen getrennt dar."
+    },
+    {
+      "type": "Angebot für zusätzliche Leistung",
+      "reference": "VOB/B 2016 § 2 Abs. 6 bei geforderter, bisher nicht vereinbarter Leistung prüfen",
+      "prompt": "Ermittle aus Anfrage, LV-Auszug und Kalkulation den Angebotsumfang und Nettobetrag. Benenne den aktuellen Status der Beauftragung. Bei bloßer Angebotsanfrage formuliere ein Angebot zur Entscheidung. Jede Angabe zu Ist-Kosten muss auf einem Ausführungsnachweis beruhen."
+    },
+    {
+      "type": "Bautagesbericht",
+      "reference": "Projektformat Los 2",
+      "prompt": "Ordne Witterung, Personal, Geräte, Leistungen je Arbeitsfront, Störungen, Ausweichmaßnahmen und offene Punkte nach Datum. Weise Liefer-, Rück- und Einbaumengen separat aus. Vergleiche die Menge mit dem Ziel desselben Zeitfensters. Lege widersprüchliche Mengen mit ihren Belegen zur Prüfung vor."
+    }
+  ]
+}

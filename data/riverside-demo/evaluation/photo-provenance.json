@@ -1,0 +1,20 @@
+[
+  {
+    "id": "P1",
+    "file": "leaking-hose.jpg",
+    "method": "Built-in ImageGen",
+    "prompt": "Documentary phone photo taken by foreman at fictional Riverside Office Block site. Close detail of the side of a parked excavator boom. A black braided hydraulic hose at a metal crimp fitting is visibly wet with a small fresh streak of hydraulic oil, small drip tray below. Construction gravel and the yellow boom in soft background. No people, text or brands. Single horizontal realistic image, subdued November daylight."
+  },
+  {
+    "id": "P2",
+    "file": "slab-edge.jpg",
+    "method": "Built-in ImageGen",
+    "prompt": "Candid phone photograph for a fictional site inspection of a concrete slab edge, showing one short visible hairline crack running from the edge of the flat top over the vertical concrete face. Close view, no scale, no ruler, no text or people. Timbers in background, realistic overcast construction-site lighting."
+  },
+  {
+    "id": "P3",
+    "file": "rainy-access.jpg",
+    "method": "Built-in ImageGen",
+    "prompt": "Wide documentary phone photograph for a fictional English-language construction diary, view from temporary gate of modest urban office block build, wet construction access road, shallow puddles and rain falling under overcast daylight. No text, logos, people or montage. Natural colours."
+  }
+]

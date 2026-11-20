@@ -1,0 +1,23 @@
+DRAFT FOR SITE MANAGER REVIEW
+10 November 2026 | Riverside Office Block
+From: Sam Reed, Site Manager, Riverside Build JV
+To: Client Project Manager, Riverside Developments
+Contract reference: [MISSING: contract reference]
+Applicable clause: [MISSING: contract clause]
+
+Subject: Excavation Zone B and planned foundation handover
+
+Dear Project Manager,
+
+At 10:00 today the Zone B foreman reported a hydraulic hose failure on the excavator. Three workers could no longer continue excavation in that zone. The equipment register and shift report identify the machine as EX-02. [V01; EQ; R10]
+
+The signed daily report records 65 m³ excavated against the scheduled 100 m³. This leaves a shortfall of 35 m³, or 35%. Foundations Zone B is due to start on 12 November after the excavation handover. That start is at risk. [R10; SCH]
+
+GroundWorks had reported on 6 November that routine servicing was overdue. The maintenance email records the service status; the cause of the hose failure remains under review. [E01] The mechanic currently expects a return to service at noon tomorrow. We will update you once the crew confirms the restart and we can assess the handover date. [V02]
+
+Please confirm receipt and coordinate the foundation booking with us following the next progress update.
+
+Sam Reed
+Site Manager
+
+Draft for assistance only. Not legal advice. The site manager / company is responsible for the final content.

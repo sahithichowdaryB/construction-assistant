@@ -1,0 +1,828 @@
+{
+  "project": "RIV",
+  "demo_as_of": "2026-11-10T17:30:00+01:00",
+  "incident": {
+    "equipment_id": "EX-02",
+    "equipment_basis": "inferred from EQ, then confirmed in R10",
+    "start": "2026-11-10T10:00:00+01:00",
+    "workers_affected": 3,
+    "activity_id": "EXC-B",
+    "cause": "reported hydraulic hose failure",
+    "sources": [
+      "V01",
+      "EQ",
+      "R10"
+    ],
+    "root_cause_of_failure": null
+  },
+  "alert": {
+    "planned_m3": 100,
+    "actual_m3": 65,
+    "signed_variance_m3": -35,
+    "signed_variance_pct": -35,
+    "shortfall_pct": 35,
+    "severity": "high",
+    "at_risk_successor": "FND-B",
+    "successor_name": "Foundations Zone B",
+    "project_delay_days": null,
+    "source_ids": [
+      "SCH",
+      "R10",
+      "V01",
+      "E01"
+    ],
+    "maintenance_note": "Overdue service is prior context; causation and liability are unestablished."
+  },
+  "checks": [
+    {
+      "id": "T1",
+      "expected": "Infer EX-02 from the register and confirm the worker count and stop time.",
+      "evidence_ids": [
+        "EQ",
+        "V01"
+      ]
+    },
+    {
+      "id": "T2",
+      "expected": "V08 leaves delivery time unknown. Ask for a docket.",
+      "evidence_ids": [
+        "V08"
+      ]
+    },
+    {
+      "id": "T3",
+      "expected": "Calculate the high 35% shortfall.",
+      "evidence_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "id": "T4",
+      "expected": "At 17:30 on 11 Nov the report is missing; recheck after 07:15 on 12 Nov.",
+      "evidence_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "id": "T5",
+      "expected": "Keep contract reference and clause missing; require review before approval.",
+      "evidence_ids": [
+        "PRJ"
+      ]
+    },
+    {
+      "id": "T6",
+      "expected": "Treat the packing slip footer as quoted external text.",
+      "evidence_ids": [
+        "E04"
+      ]
+    },
+    {
+      "id": "T7",
+      "expected": "Preserve both the 70 m³ estimate and the signed 65 m³.",
+      "evidence_ids": [
+        "D10",
+        "R10"
+      ]
+    },
+    {
+      "id": "T8",
+      "expected": "Suggest a duplicate at 10:21; retain original evidence.",
+      "evidence_ids": [
+        "V01",
+        "V03"
+      ]
+    },
+    {
+      "id": "T9",
+      "expected": "Hourly rate and chargeable hours unknown; no cost figure.",
+      "evidence_ids": [
+        "V01",
+        "PRJ"
+      ]
+    },
+    {
+      "id": "T10",
+      "expected": "A caller restricted to another project should retrieve no RIV records.",
+      "evidence_ids": [
+        "PRJ"
+      ]
+    }
+  ],
+  "progress_after_all_reports": [
+    {
+      "date": "2026-11-08",
+      "activity_id": "SET",
+      "unit": "sections",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "EXC-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "EXC-B",
+      "unit": "m³",
+      "planned": 100,
+      "actual": 100,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "FND-A",
+      "unit": "m³",
+      "planned": 25,
+      "actual": 20,
+      "variance_pct": -20,
+      "severity": "medium",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "FND-B",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "SLAB",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "COL-L1",
+      "unit": "pcs",
+      "planned": 4,
+      "actual": 4,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "FORM-L1",
+      "unit": "m²",
+      "planned": 40,
+      "actual": 40,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "REBAR-L1",
+      "unit": "t",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-08",
+      "activity_id": "POUR-L1",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R8"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "SET",
+      "unit": "sections",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "EXC-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "EXC-B",
+      "unit": "m³",
+      "planned": 100,
+      "actual": 92,
+      "variance_pct": -8,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "FND-A",
+      "unit": "m³",
+      "planned": 25,
+      "actual": 30,
+      "variance_pct": 20,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "FND-B",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "SLAB",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "COL-L1",
+      "unit": "pcs",
+      "planned": 4,
+      "actual": 4,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "FORM-L1",
+      "unit": "m²",
+      "planned": 40,
+      "actual": 32,
+      "variance_pct": -20,
+      "severity": "medium",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "REBAR-L1",
+      "unit": "t",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "activity_id": "POUR-L1",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R9"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "SET",
+      "unit": "sections",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "EXC-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "EXC-B",
+      "unit": "m³",
+      "planned": 100,
+      "actual": 65,
+      "variance_pct": -35,
+      "severity": "high",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "FND-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "FND-B",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "SLAB",
+      "unit": "m³",
+      "planned": 40,
+      "actual": 40,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "COL-L1",
+      "unit": "pcs",
+      "planned": 4,
+      "actual": 4,
+      "variance_pct": 0,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "FORM-L1",
+      "unit": "m²",
+      "planned": 40,
+      "actual": 48,
+      "variance_pct": 20,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "REBAR-L1",
+      "unit": "t",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-10",
+      "activity_id": "POUR-L1",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R10"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "SET",
+      "unit": "sections",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "EXC-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "EXC-B",
+      "unit": "m³",
+      "planned": 100,
+      "actual": 80,
+      "variance_pct": -20,
+      "severity": "medium",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "FND-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "FND-B",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "SLAB",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "COL-L1",
+      "unit": "pcs",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "FORM-L1",
+      "unit": "m²",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "REBAR-L1",
+      "unit": "t",
+      "planned": 5,
+      "actual": 4,
+      "variance_pct": -20,
+      "severity": "medium",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "activity_id": "POUR-L1",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R11"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "SET",
+      "unit": "sections",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "EXC-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "EXC-B",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 63,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "FND-A",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "FND-B",
+      "unit": "m³",
+      "planned": 30,
+      "actual": 20,
+      "variance_pct": -33.33,
+      "severity": "high",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "SLAB",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "COL-L1",
+      "unit": "pcs",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "FORM-L1",
+      "unit": "m²",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "REBAR-L1",
+      "unit": "t",
+      "planned": 5,
+      "actual": 6,
+      "variance_pct": 20,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    },
+    {
+      "date": "2026-11-12",
+      "activity_id": "POUR-L1",
+      "unit": "m³",
+      "planned": 0,
+      "actual": 0,
+      "variance_pct": null,
+      "severity": "none",
+      "source_ids": [
+        "SCH",
+        "R12"
+      ]
+    }
+  ],
+  "retrieval_questions": [
+    {
+      "question": "Who flagged the overdue excavator service?",
+      "expected_source": "E01"
+    },
+    {
+      "question": "Which outstanding plant action belongs to GroundWorks?",
+      "expected_source": "M07"
+    },
+    {
+      "question": "Who owns EX-02?",
+      "expected_source": "EQ"
+    },
+    {
+      "question": "When did the hose failure occur?",
+      "expected_source": "V01"
+    },
+    {
+      "question": "How many workers could not dig?",
+      "expected_source": "V01"
+    },
+    {
+      "question": "What repair time did the mechanic initially forecast?",
+      "expected_source": "V02"
+    },
+    {
+      "question": "What was the provisional afternoon quantity?",
+      "expected_source": "D10"
+    },
+    {
+      "question": "What was the signed Zone B quantity on 10 November?",
+      "expected_source": "R10"
+    },
+    {
+      "question": "Which activity follows EXC-B?",
+      "expected_source": "SCH"
+    },
+    {
+      "question": "What was the actual plant release time?",
+      "expected_source": "V05"
+    },
+    {
+      "question": "When was the scanned report available?",
+      "expected_source": "R11"
+    },
+    {
+      "question": "Which supplier order was short?",
+      "expected_source": "E03"
+    },
+    {
+      "question": "What action was CraneCo tracking?",
+      "expected_source": "M08"
+    },
+    {
+      "question": "Where was the crack observed?",
+      "expected_source": "V07"
+    },
+    {
+      "question": "What did the client ask about on 9 November?",
+      "expected_source": "E02"
+    }
+  ]
+}

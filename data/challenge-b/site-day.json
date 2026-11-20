@@ -1,0 +1,163 @@
+{
+  "provenance": "Synthetic hackathon scenario. All operational records and quantities are fictional.",
+  "project": "Nordhof courtyard works",
+  "timezone": "Europe/Berlin",
+  "plan_basis": "Approved before shift. Targets and measured quantities are cumulative within the day for each activity.",
+  "plan": [
+    {
+      "id": "P1",
+      "activity_id": "EX-N",
+      "activity": "North trench excavation",
+      "unit": "m³",
+      "checkpoint": "2026-11-19T12:00:00+01:00",
+      "planned_today_to_checkpoint": 120
+    },
+    {
+      "id": "P2",
+      "activity_id": "EX-N",
+      "activity": "North trench excavation",
+      "unit": "m³",
+      "checkpoint": "2026-11-19T16:00:00+01:00",
+      "planned_today_to_checkpoint": 180
+    },
+    {
+      "id": "P3",
+      "activity_id": "PIPE-E",
+      "activity": "East drain installation",
+      "unit": "m",
+      "checkpoint": "2026-11-19T16:00:00+01:00",
+      "planned_today_to_checkpoint": 36
+    },
+    {
+      "id": "P4",
+      "activity_id": "KERB-S",
+      "activity": "South kerb installation",
+      "unit": "m",
+      "checkpoint": "2026-11-19T16:00:00+01:00",
+      "planned_today_to_checkpoint": 24
+    }
+  ],
+  "records": [
+    {
+      "id": "R01",
+      "recorded_at": "2026-11-19T07:05:00+01:00",
+      "type": "site_diary",
+      "author_role": "Site manager",
+      "activity_id": null,
+      "text": "Dry at shift start, 5 °C. Earthworks crew: one operator and two groundworkers. Drainage crew: three installers. Kerb crew: two installers."
+    },
+    {
+      "id": "R02",
+      "recorded_at": "2026-11-19T08:10:00+01:00",
+      "type": "meeting_minutes",
+      "author_role": "Site coordinator",
+      "activity_id": null,
+      "text": "Keep the north haul road clear for excavation traffic. Logistics coordinator to confirm the east gate arrangement by 14:00 today."
+    },
+    {
+      "id": "R03",
+      "recorded_at": "2026-11-19T10:05:00+01:00",
+      "type": "dictation_transcript",
+      "author_role": "Earthworks foreman",
+      "activity_id": "EX-N",
+      "text": "North trench. Excavator standing since ten. The haul road is blocked by stacked pallets. I can't see whose pallets they are."
+    },
+    {
+      "id": "R04",
+      "recorded_at": "2026-11-19T11:35:00+01:00",
+      "type": "supplier_email",
+      "author_role": "Pipe supplier",
+      "activity_id": "PIPE-E",
+      "text": "The replacement crates should arrive around 13:30. I will confirm once the driver is on site."
+    },
+    {
+      "id": "R05",
+      "recorded_at": "2026-11-19T12:00:00+01:00",
+      "type": "dictation_transcript",
+      "author_role": "Earthworks foreman",
+      "activity_id": "EX-N",
+      "text": "Noon reading. Sixty-five cubic metres excavated today in the north trench. Still waiting for the haul road."
+    },
+    {
+      "id": "R06",
+      "recorded_at": "2026-11-19T12:08:00+01:00",
+      "type": "correction",
+      "author_role": "Earthworks foreman",
+      "activity_id": "EX-N",
+      "text": "Please correct my noon reading. Seventy-five cubic metres, not sixty-five. The missed load left before ten. The road is still blocked.",
+      "corrects": "R05"
+    },
+    {
+      "id": "R07",
+      "recorded_at": "2026-11-19T12:30:00+01:00",
+      "type": "inspection_note",
+      "author_role": "Drainage foreman",
+      "activity_id": "PIPE-E",
+      "text": "Two pipe sections in the east laydown area have chipped sockets. Both tagged and set aside before installation. Supplier asked to inspect."
+    },
+    {
+      "id": "R08",
+      "recorded_at": "2026-11-19T13:25:00+01:00",
+      "type": "site_diary",
+      "author_role": "Earthworks foreman",
+      "activity_id": "EX-N",
+      "text": "Haul road cleared and the excavator restarted at 13:20. Logging that time from the operator's call."
+    },
+    {
+      "id": "R09",
+      "recorded_at": "2026-11-19T13:42:00+01:00",
+      "type": "delivery_receipt",
+      "author_role": "Storekeeper",
+      "activity_id": "PIPE-E",
+      "text": "Replacement crates signed in at the east gate at 13:40."
+    },
+    {
+      "id": "R10",
+      "recorded_at": "2026-11-19T14:10:00+01:00",
+      "type": "meeting_minutes",
+      "author_role": "Site coordinator",
+      "activity_id": null,
+      "text": "East gate confirmation is still outstanding. Logistics coordinator to send the updated routing sketch by 15:30 today; this replaces the 14:00 deadline."
+    },
+    {
+      "id": "R11",
+      "recorded_at": "2026-11-19T15:35:00+01:00",
+      "type": "email",
+      "author_role": "Logistics coordinator",
+      "activity_id": null,
+      "text": "Routing sketch sent to the crews at 15:32. East gate arrangement confirmed."
+    },
+    {
+      "id": "R12",
+      "recorded_at": "2026-11-19T15:45:00+01:00",
+      "type": "field_note",
+      "author_role": "Earthworks foreman",
+      "activity_id": "EX-N",
+      "text": "Haulier mentioned a possible standby charge for this morning. No hours, rate or invoice supplied."
+    },
+    {
+      "id": "R13",
+      "recorded_at": "2026-11-19T16:00:00+01:00",
+      "type": "daily_report",
+      "author_role": "Site manager",
+      "activity_id": "EX-N",
+      "text": "North trench final shift quantity from the signed load tally: 148 cubic metres excavated today. Project completion impact has not been assessed."
+    },
+    {
+      "id": "R14",
+      "recorded_at": "2026-11-19T16:00:00+01:00",
+      "type": "daily_report",
+      "author_role": "Drainage foreman",
+      "activity_id": "PIPE-E",
+      "text": "East drain: 36 metres installed today. The two damaged sections remain segregated pending supplier inspection."
+    },
+    {
+      "id": "R15",
+      "recorded_at": "2026-11-19T16:00:00+01:00",
+      "type": "daily_report",
+      "author_role": "Kerb foreman",
+      "activity_id": "KERB-S",
+      "text": "South kerb line set out and installation under way. Measured length to follow tomorrow."
+    }
+  ]
+}

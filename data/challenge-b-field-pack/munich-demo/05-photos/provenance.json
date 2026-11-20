@@ -1,0 +1,13 @@
+{
+  "method": "Built-in ImageGen. Fictional scenes and assigned scenario times.",
+  "images": [
+    {
+      "file": "F01.png",
+      "prompt": "Unstaged phone photo for a fictional German construction diary, landscape. From behind temporary site fencing, a yellow tracked excavator with its bucket resting beside a shallow, partially excavated foundation area in an urban Munich office shell project, overcast November, a painted survey marking visible on the soil. No readable writing, branding or identifiable people. A single candid photo."
+    },
+    {
+      "file": "F02.png",
+      "prompt": "Unstaged close-up phone photo for a fictional German construction diary, landscape. A tightly spaced steel rebar mat for a foundation slab on a Munich office site with two orange service sleeves passing through the mat, one sleeve very close to a reinforcing bar. No ruler or measurements, no writing, people, branding or montage. Flat overcast November light. A single realistic photo."
+    }
+  ]
+}

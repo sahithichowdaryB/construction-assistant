@@ -1,0 +1,40 @@
+{
+  "notice_id": "MUC-L2-BA-001",
+  "project_id": "MUC-L2",
+  "notice_type": "Behinderungsanzeige",
+  "review_status": "draft",
+  "event_status": "open",
+  "trigger_at": "2026-11-11T10:00:00+01:00",
+  "as_of": "2026-11-11T10:12:00+01:00",
+  "resolved_at": null,
+  "location": "Nord, Kreuzung N3",
+  "affected_activity_ids": [
+    "E10"
+  ],
+  "affected_trades": [
+    "Erdkolonne"
+  ],
+  "affected_equipment": [
+    "Kettenbagger B17"
+  ],
+  "observed_facts": "Der Polier meldet Stillstand seit 10:00. Index B ist als Vorabzug gekennzeichnet. Die Arbeiten in Ost laufen weiter.",
+  "cause_category": "missing_plan",
+  "root_cause": "Für den Arbeitsbereich N3 liegt der Kolonne noch kein freigegebener Leitungsplan vor.",
+  "critical_path_impact": "unknown",
+  "project_delay_days": null,
+  "evidence_ids": [
+    "B0",
+    "M01",
+    "E02",
+    "RFI01",
+    "V02",
+    "F01"
+  ],
+  "required_evidence": [
+    "Freigabemitteilung für N3",
+    "Geräterapport mit tatsächlicher Wiederaufnahme",
+    "Aktualisierter Terminplan für Aussagen zum Endtermin"
+  ],
+  "requested_action": "Bitte freigegebenen Planstand oder eine freigegebene Ausweichfläche benennen.",
+  "recipient_role": "AG-Projektleitung"
+}

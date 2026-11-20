@@ -1,0 +1,229 @@
+{
+  "usage": "Score only listed fields per input. Null means unknown from the input. Equipment code inference uses EQ. For M07 and M08 score the named owner's action. For R8–R12 score the indicated activity.",
+  "labels": [
+    {
+      "source_id": "V01",
+      "expected": {
+        "type": "equipment_failure",
+        "time": "10:00",
+        "workers": 3,
+        "area": "B",
+        "equipment_id_spoken": null,
+        "equipment_id_inferred": "EX-02"
+      }
+    },
+    {
+      "source_id": "V02",
+      "expected": {
+        "type": "repair_forecast",
+        "forecast": "2026-11-11T12:00:00+01:00",
+        "actual_restart": null
+      }
+    },
+    {
+      "source_id": "V03",
+      "expected": {
+        "type": "duplicate_candidate",
+        "original": "V01",
+        "workers": 3
+      }
+    },
+    {
+      "source_id": "V04",
+      "expected": {
+        "type": "quantity_estimate",
+        "quantity": 70,
+        "unit": "m³",
+        "verified": false
+      }
+    },
+    {
+      "source_id": "V05",
+      "expected": {
+        "type": "repair_release",
+        "release": "11:30",
+        "equipment_id": "EX-02"
+      }
+    },
+    {
+      "source_id": "V06",
+      "expected": {
+        "type": "material_delivery",
+        "delivered_t": 4,
+        "outstanding_t": 1
+      }
+    },
+    {
+      "source_id": "V07",
+      "expected": {
+        "type": "quality_observation",
+        "location": "Zone A slab edge",
+        "crack_width_mm": null
+      }
+    },
+    {
+      "source_id": "V08",
+      "expected": {
+        "type": "delivery_delay",
+        "delay_minutes": null
+      }
+    },
+    {
+      "source_id": "V09",
+      "expected": {
+        "type": "handover",
+        "excavation_finished": "11:50",
+        "successor": "FND-B"
+      }
+    },
+    {
+      "source_id": "V10",
+      "expected": {
+        "type": "production",
+        "activity": "FND-B",
+        "quantity": 20,
+        "unit": "m³"
+      }
+    },
+    {
+      "source_id": "E01",
+      "expected": {
+        "type": "maintenance",
+        "equipment_id": "EX-02",
+        "service": "overdue",
+        "booking_confirmed": false
+      }
+    },
+    {
+      "source_id": "E02",
+      "expected": {
+        "type": "client_query",
+        "activity": "FND-B",
+        "planned_start": "2026-11-12"
+      }
+    },
+    {
+      "source_id": "E03",
+      "expected": {
+        "type": "supplier_delay",
+        "activity": "REBAR-L1",
+        "moved_t": 1
+      }
+    },
+    {
+      "source_id": "E04",
+      "expected": {
+        "type": "correspondence",
+        "quantity_change": false,
+        "approve_drafts": false
+      }
+    },
+    {
+      "source_id": "M07",
+      "expected": {
+        "type": "meeting_action",
+        "owner": "GroundWorks Ltd",
+        "action": "Provide backup excavator plan",
+        "due": "2026-11-10T12:00:00+01:00"
+      }
+    },
+    {
+      "source_id": "M08",
+      "expected": {
+        "type": "meeting_action",
+        "owner": "CraneCo Hire",
+        "due": "2026-11-12T12:00:00+01:00",
+        "status": "open"
+      }
+    },
+    {
+      "source_id": "R8",
+      "expected": {
+        "activity": "FND-A",
+        "actual": 20,
+        "unit": "m³"
+      }
+    },
+    {
+      "source_id": "R9",
+      "expected": {
+        "activity": "EXC-B",
+        "actual": 92,
+        "unit": "m³"
+      }
+    },
+    {
+      "source_id": "R10",
+      "expected": {
+        "activity": "EXC-B",
+        "actual": 65,
+        "unit": "m³",
+        "worker_count": 3
+      }
+    },
+    {
+      "source_id": "R12",
+      "expected": {
+        "activity": "FND-B",
+        "actual": 20,
+        "unit": "m³"
+      }
+    }
+  ],
+  "voice_test": {
+    "model": "Piper en_US-lessac-medium v1.0.0",
+    "provenance": "Synthesized English speech. V01–V05 are clean. V06–V10 have simulated equipment rumble mixed locally. The .txt transcripts are the reference wording.",
+    "reference_dir": "../transcripts",
+    "key_terms": [
+      [
+        "V01",
+        "ten",
+        "three",
+        "Zone B",
+        "hydraulic hose"
+      ],
+      [
+        "V02",
+        "tomorrow",
+        "noon"
+      ],
+      [
+        "V03",
+        "three",
+        "Zone B"
+      ],
+      [
+        "V04",
+        "seventy"
+      ],
+      [
+        "V05",
+        "EX-02",
+        "eleven thirty"
+      ],
+      [
+        "V06",
+        "four tonnes",
+        "tomorrow"
+      ],
+      [
+        "V07",
+        "Zone A",
+        "crack"
+      ],
+      [
+        "V08",
+        "delivery late"
+      ],
+      [
+        "V09",
+        "eleven fifty"
+      ],
+      [
+        "V10",
+        "twenty",
+        "Foundations Zone B"
+      ]
+    ]
+  }
+}

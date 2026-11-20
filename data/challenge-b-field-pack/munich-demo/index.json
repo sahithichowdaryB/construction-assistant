@@ -1,0 +1,404 @@
+{
+  "project_id": "MUC-L2",
+  "provenance": "Fiktives Projekt; alle Angaben, Texte, Bilder und Zeitstempel sind synthetisch.",
+  "baseline": "01-schedule/baseline.json",
+  "records": [
+    {
+      "id": "M01",
+      "available_at": "2026-11-09T09:20:00+01:00",
+      "kind": "Baubesprechung",
+      "author": "Objektüberwachung",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Jour fixe 01 · Auszug aus dem Ergebnisprotokoll",
+      "path": "04-correspondence/M01.txt"
+    },
+    {
+      "id": "E01",
+      "available_at": "2026-11-09T11:02:00+01:00",
+      "kind": "E-Mail",
+      "author": "TGA-Koordination",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "L-17 / Termin für N3",
+      "path": "04-correspondence/E01.txt"
+    },
+    {
+      "id": "TB01",
+      "available_at": "2026-11-09T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10",
+        "O10"
+      ],
+      "title": "Bautagesbericht 1 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB01.txt"
+    },
+    {
+      "id": "E02",
+      "available_at": "2026-11-10T15:42:00+01:00",
+      "kind": "E-Mail",
+      "author": "TGA-Koordination",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Re: L-17 / Index B zur Abstimmung",
+      "path": "04-correspondence/E02.txt"
+    },
+    {
+      "id": "V01",
+      "available_at": "2026-11-10T15:52:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Plan im Tablet",
+      "path": "03-voice-transcripts/V01.txt",
+      "audio_path": "03-voice-notes/V01.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 8.2
+    },
+    {
+      "id": "TB02",
+      "available_at": "2026-11-10T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10",
+        "O10"
+      ],
+      "title": "Bautagesbericht 2 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB02.txt"
+    },
+    {
+      "id": "RFI01",
+      "available_at": "2026-11-11T09:48:00+01:00",
+      "kind": "Plananfrage",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "RFI 17 · Arbeitsfront N3",
+      "path": "04-correspondence/RFI01.txt"
+    },
+    {
+      "id": "V02",
+      "available_at": "2026-11-11T10:06:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Bagger an N3",
+      "path": "03-voice-transcripts/V02.txt",
+      "audio_path": "03-voice-notes/V02.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 9.5
+    },
+    {
+      "id": "F01",
+      "available_at": "2026-11-11T10:12:00+01:00",
+      "kind": "Baustellenfoto (KI-generiert)",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Blick vom Bauzaun auf Arbeitsfront Nord",
+      "path": "05-photos/F01.png"
+    },
+    {
+      "id": "E03",
+      "available_at": "2026-11-11T11:05:00+01:00",
+      "kind": "E-Mail",
+      "author": "TGA-Koordination",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Re: RFI 17 · erwartete Rückmeldung",
+      "path": "04-correspondence/E03.txt"
+    },
+    {
+      "id": "V03",
+      "available_at": "2026-11-11T12:02:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Mittagsmenge",
+      "path": "03-voice-transcripts/V03.txt",
+      "audio_path": "03-voice-notes/V03.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 7.8
+    },
+    {
+      "id": "L01",
+      "available_at": "2026-11-11T12:18:00+01:00",
+      "kind": "Wiegelistenabgleich",
+      "author": "Abrechnung AN",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Tagesabgleich Nord · Stand Mittag",
+      "path": "04-correspondence/L01.txt"
+    },
+    {
+      "id": "V04",
+      "available_at": "2026-11-11T12:24:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Berichtigung zur Mittagsmenge",
+      "path": "03-voice-transcripts/V04.txt",
+      "audio_path": "03-voice-notes/V04.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 7.2
+    },
+    {
+      "id": "TB03",
+      "available_at": "2026-11-11T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10",
+        "O20"
+      ],
+      "title": "Bautagesbericht 3 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB03.txt"
+    },
+    {
+      "id": "E04",
+      "available_at": "2026-11-12T08:40:00+01:00",
+      "kind": "Planfreigabe",
+      "author": "Objektüberwachung",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "L-17 C · Freigabe Kreuzung N3",
+      "path": "04-correspondence/E04.txt"
+    },
+    {
+      "id": "V05",
+      "available_at": "2026-11-12T08:47:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "Plan ist da",
+      "path": "03-voice-transcripts/V05.txt",
+      "audio_path": "03-voice-notes/V05.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 6.0
+    },
+    {
+      "id": "G01",
+      "available_at": "2026-11-12T09:20:00+01:00",
+      "kind": "Geräterapport",
+      "author": "Geräteführung",
+      "activity_ids": [
+        "E10"
+      ],
+      "title": "B17 · Auszug Einsatzbuch",
+      "path": "04-correspondence/G01.txt"
+    },
+    {
+      "id": "TB04",
+      "available_at": "2026-11-12T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10",
+        "O20"
+      ],
+      "title": "Bautagesbericht 4 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB04.txt"
+    },
+    {
+      "id": "V06",
+      "available_at": "2026-11-13T08:42:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "O20",
+        "O30"
+      ],
+      "title": "Hülse an B2",
+      "path": "03-voice-transcripts/V06.txt",
+      "audio_path": "03-voice-notes/V06.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 9.6
+    },
+    {
+      "id": "F02",
+      "available_at": "2026-11-13T08:44:00+01:00",
+      "kind": "Baustellenfoto (KI-generiert)",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "O20",
+        "O30"
+      ],
+      "title": "Durchführungen im Bewehrungsfeld B2",
+      "path": "05-photos/F02.png"
+    },
+    {
+      "id": "Q01",
+      "available_at": "2026-11-13T08:50:00+01:00",
+      "kind": "Prüfvermerk",
+      "author": "Polier Ost",
+      "activity_ids": [
+        "O20",
+        "O30"
+      ],
+      "title": "B2 / D-07 · Sichtprüfung vor Betonage",
+      "path": "04-correspondence/Q01.txt"
+    },
+    {
+      "id": "E05",
+      "available_at": "2026-11-13T11:05:00+01:00",
+      "kind": "E-Mail",
+      "author": "Tragwerksplanung",
+      "activity_ids": [
+        "O20",
+        "O30"
+      ],
+      "title": "B2 / D-07b · örtliche Nachprüfung",
+      "path": "04-correspondence/E05.txt"
+    },
+    {
+      "id": "Q02",
+      "available_at": "2026-11-13T15:05:00+01:00",
+      "kind": "Prüfprotokoll",
+      "author": "Objektüberwachung",
+      "activity_ids": [
+        "O20",
+        "O30"
+      ],
+      "title": "B2 · Wiedervorlage und Freigabe",
+      "path": "04-correspondence/Q02.txt"
+    },
+    {
+      "id": "TB05",
+      "available_at": "2026-11-13T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "E10",
+        "E20",
+        "O20"
+      ],
+      "title": "Bautagesbericht 5 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB05.txt"
+    },
+    {
+      "id": "M02",
+      "available_at": "2026-11-16T09:05:00+01:00",
+      "kind": "Baubesprechung",
+      "author": "Objektüberwachung",
+      "activity_ids": [],
+      "title": "Jour fixe 02 · W4 und Bauablauf",
+      "path": "04-correspondence/M02.txt"
+    },
+    {
+      "id": "E06",
+      "available_at": "2026-11-16T10:30:00+01:00",
+      "kind": "E-Mail",
+      "author": "AG-Projektleitung",
+      "activity_ids": [],
+      "title": "W4 / Bitte um Angebot",
+      "path": "04-correspondence/E06.txt"
+    },
+    {
+      "id": "V07",
+      "available_at": "2026-11-16T15:02:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [
+        "O30"
+      ],
+      "title": "Betonmenge Ost",
+      "path": "03-voice-transcripts/V07.txt",
+      "audio_path": "03-voice-notes/V07.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 7.1
+    },
+    {
+      "id": "LS01",
+      "available_at": "2026-11-16T15:10:00+01:00",
+      "kind": "Lieferscheinabgleich",
+      "author": "Betonpolier",
+      "activity_ids": [
+        "O30"
+      ],
+      "title": "B2 / Abschluss Pumpenbuch",
+      "path": "04-correspondence/LS01.txt"
+    },
+    {
+      "id": "TB06",
+      "available_at": "2026-11-16T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "O30"
+      ],
+      "title": "Bautagesbericht 6 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB06.txt"
+    },
+    {
+      "id": "K01",
+      "available_at": "2026-11-17T10:55:00+01:00",
+      "kind": "Kalkulationsblatt",
+      "author": "Kalkulation AN",
+      "activity_ids": [],
+      "title": "W4 / Angebotskalkulation Nr. 04",
+      "path": "04-correspondence/K01.txt"
+    },
+    {
+      "id": "V08",
+      "available_at": "2026-11-17T11:04:00+01:00",
+      "kind": "Diktat (Text)",
+      "author": "Polier",
+      "activity_ids": [],
+      "title": "Nachtrag West",
+      "path": "03-voice-transcripts/V08.txt",
+      "audio_path": "03-voice-notes/V08.wav",
+      "audio_provenance": "Synthetic German speech, Piper de_DE-thorsten-medium v1.0.0",
+      "audio_duration_seconds": 9.1
+    },
+    {
+      "id": "E07",
+      "available_at": "2026-11-17T11:35:00+01:00",
+      "kind": "E-Mail",
+      "author": "Bauleitung AN",
+      "activity_ids": [],
+      "title": "Re: W4 / Angebot 04 zur Prüfung",
+      "path": "04-correspondence/E07.txt"
+    },
+    {
+      "id": "E08",
+      "available_at": "2026-11-17T13:10:00+01:00",
+      "kind": "E-Mail",
+      "author": "AG-Projektleitung",
+      "activity_ids": [],
+      "title": "Re: W4 / Angebot eingegangen",
+      "path": "04-correspondence/E08.txt"
+    },
+    {
+      "id": "TB07",
+      "available_at": "2026-11-17T16:15:00+01:00",
+      "kind": "Bautagesbericht",
+      "author": "Bauleitung AN",
+      "activity_ids": [
+        "O40"
+      ],
+      "title": "Bautagesbericht 7 · Schicht 07:00–16:00",
+      "path": "02-site-diaries/TB07.txt"
+    }
+  ]
+}

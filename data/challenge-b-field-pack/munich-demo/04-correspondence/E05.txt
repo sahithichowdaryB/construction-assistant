@@ -1,0 +1,4 @@
+B2 / D-07b · örtliche Nachprüfung
+2026-11-13T11:05:00+01:00 | Tragwerksplanung | MUC-L2 | E05
+
+Detail D-07b ist eingestellt. Bitte Lage nach diesem Stand prüfen und Prüfergebnis vor dem Einbau des Betons dokumentieren. Die Nachricht allein ist keine Betonierfreigabe.

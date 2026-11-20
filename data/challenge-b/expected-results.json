@@ -1,0 +1,137 @@
+{
+  "usage": "Evaluation only. For each test, give the assistant the plan and records with recorded_at at or before as_of. Evaluate its answer using expected and evidence_ids. Times in expected use project local time.",
+  "cases": [
+    {
+      "name": "Noon delay",
+      "as_of": "2026-11-19T12:00:00+01:00",
+      "evidence_ids": [
+        "P1",
+        "R03",
+        "R05"
+      ],
+      "expected": {
+        "planned_m3": 120,
+        "actual_m3": 65,
+        "shortfall_m3": 55,
+        "idle_minutes_so_far": 120,
+        "restart_time": null,
+        "responsible_party": null,
+        "suggested_action": "Draft delay notice for manager review."
+      }
+    },
+    {
+      "name": "Corrected noon tally",
+      "as_of": "2026-11-19T12:08:00+01:00",
+      "evidence_ids": [
+        "P1",
+        "R05",
+        "R06"
+      ],
+      "expected": {
+        "planned_m3": 120,
+        "actual_m3": 75,
+        "shortfall_m3": 45,
+        "suggested_action": "Update the existing noon diary entry and draft notice, preserving both source readings."
+      }
+    },
+    {
+      "name": "Receipt versus forecast",
+      "as_of": "2026-11-19T13:42:00+01:00",
+      "evidence_ids": [
+        "R04",
+        "R09"
+      ],
+      "expected": {
+        "estimated_arrival": "13:30",
+        "actual_arrival": "13:40"
+      }
+    },
+    {
+      "name": "Meeting action",
+      "as_of": "2026-11-19T14:10:00+01:00",
+      "evidence_ids": [
+        "R02",
+        "R10"
+      ],
+      "expected": {
+        "owner": "Logistics coordinator",
+        "due": "15:30",
+        "status": "open",
+        "action": "Send updated routing sketch."
+      }
+    },
+    {
+      "name": "Closed action",
+      "as_of": "2026-11-19T15:35:00+01:00",
+      "evidence_ids": [
+        "R10",
+        "R11"
+      ],
+      "expected": {
+        "due": "15:30",
+        "sent": "15:32",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "Potential additional cost",
+      "as_of": "2026-11-19T15:45:00+01:00",
+      "evidence_ids": [
+        "R12"
+      ],
+      "expected": {
+        "amount_eur": null,
+        "confirmed_charge": false,
+        "suggested_action": "Request the standby record and rate before quantifying any cost."
+      }
+    },
+    {
+      "name": "End-of-shift excavation",
+      "as_of": "2026-11-19T16:00:00+01:00",
+      "evidence_ids": [
+        "P2",
+        "R03",
+        "R08",
+        "R13"
+      ],
+      "expected": {
+        "planned_m3": 180,
+        "actual_m3": 148,
+        "shortfall_m3": 32,
+        "idle_minutes_final": 200,
+        "project_delay_days": null
+      }
+    },
+    {
+      "name": "Quality issue despite meeting output target",
+      "as_of": "2026-11-19T16:00:00+01:00",
+      "evidence_ids": [
+        "P3",
+        "R07",
+        "R14"
+      ],
+      "expected": {
+        "planned_m": 36,
+        "actual_m": 36,
+        "shortfall_m": 0,
+        "damaged_sections": 2,
+        "status": "Segregated before installation; supplier inspection pending.",
+        "suggested_action": "Draft a quality issue note for review."
+      }
+    },
+    {
+      "name": "Missing measurement",
+      "as_of": "2026-11-19T16:00:00+01:00",
+      "evidence_ids": [
+        "P4",
+        "R15"
+      ],
+      "expected": {
+        "planned_m": 24,
+        "actual_m": null,
+        "shortfall_m": null,
+        "suggested_action": "Request measured length."
+      }
+    }
+  ]
+}
