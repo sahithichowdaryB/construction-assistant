@@ -1,0 +1,166 @@
+[
+  {
+    "code": "SET",
+    "name": "Site setup",
+    "zone": "zones A/B",
+    "unit": "sections",
+    "planned_start": "2026-11-02",
+    "planned_end": "2026-11-02",
+    "planned_qty_per_day": 1,
+    "planned_total_qty": 1,
+    "crew_size": 4,
+    "contractor_id": "GW",
+    "equipment_ids": [],
+    "predecessors": []
+  },
+  {
+    "code": "EXC-A",
+    "name": "Excavation Zone A",
+    "zone": "A",
+    "unit": "m³",
+    "planned_start": "2026-11-03",
+    "planned_end": "2026-11-07",
+    "planned_qty_per_day": 50,
+    "planned_total_qty": 250,
+    "crew_size": 3,
+    "contractor_id": "GW",
+    "equipment_ids": [
+      "EX-02",
+      "DT-03"
+    ],
+    "predecessors": [
+      "SET"
+    ]
+  },
+  {
+    "code": "EXC-B",
+    "name": "Excavation Zone B",
+    "zone": "B",
+    "unit": "m³",
+    "planned_start": "2026-11-08",
+    "planned_end": "2026-11-11",
+    "planned_qty_per_day": 100,
+    "planned_total_qty": 400,
+    "crew_size": 3,
+    "contractor_id": "GW",
+    "equipment_ids": [
+      "EX-02",
+      "DT-03"
+    ],
+    "predecessors": [
+      "SET"
+    ]
+  },
+  {
+    "code": "FND-A",
+    "name": "Foundations Zone A",
+    "zone": "A",
+    "unit": "m³",
+    "planned_start": "2026-11-08",
+    "planned_end": "2026-11-09",
+    "planned_qty_per_day": 25,
+    "planned_total_qty": 50,
+    "crew_size": 5,
+    "contractor_id": "SB",
+    "equipment_ids": [],
+    "predecessors": [
+      "EXC-A"
+    ]
+  },
+  {
+    "code": "FND-B",
+    "name": "Foundations Zone B",
+    "zone": "B",
+    "unit": "m³",
+    "planned_start": "2026-11-12",
+    "planned_end": "2026-11-14",
+    "planned_qty_per_day": 30,
+    "planned_total_qty": 90,
+    "crew_size": 5,
+    "contractor_id": "SB",
+    "equipment_ids": [],
+    "predecessors": [
+      "EXC-B"
+    ]
+  },
+  {
+    "code": "SLAB",
+    "name": "Ground slab",
+    "zone": "A",
+    "unit": "m³",
+    "planned_start": "2026-11-10",
+    "planned_end": "2026-11-10",
+    "planned_qty_per_day": 40,
+    "planned_total_qty": 40,
+    "crew_size": 5,
+    "contractor_id": "SB",
+    "equipment_ids": [],
+    "predecessors": [
+      "FND-A"
+    ]
+  },
+  {
+    "code": "COL-L1",
+    "name": "Columns L1",
+    "zone": "existing east wing",
+    "unit": "pcs",
+    "planned_start": "2026-11-08",
+    "planned_end": "2026-11-10",
+    "planned_qty_per_day": 4,
+    "planned_total_qty": 12,
+    "crew_size": 4,
+    "contractor_id": "SB",
+    "equipment_ids": [
+      "TC-01"
+    ],
+    "predecessors": []
+  },
+  {
+    "code": "FORM-L1",
+    "name": "Formwork L1",
+    "zone": "existing west wing",
+    "unit": "m²",
+    "planned_start": "2026-11-08",
+    "planned_end": "2026-11-10",
+    "planned_qty_per_day": 40,
+    "planned_total_qty": 120,
+    "crew_size": 4,
+    "contractor_id": "SB",
+    "equipment_ids": [],
+    "predecessors": []
+  },
+  {
+    "code": "REBAR-L1",
+    "name": "Rebar L1",
+    "zone": "existing west wing",
+    "unit": "t",
+    "planned_start": "2026-11-11",
+    "planned_end": "2026-11-12",
+    "planned_qty_per_day": 5,
+    "planned_total_qty": 10,
+    "crew_size": 4,
+    "contractor_id": "SF",
+    "equipment_ids": [
+      "TC-01"
+    ],
+    "predecessors": [
+      "FORM-L1"
+    ]
+  },
+  {
+    "code": "POUR-L1",
+    "name": "Concrete pour L1",
+    "zone": "existing west wing",
+    "unit": "m³",
+    "planned_start": "2026-11-13",
+    "planned_end": "2026-11-13",
+    "planned_qty_per_day": 50,
+    "planned_total_qty": 50,
+    "crew_size": 5,
+    "contractor_id": "SB",
+    "equipment_ids": [],
+    "predecessors": [
+      "REBAR-L1"
+    ]
+  }
+]

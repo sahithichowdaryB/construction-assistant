@@ -1,0 +1,49 @@
+{
+  "rules": [
+    {
+      "match": ["excavator", "ex-02", "machine", "which"],
+      "available_at": "2026-11-10T10:15:00+01:00",
+      "answer": "The foreman reported the excavator in Zone B, without naming it [1]. The equipment register assigns EX-02 (GroundWorks) to EXC-B on 10 November [2], so EX-02 is inferred, not stated.",
+      "citations": [
+        { "n": 1, "label": "Voice note V01", "ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" } },
+        { "n": 2, "label": "Equipment register, EX-02", "ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" } }
+      ]
+    },
+    {
+      "match": ["repair", "back", "mechanic", "forecast"],
+      "available_at": "2026-11-10T10:18:00+01:00",
+      "answer": "The mechanic expects EX-02 back at noon on 11 November. This is the mechanic's estimate, not a confirmed release [1].",
+      "citations": [
+        { "n": 1, "label": "Voice note V02", "ref": { "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" } }
+      ]
+    },
+    {
+      "match": ["zone b", "exc-b", "progress", "excavat", "how much", "m³", "m3"],
+      "available_at": "2026-11-10T17:30:00+01:00",
+      "answer": "On 10 November the signed report records 65 m³ for Excavation Zone B against a plan of 100 m³ [1]. The diary estimate earlier that afternoon was 70 m³ (provisional) [2]; the signed figure is the one used for alerts.",
+      "citations": [
+        { "n": 1, "label": "Daily report R10, page 2", "ref": { "source_id": "R10", "locator": "EXC-B", "page": 2, "passage_id": "R10:EXC-B" } },
+        { "n": 2, "label": "Site diary, 10 Nov", "ref": { "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" } }
+      ]
+    },
+    {
+      "match": ["backup", "plan", "groundworks", "action", "owe"],
+      "available_at": "2026-11-07T12:40:00+01:00",
+      "answer": "GroundWorks agreed to give Sam a backup excavator plan by 10 November at 12:00 [1]. On 8 November it was still outstanding [2].",
+      "citations": [
+        { "n": 1, "label": "Minutes M07, agreed actions", "ref": { "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" } },
+        { "n": 2, "label": "Minutes M08, agreed actions", "ref": { "source_id": "M08", "locator": "actions", "passage_id": "M08:actions" } }
+      ]
+    },
+    {
+      "match": ["handover", "foundation", "fnd-b", "client"],
+      "available_at": "2026-11-09T14:30:00+01:00",
+      "answer": "Foundations Zone B is scheduled to start on 12 November after the Zone B excavation [1]. The client asked for confirmation that the handover still stands after the 10 November shift [2].",
+      "citations": [
+        { "n": 1, "label": "Programme schedule, FND-B", "ref": { "source_id": "SCH", "locator": "FND-B", "passage_id": "SCH:FND-B" } },
+        { "n": 2, "label": "Email E02", "ref": { "source_id": "E02", "locator": "body", "passage_id": "E02:body" } }
+      ]
+    }
+  ],
+  "fallback": "I couldn't find project evidence for that question at this time. I only answer from Riverside records available at the selected time."
+}

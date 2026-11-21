@@ -1,0 +1,42 @@
+[
+  {
+    "id": "DRF-1",
+    "project_id": "RIV",
+    "type": "delay",
+    "title": "Excavation Zone B and planned foundation handover",
+    "keywords": null,
+    "incident_id": "INC-1",
+    "alert_id": "alr-exc-b-2026-11-10",
+    "created_at": "2026-11-10T17:30:00+01:00",
+    "versions": [
+      {
+        "id": "DRF-1-v1",
+        "version": 1,
+        "as_of": "2026-11-10T17:30:00+01:00",
+        "created_at": "2026-11-10T17:30:00+01:00",
+        "created_by": "SiteMate (from alert revision 1)",
+        "status": "draft",
+        "body": "DRAFT FOR SITE MANAGER REVIEW\n10 November 2026 | Riverside Office Block\nFrom: Sam Reed, Site Manager, Riverside Build JV\nTo: Client Project Manager, Riverside Developments\nContract reference: [MISSING: contract reference]\nApplicable clause: [MISSING: relevant contract clause]\n\n## Subject: Excavation Zone B and planned foundation handover\n\nDear Project Manager,\n\nAt 10:00 today the Zone B foreman reported a hydraulic hose failure on the excavator. Three workers could no longer continue excavation in that zone. The equipment register and shift report identify the machine as EX-02. [1][2][3]\n\nThe signed daily report records 65 m³ excavated against the scheduled 100 m³. This leaves a shortfall of 35 m³, or 35%. Foundations Zone B is due to start on 12 November after the excavation handover. That start is at risk. [3][4]\n\nGroundWorks had reported on 6 November that routine servicing was overdue. The maintenance email records the service status; the cause of the hose failure remains under review. [5] The mechanic currently expects a return to service at noon tomorrow. We will update you once the crew confirms the restart and we can assess the handover date. [6]\n\nPlease confirm receipt and coordinate the foundation booking with us following the next progress update.\n\nSam Reed\nSite Manager",
+        "evidence_refs": [
+          { "n": 1, "label": "Voice note V01, foreman, 10 Nov 10:15", "ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" } },
+          { "n": 2, "label": "Equipment register, EX-02 assignment", "ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" } },
+          { "n": 3, "label": "Signed daily report R10, page 2, EXC-B row", "ref": { "source_id": "R10", "locator": "EXC-B", "page": 2, "passage_id": "R10:EXC-B" } },
+          { "n": 4, "label": "Programme schedule, FND-B row", "ref": { "source_id": "SCH", "locator": "FND-B", "passage_id": "SCH:FND-B" } },
+          { "n": 5, "label": "Email E01, EX-02 service booking, 6 Nov", "ref": { "source_id": "E01", "locator": "body", "passage_id": "E01:body" } },
+          { "n": 6, "label": "Voice note V02, mechanic's forecast (estimate)", "ref": { "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" } }
+        ],
+        "gaps": [
+          { "id": "gap-contract-ref", "marker": "[MISSING: contract reference]", "kind": "missing", "label": "Contract reference is not recorded in the project record", "resolution": null },
+          { "id": "gap-contract-clause", "marker": "[MISSING: relevant contract clause]", "kind": "missing", "label": "Applicable contract clause is not recorded in the project record", "resolution": null }
+        ],
+        "assumptions": [
+          "The cause of the hose failure is not established; the letter does not attribute it.",
+          "No monetary figures are included because the project record has no rate table.",
+          "The repair time is the mechanic's forecast, not a confirmed release."
+        ],
+        "reviews": [],
+        "exports": []
+      }
+    ]
+  }
+]
