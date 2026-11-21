@@ -482,6 +482,77 @@ def parse_diary(path, ctx, result):
     result.add("handover" if "handover" in label.lower() else slug(label), text, section=label)
 
 
+# ---------------------------------------------------------------- uploaded plans (performance baselines)
+
+# A table row starts with an ID cell on its own line: A200, M3, EXC-B, A410-A440, 1.2.3 is not an ID.
+PLAN_ROW = re.compile(r"^(?:[A-Z]{1,4}\d{1,5}[A-Z]?(?:\s?[-–]\s?[A-Z]{0,4}\d{1,5}[A-Z]?)?|[A-Z]{2,6}-[A-Z0-9]{1,6})$")
+PLAN_SECTION = re.compile(r"^\d{1,2}\.\s+\S")
+DATEISH = re.compile(r"^(?:\d|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b)")
+
+
+def _name_like(line):
+    return bool(line) and line[0].isalpha() and not DATEISH.match(line) and re.search(r"[a-z]{3}", line) is not None
+
+
+def plan_rows(lines):
+    """Group table lines into rows that start with an ID cell followed by a name cell (so an ID in a predecessor
+    column does not start a row). Returns [(row_id, [lines])]."""
+    rows, current = [], None
+    for i, line in enumerate(lines):
+        if PLAN_ROW.match(line) and i + 1 < len(lines) and _name_like(lines[i + 1]):
+            current = (line.replace(" ", "").replace("–", "-"), [line])
+            rows.append(current)
+        elif PLAN_SECTION.match(line) or line.startswith("Page "):
+            current = None
+        elif current is not None:
+            current[1].append(line)
+    return [(code, body) for code, body in rows if len(body) > 1]
+
+
+def parse_plan(path, ctx, result):
+    """Programme, resource and contract plans: one passage per page (`p{n}`) and one per table row that starts
+    with an ID (`p{n}.r{k}`, row k on the page), so extraction can cite the exact row. The row ID is kept in the
+    passage meta, not in the locator, because row detection on extracted PDF text is heuristic.
+    Word plans: one passage per paragraph; CSV: register rows."""
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        parse_csv_register(path, ctx, result)
+        return
+    if suffix == ".docx":
+        for n, (style, text) in enumerate(docx_paragraphs(path), start=1):
+            result.title = result.title or (text if style in ("Title", "Heading1") else None)
+            result.add(f"para.{n}", text, kind="heading" if style.startswith(("Title", "Heading")) else "paragraph")
+        result.title = result.title or path.stem
+        return
+    if suffix in (".txt", ".md"):
+        blocks = [squash(b) for b in re.split(r"\n\s*\n", path.read_text(encoding="utf-8")) if b.strip()]
+        for n, block in enumerate(blocks, start=1):
+            result.add(f"para.{n}", block)
+        result.title = (blocks[0][:120] if blocks else path.stem)
+        return
+    if suffix != ".pdf":
+        result.title = path.name
+        result.review_reasons.append(f"Plans must be PDF, Word, CSV or text; {suffix or 'no extension'} is not supported")
+        return
+    reader = PdfReader(path)
+    result.meta["pages"] = len(reader.pages)
+    for page_no, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        lines = [squash(line) for line in text.splitlines() if squash(line)]
+        if not lines:
+            result.review_reasons.append(f"Page {page_no} has no text layer; the model reads it from the page image")
+            result.add(f"p{page_no}", f"Page {page_no} (no text layer; see the original)", page=page_no)
+            continue
+        if page_no == 1:
+            heading = next((line for line in lines[:12] if len(line) > 12 and not line.startswith("MOCK")), lines[0])
+            result.title = heading
+        result.add(f"p{page_no}", "\n".join(lines), page=page_no, section=f"Page {page_no}")
+        for k, (code, body) in enumerate(plan_rows(lines), start=1):
+            result.add(f"p{page_no}.r{k}", " | ".join(body), kind="table_row", page=page_no,
+                       section=f"Page {page_no}", meta={"row_id": code})
+    result.title = result.title or path.stem
+
+
 # ---------------------------------------------------------------- voice and photos
 
 def parse_voice(path, ctx, result):
@@ -557,7 +628,7 @@ def metadata_passage(result, ctx, path):
 def parse_file(path: Path, ctx) -> ParseResult:
     result = ParseResult()
     kind = ctx["source"]["kind"]
-    parser = parse_diary if kind == "diary" else PARSERS.get(path.suffix.lower())
+    parser = parse_diary if kind == "diary" else parse_plan if kind == "plan" else PARSERS.get(path.suffix.lower())
     if parser is None:
         result.title = path.name
         result.review_reasons.append(f"No parser for {path.suffix or 'files without an extension'}")

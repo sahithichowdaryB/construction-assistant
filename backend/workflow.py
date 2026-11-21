@@ -388,10 +388,19 @@ def site_day(project_id: str, date: str | None = None, as_of: datetime | None = 
         })
     rank = {"behind": 0, "not_reported": 1, "on_track": 2}
     rows.sort(key=lambda r: (rank[r["status"]], -(r["shortfall_pct"] or 0), r["code"]))
+    evaluation = None  # additive (performance evaluation, migration 0009): the latest daily evaluation known at as_of
+    if conn.scalar(text("SELECT to_regclass('sitemate.daily_evaluations')")) is not None:
+        found = conn.execute(text(f"""
+            SELECT version, day_status, day_severity, day_score, status, provisional, as_of,
+                   summary->'headline'->>'text' AS headline
+            FROM sitemate.daily_evaluations WHERE project_id = :p AND work_date = :d AND as_of <= {CUTOFF}
+            ORDER BY version DESC LIMIT 1"""), {"p": project_id, "d": day, "cutoff": as_of}).mappings().one_or_none()
+        if found:
+            evaluation = {**dict(found), "day_score": float(found["day_score"])}
     return {"date": day.isoformat(), "as_of": as_of, "timezone": project["timezone"],
             "threshold": float(project["threshold"]), "high_threshold": float(project["high_threshold"]),
             "first_day": span[0].isoformat() if span[0] else None, "last_day": span[1].isoformat() if span[1] else None,
-            "activities": rows}
+            "activities": rows, "daily_evaluation": evaluation}
 
 
 @router.get("/related", dependencies=[Depends(check_member)])
@@ -444,6 +453,8 @@ class DraftIn(BaseModel):
     alert_id: str | None = None
     activity_code: str | None = Field(None, max_length=40)
     work_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    # Performance suggestions (plan section 6.7): the alert's suggested notice type. Default: the delay notice.
+    notice_type: str = Field(NOTICE, pattern="^(delay_notice|additional_cost_notice|defect_notice|notice_of_concern)$")
 
 
 def _ensure_alert(conn, project_id, code, day, as_of):
@@ -476,7 +487,8 @@ def _ensure_alert(conn, project_id, code, day, as_of):
     current = conn.execute(text("SELECT calculation FROM sitemate.alert_revisions WHERE project_id=:p AND alert_id=:a "
                                 "AND as_of <= :at ORDER BY as_of DESC, version DESC LIMIT 1"),
                            {"p": project_id, "a": alert_id, "at": as_of}).scalar()
-    if current != calc:
+    # Daily evaluations add fields to the calculation; only the fields written here decide a new revision.
+    if {k: (current or {}).get(k) for k in calc} != calc:
         conn.execute(text("""
             INSERT INTO sitemate.alert_revisions (project_id, alert_id, version, as_of, severity, calculation, evidence_refs, reason)
             SELECT :p, :a, coalesce(max(version), 0) + 1, :at, :sev, CAST(:calc AS jsonb), CAST(:refs AS jsonb), :why
@@ -500,7 +512,8 @@ class RevisionIn(BaseModel):
 
 def _alert(conn, project_id, alert_id, as_of):
     row = conn.execute(text(f"""
-        SELECT a.id, a.activity_code, a.checkpoint_at, r.version, r.as_of, r.calculation, r.evidence_refs, r.severity
+        SELECT a.id, a.activity_code, a.checkpoint_at, a.kind, a.title, r.version, r.as_of, r.calculation,
+               r.evidence_refs, r.severity, to_jsonb(r) -> 'suggested_notice' AS suggested_notice
         FROM sitemate.alerts a
         JOIN LATERAL (SELECT * FROM sitemate.alert_revisions r WHERE r.project_id = a.project_id AND r.alert_id = a.id
                       AND r.as_of <= {CUTOFF} ORDER BY r.as_of DESC, r.version DESC LIMIT 1) r ON true
@@ -515,8 +528,14 @@ def _tag(refs):
     return "[" + "; ".join(f"{r['source_id']} · {r['locator']}" for r in refs) + "]"
 
 
-def compose_notice(conn, project_id, alert, as_of):
-    """Write the delay notice from stored records only; every factual sentence carries its citation."""
+def compose_notice(conn, project_id, alert, as_of, notice_type=NOTICE):
+    """Write the notice from stored records only; every factual sentence carries its citation.
+
+    The shortfall delay notice is unchanged. Other notice types, and delay notices for late starts, are composed by
+    performance/notices.py from the alert's calculation and suggested notice."""
+    if notice_type != NOTICE or alert.get("kind", "shortfall") != "shortfall":
+        from performance.notices import compose_performance_notice
+        return compose_performance_notice(conn, project_id, alert, as_of, notice_type)
     project = _project(conn, project_id)
     tz = ZoneInfo(project["timezone"])
     calc = alert["calculation"]
@@ -741,7 +760,8 @@ def _draft_view(conn, project_id, draft_id, as_of):
 @router.post("/drafts", status_code=201)
 def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
                  member=Depends(require_roles("manager"))):
-    """Draft a delay notice for a shortfall alert. One notice per alert: a second call returns it."""
+    """Draft a notice for an alert (delay notice by default; additional cost, defect or concern notices for the
+    performance suggestions). One notice per alert and type: a second call returns it. Nothing is sent."""
     when = stamp(as_of)
     with writer_engine().begin() as conn:
         if body.incident_id:
@@ -765,13 +785,14 @@ def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
                                      datetime.fromisoformat(body.work_date).date(), when)
         alert = _alert(conn, project_id, alert_id, when)
         _lock_notice(conn, alert["id"])
+        notice_type = body.notice_type
         existing = conn.scalar(text("SELECT id FROM sitemate.drafts WHERE project_id=:p AND alert_id=:a AND notice_type=:t"),
-                               {"p": project_id, "a": alert["id"], "t": NOTICE})
+                               {"p": project_id, "a": alert["id"], "t": notice_type})
         if existing:
             return _draft_view(conn, project_id, str(existing), None)
-        text_, refs = compose_notice(conn, project_id, alert, when)
+        text_, refs = compose_notice(conn, project_id, alert, when, notice_type)
         draft_id = conn.scalar(text("INSERT INTO sitemate.drafts (project_id, notice_type, alert_id) "
-                                    "VALUES (:p, :t, :a) RETURNING id"), {"p": project_id, "t": NOTICE, "a": alert["id"]})
+                                    "VALUES (:p, :t, :a) RETURNING id"), {"p": project_id, "t": notice_type, "a": alert["id"]})
         conn.execute(text("""
             INSERT INTO sitemate.draft_versions (project_id, draft_id, version, as_of, body, evidence_refs,
                                                  missing_fields, alert_id, alert_version)

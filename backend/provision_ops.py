@@ -20,6 +20,10 @@ READ_ALL = ("project_members", "projects", "activities", "activity_dependencies"
 INSERT = ("alert_activity", "action_items", "agent_runs", "agent_jobs", "incident_events", "alert_revisions",
           "incident_severity_history", "incident_analyses", "analysis_hypotheses", "analysis_evidence", "drafts",
           "incidents", "alerts")
+PERFORMANCE_READ = ("plan_baselines", "activity_plan", "milestones", "performance_settings", "daily_evaluations",
+                    "daily_activity_results", "performance_ledger", "performance_snapshots", "document_summaries",
+                    "reviews")
+PERFORMANCE_INSERT = ("daily_evaluations", "daily_activity_results", "performance_ledger", "performance_snapshots")
 
 
 def main():
@@ -48,6 +52,13 @@ def main():
             cur.execute(sql.SQL("GRANT UPDATE (incident_id) ON sitemate.events TO {}").format(r))
             cur.execute(sql.SQL("GRANT UPDATE (status, run_after, attempts, last_error, updated_at, payload) "
                                 "ON sitemate.agent_jobs TO {}").format(r))
+            # The worker runs daily evaluations and snapshots (migration 0009_performance): it adds versions and
+            # ledger rows, supersedes ledger rows, and may only change a ledger row's review fields otherwise.
+            cur.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(ident(PERFORMANCE_READ), r))
+            cur.execute(sql.SQL("GRANT INSERT ON {} TO {}").format(ident(PERFORMANCE_INSERT), r))
+            cur.execute(sql.SQL("""GRANT UPDATE (status, reviewer_id, note, reviewed_at, superseded_at, superseded_version)
+                                   ON sitemate.performance_ledger TO {}""").format(r))
+            cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_ops")
     print("Database ops role provisioned.")
 
 

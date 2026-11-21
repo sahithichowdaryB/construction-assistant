@@ -38,6 +38,25 @@ def _int_or_none(v):
         return None
 
 
+def _queue_daily_evaluations(conn, project_id, capture_id) -> None:
+    """A confirmed capture event recomputes a provisional daily evaluation for its work date (debounced, 2 min).
+    Runs in a savepoint and is skipped when the performance tables are not installed, so it can never block a capture."""
+    if conn.scalar(text("SELECT to_regclass('sitemate.daily_evaluations')")) is None:
+        return
+    from ..worker import enqueue_daily_eval
+    days = conn.execute(text("""
+        SELECT DISTINCT (e.occurred_at AT TIME ZONE p.timezone)::date FROM sitemate.events e
+        JOIN sitemate.projects p ON p.id = e.project_id
+        WHERE e.project_id = :p AND e.capture_id = CAST(:c AS uuid) AND e.status = 'confirmed'"""),
+                        {"p": project_id, "c": capture_id}).scalars().all()
+    for day in days:
+        try:
+            with conn.begin_nested():
+                enqueue_daily_eval(conn, project_id, day, trigger="capture_event")
+        except Exception:  # noqa: BLE001 - an evaluation trigger must not fail the capture
+            continue
+
+
 def persist_capture(engine, state: dict, taxonomy: Taxonomy, correlation_ctx: dict) -> dict:
     p, capture_id, source_id = state["project_id"], state["capture_id"], state["source_id"]
     transcript, perception, answers = state.get("transcript"), state.get("perception") or [], state.get("answers") or []
@@ -135,6 +154,7 @@ def persist_capture(engine, state: dict, taxonomy: Taxonomy, correlation_ctx: di
             saved.append({"id": fact_id, **f})
         conn.execute(text("UPDATE sitemate.captures SET status='saved', state=NULL WHERE project_id=:p AND id=CAST(:c AS uuid)"),
                      {"p": p, "c": capture_id})
+        _queue_daily_evaluations(conn, p, capture_id)
 
     return {
         "source_id": source_id, "capture_id": capture_id, "incident_ids": {str(k): v for k, v in incident_ids.items()},

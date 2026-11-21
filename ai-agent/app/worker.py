@@ -52,6 +52,84 @@ def enqueue(conn, project_id: str, kind: str, incident_id: str, delay_seconds: i
     """), {"p": project_id, "k": kind, "i": incident_id, "d": delay_seconds})
 
 
+DAILY_DEBOUNCE_SECONDS = 120  # a burst of events for one project and day causes one evaluation
+
+
+def enqueue_daily_eval(conn, project_id: str, work_date, *, trigger: str, as_of=None,
+                       delay_seconds: int = DAILY_DEBOUNCE_SECONDS, force: bool = False, kind: str = "daily_eval") -> None:
+    """Queue a daily (or overall) evaluation for (project, date). While a job is queued, a new trigger pushes its
+    run_after out (debounce). `force` (manual recompute) also replaces the payload; it needs UPDATE on payload."""
+    payload = json.dumps({"work_date": str(work_date), "trigger": trigger,
+                          "as_of": as_of.isoformat() if as_of else None, "force": force})
+    replace = ", payload = EXCLUDED.payload" if force else ""
+    conn.execute(text(f"""
+        INSERT INTO sitemate.agent_jobs (project_id, kind, payload, run_after)
+        VALUES (:p, :k, CAST(:payload AS jsonb), now() + make_interval(secs => :d))
+        ON CONFLICT (project_id, kind, (payload->>'work_date')) WHERE status = 'queued' AND incident_id IS NULL
+        DO UPDATE SET run_after = EXCLUDED.run_after, updated_at = now(){replace}"""),
+                 {"p": project_id, "k": kind, "payload": payload, "d": delay_seconds})
+
+
+def _performance():
+    """The evaluation code lives in backend/performance; the worker process runs from backend/ (worker.py)."""
+    import sys
+    from pathlib import Path
+    backend = str(Path(__file__).resolve().parents[2] / "backend")
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+    from performance import daily, overall
+    return daily, overall
+
+
+def run_daily_eval(conn, llm: LLMClient, job: dict) -> dict:
+    """Evaluate one work day (payload: work_date, as_of, trigger, force). The LLM steps use the existing clients."""
+    from datetime import date as _date
+    daily, _ = _performance()
+    payload = job.get("payload") or {}
+    as_of = datetime.fromisoformat(payload["as_of"]) if payload.get("as_of") else None
+    started = time.monotonic()
+    result = daily.evaluate_day(conn, job["project_id"], _date.fromisoformat(payload["work_date"]), as_of,
+                                trigger=payload.get("trigger") or "job", force=bool(payload.get("force")))
+    conn.commit()
+    _log_run(conn, job["project_id"], "daily_eval", None, None, None, result, "ok", started)
+    return result
+
+
+def run_overall_eval(conn, llm: LLMClient, job: dict) -> dict:
+    from datetime import date as _date
+    _, overall = _performance()
+    payload = job.get("payload") or {}
+    as_of = datetime.fromisoformat(payload["as_of"]) if payload.get("as_of") else None
+    started = time.monotonic()
+    result = overall.snapshot(conn, job["project_id"], _date.fromisoformat(payload["work_date"]), as_of,
+                              force=bool(payload.get("force")))
+    conn.commit()
+    _log_run(conn, job["project_id"], "overall_eval", None, None, None, {"version": result.get("version")}, "ok", started)
+    return result
+
+
+def sweep_daily(conn) -> int:
+    """End-of-day sweep: at the project's sweep time (default 18:00 local) queue today's evaluation once, so an
+    unreported planned activity is flagged as a missing report."""
+    if conn.scalar(text("SELECT to_regclass('sitemate.daily_evaluations')")) is None:
+        return 0
+    due = conn.execute(text("""
+        SELECT p.id, (now() AT TIME ZONE p.timezone)::date AS today
+        FROM sitemate.projects p
+        JOIN sitemate.plan_baselines b ON b.project_id = p.id AND b.status = 'active'
+        LEFT JOIN sitemate.performance_settings s ON (s.project_id, s.baseline_id) = (b.project_id, b.id)
+        WHERE (now() AT TIME ZONE p.timezone)::time >= CAST(coalesce(s.settings #>> '{calendar,sweep_time}', '18:00') AS time)
+          AND NOT EXISTS (SELECT 1 FROM sitemate.daily_evaluations d WHERE d.project_id = p.id
+                          AND d.work_date = (now() AT TIME ZONE p.timezone)::date AND d.trigger = 'sweep')
+          AND NOT EXISTS (SELECT 1 FROM sitemate.agent_jobs j WHERE j.project_id = p.id AND j.kind = 'daily_eval'
+                          AND j.payload->>'work_date' = ((now() AT TIME ZONE p.timezone)::date)::text
+                          AND j.payload->>'trigger' = 'sweep')""")).mappings().all()
+    for row in due:
+        enqueue_daily_eval(conn, row["id"], row["today"], trigger="sweep", delay_seconds=0)
+    conn.commit()
+    return len(due)
+
+
 def _log_run(conn, project_id, agent, incident_id, model, digest, output, status, started):
     conn.execute(text("""
         INSERT INTO sitemate.agent_runs (project_id, agent, incident_id, model, input_digest, output, status, latency_ms)
@@ -112,7 +190,8 @@ def run_plan_actions(conn, llm: LLMClient, job: dict) -> dict:
     return saved
 
 
-HANDLERS = {"reasoning": run_reasoning, "plan_actions": run_plan_actions}
+HANDLERS = {"reasoning": run_reasoning, "plan_actions": run_plan_actions, "daily_eval": run_daily_eval,
+            "overall_eval": run_overall_eval}
 
 
 def finish(conn, job: dict, error: Exception | None) -> None:
@@ -233,8 +312,8 @@ def run_forever(engine, llm_factory, poll_seconds: float = 3.0, sweep_seconds: f
         try:
             if time.monotonic() - last_sweep > sweep_seconds:
                 with engine.connect() as conn:
-                    log.info("sweep: escalated=%s auto_resolved=%s", escalate_long_open(conn, escalate_hours),
-                             auto_resolve_quiet(conn, resolve_hours))
+                    log.info("sweep: escalated=%s auto_resolved=%s daily=%s", escalate_long_open(conn, escalate_hours),
+                             auto_resolve_quiet(conn, resolve_hours), sweep_daily(conn))
                 last_sweep = time.monotonic()
             if not process_one(engine, llm_factory):
                 time.sleep(poll_seconds)

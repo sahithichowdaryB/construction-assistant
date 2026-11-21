@@ -269,6 +269,9 @@ def main():
         seed_incident(conn)
         from seed_field_cases import seed as seed_field_cases
         seed_field_cases(conn, ROOT, text_passages)
+        if conn.scalar(text("SELECT to_regclass('sitemate.plan_baselines')")) is not None:
+            from performance.baseline import backfill  # schedule.csv as baseline revision 1 (migration 0009)
+            backfill(conn, "RIV")
     print(f"Imported {len(tables['sources'])} sources and {len(tables['observations'])} observations.")
 
 
