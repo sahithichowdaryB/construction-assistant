@@ -86,9 +86,14 @@ export function useProgress(code: string | null, date: string | null) {
  * Pass upToAsOf to show only what had been reported by the selected time.
  */
 export function useIncidents({ upToAsOf = false }: { upToAsOf?: boolean } = {}) {
-  const { projectId, asOf } = useApp();
-  const cutoff = upToAsOf ? asOf : null;
-  return useQuery({ queryKey: keys.incidents(projectId, cutoff), queryFn: () => api.getIncidents(projectId, cutoff) });
+  const { projectId, asOf, live } = useApp();
+  const cutoff = upToAsOf && !live ? asOf : null;
+  return useQuery({
+    queryKey: keys.incidents(projectId, cutoff),
+    queryFn: () => api.getIncidents(projectId, cutoff),
+    refetchInterval: live ? 15_000 : false,
+    refetchOnWindowFocus: "always",
+  });
 }
 
 export function useIncident(id: string, { upToAsOf = false }: { upToAsOf?: boolean } = {}) {

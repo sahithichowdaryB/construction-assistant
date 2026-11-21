@@ -204,7 +204,7 @@ NOTE_SELECT = """
 
 @router.post("/field-notes", status_code=201)
 def record_note(project_id: str, body: NoteIn, as_of: datetime | None = None,
-                member=Depends(require_roles("contributor", "manager"))):
+                member=Depends(require_roles("contributor"))):
     """Store the note as a source and propose its facts for the foreman to confirm."""
     note = re.sub(r"\s+", " ", body.text).strip()
     recorded = stamp(as_of)
@@ -290,7 +290,7 @@ def list_notes(project_id: str, as_of: datetime | None = None, mine: bool = Fals
 
 @router.post("/field-notes/{source_id}/confirm")
 def confirm_note(project_id: str, source_id: str, as_of: datetime | None = None,
-                 member=Depends(require_roles("contributor", "manager"))):
+                 member=Depends(require_roles("contributor"))):
     when = stamp(as_of)
     with writer_engine().begin() as conn:
         row = conn.execute(text(NOTE_SELECT + " AND s.id = :s"), {"p": project_id, "s": source_id}).mappings().one_or_none()
@@ -606,14 +606,18 @@ def _missing(body):
 
 
 @router.get("/day-records", dependencies=[Depends(require_roles("manager"))])
-def day_records(project_id: str, date: calendar_date, as_of: datetime | None = None, conn=Depends(connection)):
+def day_records(project_id: str, date: calendar_date, as_of: datetime | None = None,
+                period: Literal["day", "week"] = "day", conn=Depends(connection)):
     check_cutoff(as_of)
     tz = ZoneInfo(_project(conn, project_id)["timezone"])
-    start = datetime.combine(date, time.min, tz)
+    first_day = date - timedelta(days=date.weekday()) if period == "week" else date
+    start = datetime.combine(first_day, time.min, tz)
+    end = start + timedelta(days=7 if period == "week" else 1)
     return conn.execute(text(f"""
         SELECT e.id::text AS id, e.summary AS title, e.event_type AS kind,
                CASE WHEN e.occurred_at >= :start AND e.occurred_at < :end AND e.occurred_at <= {CUTOFF} THEN e.occurred_at
-                    ELSE e.recorded_at END AS at, e.source_id, ie.incident_id::text AS incident_id
+                    ELSE e.recorded_at END AS at, e.source_id, ie.incident_id::text AS incident_id,
+               NULL::text AS draft_id, NULL::integer AS version, false AS correspondence
         FROM sitemate.events e
         JOIN sitemate.captures c ON (c.project_id,c.id)=(e.project_id,e.capture_id) AND c.status='saved'
         LEFT JOIN sitemate.incident_events ie ON (ie.project_id,ie.event_id)=(e.project_id,e.id)
@@ -622,12 +626,20 @@ def day_records(project_id: str, date: calendar_date, as_of: datetime | None = N
             (e.occurred_at >= :start AND e.occurred_at < :end AND e.occurred_at <= {CUTOFF})
             OR (e.recorded_at >= :start AND e.recorded_at < :end))
         UNION ALL
-        SELECT s.id, coalesce(sp.excerpt,s.title,s.id), s.kind, s.available_at, s.id, NULL
+        SELECT s.id, coalesce(sp.excerpt,s.title,s.id), s.kind, s.available_at, s.id, NULL, NULL, NULL, false
         FROM sitemate.sources s
         LEFT JOIN sitemate.source_passages sp ON (sp.project_id,sp.source_id,sp.locator)=(s.project_id,s.id,'transcript')
         WHERE s.project_id=:p AND s.available_at >= :start AND s.available_at < :end AND s.available_at <= {CUTOFF}
           AND NOT EXISTS (SELECT 1 FROM sitemate.captures c WHERE (c.project_id,c.source_id)=(s.project_id,s.id))
-        ORDER BY at DESC, id"""), {"p": project_id, "start": start, "end": start + timedelta(days=1), "cutoff": as_of}).mappings().all()
+        UNION ALL
+        SELECT concat('draft:', d.id, ':', v.version),
+               coalesce(substring(v.body from '(?n)^Subject: ([^\r\n]+)'), d.keywords, replace(d.notice_type, '_', ' ')),
+               d.notice_type, v.as_of, NULL, NULL, d.id::text, v.version, d.request IS NOT NULL
+        FROM sitemate.draft_versions v
+        JOIN sitemate.drafts d ON (d.project_id,d.id)=(v.project_id,v.draft_id)
+        WHERE v.project_id=:p AND v.as_of >= :start AND v.as_of < :end AND v.as_of <= {CUTOFF}
+        ORDER BY at DESC, id"""), {"p": project_id, "start": start, "end": end,
+                                   "cutoff": as_of or datetime.now(timezone.utc)}).mappings().all()
 
 
 @router.get("/incidents/{incident_id}/notice-preview", dependencies=[Depends(require_roles("manager"))])

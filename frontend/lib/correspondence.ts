@@ -138,8 +138,8 @@ const send = (method: string, body?: unknown): RequestInit => ({
 });
 
 function useBase() {
-  const { projectId, asOf } = useApp();
-  return { base: `/projects/${encodeURIComponent(projectId)}`, q: `?as_of=${encodeURIComponent(asOf)}`, projectId };
+  const { projectId, asOf, live } = useApp();
+  return { base: `/projects/${encodeURIComponent(projectId)}`, q: live ? "" : `?as_of=${encodeURIComponent(asOf)}`, projectId };
 }
 
 export function useWriterOptions() {

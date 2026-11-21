@@ -36,13 +36,13 @@ export type Action =
 const PERMISSIONS: Record<Role, Action[]> = {
   // Contributors capture and confirm categories; managers merge incidents and act on alerts; approvers approve actions.
   foreman: ["capture", "confirm_capture", "upload"],
-  site_manager: ["capture", "confirm_capture", "upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning", "act_on_alert", "approve_action", "merge_incident"],
+  site_manager: ["upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning", "act_on_alert", "approve_action", "merge_incident"],
   approver: ["ask", "approve", "request_changes", "export", "run_reasoning", "act_on_alert", "approve_action"],
 };
 
 const WHO: Record<Action, string> = {
-  capture: "the foreman or site manager",
-  confirm_capture: "the foreman or site manager",
+  capture: "the foreman",
+  confirm_capture: "the foreman",
   upload: "the foreman or site manager",
   dismiss_alert: "the site manager",
   link_incident: "the site manager",

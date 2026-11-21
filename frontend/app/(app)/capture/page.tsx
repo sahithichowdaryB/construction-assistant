@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Keyboard, Megaphone, Mic, Send, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Camera, Keyboard, Megaphone, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -25,6 +25,8 @@ import {
 } from "@/lib/agent";
 import { useCapturePrompts, useEventCategories, useInvalidateProject } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
+import { useSession } from "@/lib/auth";
+import { AUTH_REQUIRED } from "@/lib/session";
 
 const MAX_IMAGES = 5;
 const PHOTO_TYPES: Record<string, string> = {
@@ -45,6 +47,17 @@ const VOICE_READY = process.env.NEXT_PUBLIC_VOICE_TRANSCRIPTION === "true";
 const VOICE_OFF_REASON = "Voice recording isn't set up. Tap “Type instead” and dictate (Mac: press the dictation key).";
 
 export default function CapturePage() {
+  const { role, projectId } = useApp();
+  const session = useSession();
+  const canCapture = AUTH_REQUIRED
+    ? session.data?.memberships.some((m) => m.project_id === projectId && m.role === "contributor")
+    : role === "foreman";
+  if (AUTH_REQUIRED && session.isPending) return <LoadingSkeleton rows={2} />;
+  if (!canCapture) return <p>Only foremen can add site notes.</p>;
+  return <ForemanCapture />;
+}
+
+function ForemanCapture() {
   const { role, projectId } = useApp();
   const blocked = denyReason(role, "capture");
   const micBlocked = blocked ?? (VOICE_READY ? null : VOICE_OFF_REASON);
@@ -168,7 +181,7 @@ export default function CapturePage() {
       <div>
         <h1 className="text-2xl font-bold md:text-[28px]">Site notes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Say or photograph what happened. SiteMate suggests what kind of event it is and picks out the details; you choose the category and check every detail before it is saved.
+          Record a voice note, type a note or add photos. Check the details before saving to the site diary.
         </p>
       </div>
 
@@ -205,7 +218,7 @@ export default function CapturePage() {
               <span className="size-2 rounded-full bg-primary" aria-hidden /> New site note
             </p>
             <h2 className="mt-2 text-2xl font-bold">What happened on site?</h2>
-            <p className="mt-1 text-sm text-hero-muted">Say what, where, when, and who was affected. Any language is fine.</p>
+            <p className="mt-1 text-sm text-hero-muted">Describe what happened, where, when, and who was affected.</p>
           </div>
 
           <MicButton key={micKey} onSubmit={submitRecording} disabled={!!micBlocked || busy || reviewing} disabledReason={reviewing ? "Finish checking your current note below." : micBlocked} />
@@ -420,7 +433,7 @@ function HowItWorks() {
     <div className="flex flex-col gap-5">
       <ol className="flex flex-col gap-3 text-sm">
         {[
-          { Icon: Mic, t: "Speak or type", d: "One short note from the field. No forms." },
+          { Icon: Keyboard, t: "Add a site note", d: "Describe what happened on site." },
           { Icon: Sparkles, t: "SiteMate picks out the details", d: "Time, machine, zone, crew and cause, each linked to what you said." },
           { Icon: ShieldCheck, t: "You confirm", d: "Nothing is saved until you have checked it. Missing details are asked, never guessed." },
         ].map(({ Icon, t, d }, i) => (

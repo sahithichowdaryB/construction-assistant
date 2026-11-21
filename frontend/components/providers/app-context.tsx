@@ -21,6 +21,7 @@ interface AppContextValue {
   projectId: string;
   /** ISO instant with UTC offset; every query is scoped to it */
   asOf: string;
+  live: boolean;
   setAsOf: (iso: string) => void;
   goLive: () => void;
   role: Role;
@@ -81,6 +82,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     () => ({
       projectId: PROJECT_ID,
       asOf,
+      live,
       setAsOf,
       goLive,
       role,
@@ -92,7 +94,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       askOpen,
       setAskOpen,
     }),
-    [asOf, setAsOf, goLive, role, setRole, evidence, evidenceAsOf, askOpen],
+    [asOf, live, setAsOf, goLive, role, setRole, evidence, evidenceAsOf, askOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -107,5 +109,5 @@ export function useApp(): AppContextValue {
 /** Resolve a saved notice's citations at the instant used to prepare that version. */
 export function EvidenceAt({ at, children }: { at: string; children: ReactNode }) {
   const app = useApp();
-  return <AppContext.Provider value={{ ...app, asOf: at, openEvidence: (ref) => app.openEvidence(ref, at) }}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={{ ...app, live: false, asOf: at, openEvidence: (ref) => app.openEvidence(ref, at) }}>{children}</AppContext.Provider>;
 }

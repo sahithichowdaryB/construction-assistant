@@ -161,7 +161,7 @@ export default function ForemanPage() {
       />
       <Steps step={step} />
       {lastReported && <p role="status" className="mb-4 text-sm">Report {lastReported} confirmed. <Link className="underline" href="/foreman/reports">View My reports</Link></p>}
-      <Link href="/capture" className="mb-4 inline-block text-sm font-medium underline">Record a voice note or attach a photo</Link>
+      {!blocked && <Link href="/capture" className="mb-4 inline-block text-sm font-medium underline">Record a voice note or attach a photo</Link>}
 
       <div className="grid items-start gap-5 max-w-3xl">
         <section className="rounded-2xl border bg-card p-5 shadow-xs" aria-labelledby="note-title">

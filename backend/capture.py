@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import engine_for
-from deps import check_member, connection, current_member, require_writer
+from deps import check_member, connection, current_member, require_roles
 
 from app.capture.llm_factory import get_capture_llm  # noqa: E402  (ai-agent is on sys.path, see main.py)
 from app.capture.pipeline import CaptureError, CaptureService  # noqa: E402
@@ -48,7 +48,7 @@ def _respond(call):
 
 
 @router.post("/projects/{project_id}/captures")
-def create_capture(project_id: str, member=Depends(require_writer), service: CaptureService = Depends(get_capture_service),
+def create_capture(project_id: str, member=Depends(require_roles("contributor")), service: CaptureService = Depends(get_capture_service),
                    audio: UploadFile | None = File(None), images: list[UploadFile] = File(default_factory=list),
                    transcript: str | None = Form(None), recorded_at: str | None = Form(None), zone_hint: str | None = Form(None)):
     """multipart: `audio` (one file), `images` (up to 5), `transcript`, optional `recorded_at`.
@@ -79,7 +79,7 @@ class CategoriesBody(BaseModel):
 
 
 @router.post("/projects/{project_id}/captures/{thread_id}/categories")
-def confirm_categories(project_id: str, thread_id: str, body: CategoriesBody, member=Depends(require_writer),
+def confirm_categories(project_id: str, thread_id: str, body: CategoriesBody, member=Depends(require_roles("contributor")),
                        service: CaptureService = Depends(get_capture_service)):
     """The person's final categories. Events not mentioned keep the AI suggestion; keep=false means "not an event"."""
     return _respond(lambda: service.confirm_categories(project_id, thread_id, body.model_dump()))
@@ -95,7 +95,7 @@ class AnswersBody(BaseModel):
 
 
 @router.post("/projects/{project_id}/captures/{thread_id}/answers")
-def answer_questions(project_id: str, thread_id: str, body: AnswersBody, member=Depends(require_writer),
+def answer_questions(project_id: str, thread_id: str, body: AnswersBody, member=Depends(require_roles("contributor")),
                      service: CaptureService = Depends(get_capture_service)):
     """Answers to the follow-up questions; `unknown` records a field as a gap."""
     return _respond(lambda: service.answer(project_id, thread_id, [a.model_dump() for a in body.answers]))
@@ -131,7 +131,7 @@ class ReviewBody(BaseModel):
 
 
 @router.post("/projects/{project_id}/captures/{thread_id}/review")
-def review_capture(project_id: str, thread_id: str, body: ReviewBody, member=Depends(require_writer),
+def review_capture(project_id: str, thread_id: str, body: ReviewBody, member=Depends(require_roles("contributor")),
                    service: CaptureService = Depends(get_capture_service)):
     """The speaker's last look before anything is saved: corrected values, removed facts, values for gaps the rules
     reported, or `discard` to save nothing. Only the person who recorded the note may review it."""

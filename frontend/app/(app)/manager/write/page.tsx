@@ -18,7 +18,7 @@ import {
   Target,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeDownloads } from "@/components/notice-downloads";
@@ -611,6 +611,7 @@ function DraftGrid({
 export default function WritePage() {
   const list = useCorrespondenceList();
   const [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => { setSelected(new URLSearchParams(window.location.search).get("draft")); }, []);
   const item = useCorrespondence(selected);
   const drafts = list.data ?? [];
 

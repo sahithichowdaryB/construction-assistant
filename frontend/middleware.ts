@@ -25,7 +25,7 @@ export function middleware(req: NextRequest) {
     const workspace = roleHomes.find((route) => pathname === route || pathname.startsWith(route + "/"));
     const oldNotices = pathname === "/drafts" || pathname.startsWith("/drafts/");
     const sharedHub = ["/today", "/alerts", "/incidents", "/schedule", "/documents", "/actions", "/search", "/settings"].includes(pathname);
-    const outsideWorkspace = home !== ROLE_HOME.site_manager && (sharedHub || (pathname === "/capture" && home === ROLE_HOME.approver));
+    const outsideWorkspace = (sharedHub && home !== ROLE_HOME.site_manager) || (pathname === "/capture" && home !== ROLE_HOME.foreman);
     if (home && roleHomes.includes(home) && (pathname === "/" || isAuthPage || oldNotices || outsideWorkspace || (workspace && workspace !== home))) {
       const url = req.nextUrl.clone();
       url.pathname = home;

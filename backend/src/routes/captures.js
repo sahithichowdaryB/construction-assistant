@@ -15,7 +15,7 @@ const IMAGE_TYPES = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": "
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Claude's per-image limit
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 + config.maxImages } })
   .fields([{ name: "audio", maxCount: 1 }, { name: "images", maxCount: config.maxImages }]);
-const canCapture = requireMember("contributor", "manager", "approver");
+const canCapture = requireMember("contributor");
 // How a member's role is weighted as evidence by the root-cause agent (sources.author_role).
 const AUTHOR_ROLE = { contributor: "foreman", manager: "site_supervisor", approver: "site_supervisor" };
 export const captures = Router({ mergeParams: true });

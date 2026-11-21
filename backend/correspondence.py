@@ -806,7 +806,7 @@ def _generate(conn, project_id, member, kind, request, chosen, day, when, instru
     project = wf._project(conn, project_id)
     started = clock.monotonic()
     u = _understand(conn, project_id, request["what_happened"], request.get("emphasis"), day)
-    if u.get("work_date"):
+    if not request.get("work_date") and u.get("work_date"):
         day = calendar_date.fromisoformat(u["work_date"])
     analysis = _analyse(conn, project_id, project, u, day, when, kind)
     if not any(f["source"] in ("record", "document", "calculated") for f in analysis["facts"]):

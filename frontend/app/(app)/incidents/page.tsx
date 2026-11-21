@@ -8,6 +8,7 @@ import { CitationList } from "@/components/citation-chip";
 import { useApp } from "@/components/providers/app-context";
 import { EmptyState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
 import { TimelineStages } from "@/components/timeline";
+import { SiteActivity } from "@/components/site-activity";
 import { Button } from "@/components/ui/button";
 import { INCIDENT_TYPE_LABEL } from "@/lib/format";
 import { useCategoryLabel, useIncidents } from "@/lib/queries";
@@ -28,7 +29,7 @@ const FINISHED = new Set<Incident["status"]>(["resolved", "closed"]);
 const matches = (i: Incident, f: Filter) => (f === "all" ? true : f === "resolved" ? FINISHED.has(i.status) : !FINISHED.has(i.status));
 
 export default function IncidentsPage() {
-  const { asOf } = useApp();
+  const { asOf, role } = useApp();
   const [filter, setFilter] = useState<Filter>("all");
   const [scope, setScope] = useState("all");
   const upToAsOf = scope !== "all";
@@ -50,7 +51,7 @@ export default function IncidentsPage() {
   return (
     <>
       <PageHeader
-        title="Incidents"
+        title="Incident insights"
         description={
           upToAsOf
             ? `Incidents reported by ${fmtDateTime(asOf)}.`
@@ -58,6 +59,8 @@ export default function IncidentsPage() {
         }
       />
 
+      {role === "site_manager" && <SiteActivity date={day} />}
+      <h2 className="mb-2 font-semibold">Incidents</h2>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter incidents by status">
           {FILTERS.map((f) => (

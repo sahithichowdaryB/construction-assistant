@@ -113,7 +113,8 @@ export type NoticeDraft = z.infer<typeof draftSchema>;
 export type DraftStatus = NoticeDraft["status"];
 
 const dayRecordsSchema = z.array(z.object({
-  id: z.string(), title: z.string(), kind: z.string(), at: z.string(), source_id: z.string(), incident_id: z.string().nullable(),
+  id: z.string(), title: z.string(), kind: z.string(), at: z.string(), source_id: z.string().nullable(), incident_id: z.string().nullable(),
+  draft_id: z.string().nullable(), version: z.number().nullable(), correspondence: z.boolean(),
 }));
 const incidentPreviewSchema = z.object({
   body: z.string(), evidence_refs: z.array(refSchema), existing_id: z.string().nullable(), as_of: z.string(),
@@ -122,11 +123,16 @@ const incidentPreviewSchema = z.object({
 export const noticeLabel = (draft: NoticeDraft) =>
   draft.kind_label ?? (draft.notice_type === "incident_notice" ? "Site incident notice" : "Delay notice");
 
-export function useDayRecords(date: string) {
-  const { base, projectId, asOf } = useBase();
+export function useDayRecords(date: string, period: "day" | "week") {
+  const { base, projectId, asOf, live } = useBase();
+  const cutoff = live ? null : asOf;
+  const params = new URLSearchParams({ date, period });
+  if (cutoff) params.set("as_of", cutoff);
   return useQuery({
-    queryKey: ["sm", projectId, "day-records", date, asOf],
-    queryFn: () => call(`${base}/day-records?date=${date}&as_of=${encodeURIComponent(asOf)}`, dayRecordsSchema),
+    queryKey: ["sm", projectId, "day-records", date, period, cutoff],
+    queryFn: () => call(`${base}/day-records?${params}`, dayRecordsSchema),
+    refetchInterval: live ? 15_000 : false,
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -162,8 +168,8 @@ const json = (body: unknown): RequestInit => ({
 });
 
 function useBase() {
-  const { projectId, asOf } = useApp();
-  return { base: `/projects/${encodeURIComponent(projectId)}`, asOf, q: `?as_of=${encodeURIComponent(asOf)}`, projectId };
+  const { projectId, asOf, live } = useApp();
+  return { base: `/projects/${encodeURIComponent(projectId)}`, asOf, live, q: live ? "" : `?as_of=${encodeURIComponent(asOf)}`, projectId };
 }
 
 // ---------- the day on site

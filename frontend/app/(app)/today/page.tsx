@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronRight, FilePen, Mic, Siren, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
+import { ArrowRight, ChevronRight, FilePen, ClipboardPen, Siren, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { alertSummary } from "@/components/alert-card";
 import { CitationList } from "@/components/citation-chip";
@@ -162,11 +162,11 @@ export default function TodayPage() {
                         </Link>
                       </Button>
                     )}
-                    <Button asChild size="touch" variant="ghost" className="h-12 rounded-2xl bg-white/10 px-5 text-[15px] text-white hover:bg-white/15 hover:text-white md:h-12 md:px-5">
+                    {role === "foreman" && <Button asChild size="touch" variant="ghost" className="h-12 rounded-2xl bg-white/10 px-5 text-[15px] text-white hover:bg-white/15 hover:text-white md:h-12 md:px-5">
                       <Link href="/capture">
-                        <Mic aria-hidden /> Record a site note
+                        <ClipboardPen aria-hidden /> Add a site note
                       </Link>
-                    </Button>
+                    </Button>}
                   </div>
                 </div>
                 <div className="px-4 pb-6 lg:px-6 lg:py-6">

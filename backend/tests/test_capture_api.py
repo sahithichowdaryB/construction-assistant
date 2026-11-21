@@ -39,7 +39,7 @@ def client(tmp_path, monkeypatch):
     with admin.begin() as c:
         _clean(c)
         c.execute(text("INSERT INTO sitemate.projects (id,name,timezone,threshold,high_threshold) VALUES (:p,'c','UTC',10,30)"), {"p": PID})
-        for m, role in (("writer", "contributor"), ("other", "contributor"), ("viewer", "viewer")):
+        for m, role in (("writer", "contributor"), ("other", "contributor"), ("viewer", "viewer"), ("manager", "manager")):
             c.execute(text("INSERT INTO sitemate.project_members (project_id,member_id,token_hash,role) VALUES (:p,:m,:h,:r)"),
                       {"p": PID, "m": m, "h": sha(f"tok-{m}"), "r": role})
     service = CaptureService(create_engine(os.environ.get("TEST_AGENT_URL", URL)), FakeLLM(),
@@ -73,6 +73,9 @@ def test_auth_and_validation(client):
     assert r.status_code == 422 and "JPEG" in r.json()["detail"]
     r = client.post(url, headers=AUTH, files=[("audio", ("n.webm", b"x", "audio/webm"))])
     assert r.status_code == 422 and "not configured" in r.json()["detail"]
+    r = client.post(url, headers={"Authorization": "Bearer tok-manager"}, files=[("audio", ("n.webm", b"x", "audio/webm"))])
+    assert r.status_code == 403
+    assert client.post(url, headers={"Authorization": "Bearer tok-manager"}, data={"transcript": "A typed note"}).status_code == 403
     r = client.post(url, headers=AUTH, files=[("images", (f"{i}.png", PNG, "image/png")) for i in range(6)])
     assert r.status_code == 422
     assert client.post(f"{url}/00000000-0000-0000-0000-000000000000/categories", headers=AUTH, json={"events": []}).status_code == 404

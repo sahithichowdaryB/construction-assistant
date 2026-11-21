@@ -2,9 +2,9 @@
 
 import { AlertTriangle, CheckCircle2, CircleDashed, FilePen, Hammer, MessageSquareWarning, Search, Send, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { CitationChip } from "@/components/citation-chip";
 import { DayNav } from "@/components/day-nav";
+import { SiteActivity } from "@/components/site-activity";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
 import { NoticeDownloads } from "@/components/notice-downloads";
@@ -23,7 +23,6 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
   useDraftNotice,
-  useDayRecords,
   noticeLabel,
   useFieldNotes,
   useNotices,
@@ -361,7 +360,6 @@ export default function ManagerPage() {
   const setPickedDate = (date: string | null) => setDayChoice(date ? { date, clockDay: clockDate } : null);
   const date = dayChoice?.clockDay === clockDate && dayChoice.date <= clockDate ? dayChoice.date : clockDate;
   const day = useSiteDay(date);
-  const records = useDayRecords(date);
   const [pickedCode, setPickedCode] = useState<string | null>(null);
   const rows = (day.data?.activities ?? []).map((activity) => {
     const notice = activity.alert_id && notices.data?.find((item) => item.alert_id === activity.alert_id);
@@ -391,15 +389,7 @@ export default function ManagerPage() {
           />
         }
       />
-      {!inboxNotice && <section className="mb-5 rounded-2xl border bg-card p-4" aria-label="Site diary for selected day">
-        <h2 className="mb-2 font-semibold">Site diary · {fmtLocalDate(date)}</h2>
-        {records.isPending ? <LoadingSkeleton rows={2} /> : records.isError ? <ErrorState error={records.error} onRetry={() => void records.refetch()} />
-          : records.data.length ? <ul className="divide-y">{records.data.map((r) =>
-            <li key={r.id} className="py-2 text-sm [overflow-wrap:anywhere]">
-              <p className="text-xs text-muted-foreground">{fmtDateTime(r.at)} · {r.kind.replaceAll("_", " ")} · {r.source_id}</p>
-              {r.incident_id ? <Link className="underline" href={`/incidents/${r.incident_id}`}>{r.title}</Link> : r.title}
-            </li>)}</ul> : <p className="text-sm text-muted-foreground">No site records for this day at the selected time.</p>}
-      </section>}
+      {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
       {!!openShortfalls?.length && notices.isSuccess && (
         <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
           <h2 className="text-sm font-semibold">Shortfalls without a notice</h2>
@@ -425,7 +415,7 @@ export default function ManagerPage() {
               <button type="button" key={notice.id} aria-pressed={inboxId === notice.id}
                 className="rounded-xl border bg-card px-3 py-2 text-sm hover:bg-muted"
                 onClick={() => setInboxId(inboxId === notice.id ? null : notice.id)}>
-                {notice.activity_name} · {STATUS_LABEL[notice.status]}
+                {notice.title ?? noticeLabel(notice)} · {STATUS_LABEL[notice.status]}
               </button>
             ))}
           </div>
