@@ -90,7 +90,7 @@ alert evidence still resolve.
 Set `ANTHROPIC_API_KEY` in `.env`. All model calls go through `documents/llm.py` with the
 Anthropic Python SDK:
 
-- **Model:** `claude-opus-5-5` (`DOCS_LLM_MODEL`). Summaries, scanned-page OCR and photo captions
+- **Model:** `claude-sonnet-5-5` (`DOCS_LLM_MODEL`). Summaries, scanned-page OCR and photo captions
   run at effort `medium` (`DOCS_LLM_EFFORT`); search reranking runs at `low`.
 - **JSON:** every call uses structured outputs (`output_config.format` with a JSON schema), so the
   reply is always schema-valid JSON.

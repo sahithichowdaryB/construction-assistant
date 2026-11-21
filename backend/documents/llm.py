@@ -6,7 +6,7 @@ record a failed or needs-review job instead of guessing.
 
 Configuration (backend/.env):
     ANTHROPIC_API_KEY      required
-    DOCS_LLM_MODEL         default claude-opus-5-5
+    DOCS_LLM_MODEL         default claude-sonnet-5-5
     DOCS_LLM_EFFORT        default medium (summaries, OCR, captions); reranking always uses low
 """
 
@@ -18,7 +18,7 @@ from functools import lru_cache
 
 import anthropic
 
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"
 # Server-side refusal fallback: if the model declines, the API re-runs the request on a
 # fallback model chosen by refusal category, inside the same call.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
