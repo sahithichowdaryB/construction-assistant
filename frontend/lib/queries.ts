@@ -16,8 +16,8 @@ export const keys = {
   alerts: (pid: string, asOf: string) => ["sm", pid, "alerts", asOf] as const,
   alertContext: (pid: string, id: string, workDate: string) => ["sm", pid, "alert-context", id, workDate] as const,
   progress: (pid: string, code: string, date: string, asOf: string) => ["sm", pid, "progress", code, date, asOf] as const,
-  incidents: (pid: string, asOf: string) => ["sm", pid, "incidents", asOf] as const,
-  incident: (pid: string, id: string, asOf: string) => ["sm", pid, "incident", id, asOf] as const,
+  incidents: (pid: string, asOf: string | null) => ["sm", pid, "incidents", asOf ?? "all"] as const,
+  incident: (pid: string, id: string, asOf: string | null) => ["sm", pid, "incident", id, asOf ?? "all"] as const,
   reasoning: (pid: string, id: string, asOf: string) => ["sm", pid, "reasoning", id, asOf] as const,
   sources: (pid: string, asOf: string) => ["sm", pid, "sources", asOf] as const,
   source: (pid: string, sid: string, asOf: string) => ["sm", pid, "source", sid, asOf] as const,
@@ -76,14 +76,20 @@ export function useProgress(code: string | null, date: string | null) {
   });
 }
 
-export function useIncidents() {
+/**
+ * Incidents are reported in full by default: nothing is hidden by the look-back clock.
+ * Pass upToAsOf to show only what had been reported by the selected time.
+ */
+export function useIncidents({ upToAsOf = false }: { upToAsOf?: boolean } = {}) {
   const { projectId, asOf } = useApp();
-  return useQuery({ queryKey: keys.incidents(projectId, asOf), queryFn: () => api.getIncidents(projectId, asOf) });
+  const cutoff = upToAsOf ? asOf : null;
+  return useQuery({ queryKey: keys.incidents(projectId, cutoff), queryFn: () => api.getIncidents(projectId, cutoff) });
 }
 
-export function useIncident(id: string) {
+export function useIncident(id: string, { upToAsOf = false }: { upToAsOf?: boolean } = {}) {
   const { projectId, asOf } = useApp();
-  return useQuery({ queryKey: keys.incident(projectId, id, asOf), queryFn: () => api.getIncident(projectId, id, asOf) });
+  const cutoff = upToAsOf ? asOf : null;
+  return useQuery({ queryKey: keys.incident(projectId, id, cutoff), queryFn: () => api.getIncident(projectId, id, cutoff) });
 }
 
 export function useIncidentReasoning(id: string) {

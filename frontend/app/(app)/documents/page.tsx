@@ -219,7 +219,7 @@ export default function DocumentsPage() {
 
   return (
     <>
-      <PageHeader title="Documents" description="Every source SiteMate can cite, filtered to what was available at the selected time." />
+      <PageHeader title="Documents" description="Every document SiteMate can refer to, as it stood at the time you are viewing." />
 
       <div className="flex flex-col gap-5">
         {/* Search and type filters */}

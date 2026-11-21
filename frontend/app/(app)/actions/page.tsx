@@ -23,12 +23,12 @@ export default function ActionsPage() {
     <>
       <PageHeader
         title="Action items"
-        description="Open actions from minutes, diaries, emails and reports. An owner and due date appear only when the source records them."
+        description="Open follow-ups from minutes, diaries, emails and reports. Owners and due dates are shown when the document names them."
       />
       <QueryState
         query={items}
         loading={<LoadingSkeleton rows={5} />}
-        empty={<EmptyState icon={<ListChecks />} title="No open actions at this time" />}
+        empty={<EmptyState icon={<ListChecks />} title="No open action items" description="Follow-ups found in documents will appear here." />}
       >
         {(list) => (
           <ul className="flex flex-col gap-3">

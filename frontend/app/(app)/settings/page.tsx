@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleCheck, CircleX, Database, RefreshCw } from "lucide-react";
+import { CircleCheck, CircleX, Database, LogOut, RefreshCw, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ErrorState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
@@ -8,14 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SIMULATE_ERRORS_KEY } from "@/lib/api";
 import { ENDPOINTS, servedFromFixtures, USE_FIXTURES, type EndpointKey } from "@/lib/endpoints";
+import { useApp } from "@/components/providers/app-context";
 import { useHealth, useProject } from "@/lib/queries";
+import { ROLE_LABEL, ROLE_PERSON } from "@/lib/roles";
 
 function Missing({ value }: { value: string | null }) {
   return value ? (
     <>{value}</>
   ) : (
     <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 text-xs font-medium text-red-800">
-      <CircleX className="size-3" aria-hidden /> Missing
+      <CircleX className="size-3" aria-hidden /> Not set
     </span>
   );
 }
@@ -31,10 +34,10 @@ function ApiIndicator() {
       <p className="flex flex-wrap items-center gap-2">
         <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-medium ${ok ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-900"}`}>
           {ok ? <CircleCheck className="size-4" aria-hidden /> : <CircleX className="size-4" aria-hidden />}
-          API: {ok ? "connected" : h.api}
+          Connection: {ok ? "working" : h.api}
         </span>
         <span className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5">
-          <Database className="size-4" aria-hidden /> Data: {h.mode === "fixtures" ? "fixtures" : "live API (planned routes on fixtures)"}
+          <Database className="size-4" aria-hidden /> Records: {h.mode === "fixtures" ? "demo data" : "live (some screens still use demo data)"}
         </span>
         {h.database && <span className="text-muted-foreground">database {h.database}</span>}
       </p>
@@ -47,6 +50,7 @@ function ApiIndicator() {
 }
 
 export default function SettingsPage() {
+  const { role } = useApp();
   const project = useProject();
   const qc = useQueryClient();
   const [simulate, setSimulate] = useState(false);
@@ -72,11 +76,11 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Project record (read-only) and data source." />
+      <PageHeader title="Settings" description="Project details, your account, and system status." />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Project</CardTitle>
+            <CardTitle>Project details</CardTitle>
           </CardHeader>
           <CardContent>
             <QueryState query={project} loading={<LoadingSkeleton rows={4} />}>
@@ -87,9 +91,9 @@ export default function SettingsPage() {
                   <dt className="text-muted-foreground">Time zone</dt>
                   <dd>{p.timezone}</dd>
                   <dt className="text-muted-foreground">Alert threshold</dt>
-                  <dd>Shortfall above {p.thresholds.deviation_pct}%</dd>
-                  <dt className="text-muted-foreground">High severity</dt>
-                  <dd>Shortfall above {p.thresholds.high_above_pct}%</dd>
+                  <dd>Behind plan by more than {p.thresholds.deviation_pct}%</dd>
+                  <dt className="text-muted-foreground">High priority</dt>
+                  <dd>Behind plan by more than {p.thresholds.high_above_pct}%</dd>
                   <dt className="text-muted-foreground">Sender</dt>
                   <dd>
                     {p.sender.name}
@@ -107,7 +111,7 @@ export default function SettingsPage() {
                   <dt className="text-muted-foreground">Rate table</dt>
                   <dd><Missing value={p.rate_table} /></dd>
                   <dt className="text-muted-foreground">Calendar</dt>
-                  <dd>{p.calendar_note ?? "Unknown"}</dd>
+                  <dd>{p.calendar_note ?? "Not set"}</dd>
                 </dl>
               )}
             </QueryState>
@@ -117,7 +121,22 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>API status</CardTitle>
+              <CardTitle>Your account</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <p className="flex items-center gap-2">
+                <UserRound className="size-4" aria-hidden /> {ROLE_PERSON[role]} · {ROLE_LABEL[role]}
+              </p>
+              <Button asChild variant="outline" size="touch" className="self-start">
+                <Link href="/login">
+                  <LogOut aria-hidden /> Sign out
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>System status</CardTitle>
             </CardHeader>
             <CardContent>
               <ApiIndicator />
@@ -125,25 +144,25 @@ export default function SettingsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Endpoints</CardTitle>
+              <CardTitle>Developer options</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                NEXT_PUBLIC_USE_FIXTURES={String(USE_FIXTURES)}. Routes marked “fixture” are served in the browser until the backend ships them.
+                Demo mode: {USE_FIXTURES ? "on" : "off"}. Items marked “demo” use sample data until the service provides them.
               </p>
               <ul className="flex flex-col divide-y rounded-md border text-xs">
                 {(Object.keys(ENDPOINTS) as EndpointKey[]).map((k) => (
                   <li key={k} className="flex items-center justify-between gap-2 px-2 py-1.5">
                     <span className="font-mono break-all">{ENDPOINTS[k].route}</span>
                     <span className={servedFromFixtures(k) ? "text-muted-foreground" : "font-medium text-emerald-700"}>
-                      {servedFromFixtures(k) ? "fixture" : "live"}
+                      {servedFromFixtures(k) ? "demo" : "live"}
                     </span>
                   </li>
                 ))}
               </ul>
               <label className="flex min-h-11 items-center gap-2 text-sm">
                 <input type="checkbox" className="size-5" checked={simulate} onChange={(e) => toggleSimulate(e.target.checked)} />
-                Simulate API errors for fixture routes (to check error and retry states)
+                Simulate failures on demo data (to check error and retry screens)
               </label>
             </CardContent>
           </Card>

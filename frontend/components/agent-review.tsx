@@ -13,8 +13,8 @@ function Events({ events }: { events: AgentEvent[] }) {
   return (
     <ul className="flex flex-col gap-1.5 text-sm">
       {events.map((e, i) => (
-        <li key={i} className="rounded-md border bg-muted/40 p-2">
-          <span className="mr-2 rounded bg-secondary px-1.5 py-0.5 text-xs font-medium">{e.event_type.replace(/_/g, " ")}</span>
+        <li key={i} className="rounded-2xl bg-muted/60 p-3">
+          <span className="mr-2 rounded-md bg-primary/20 px-1.5 py-0.5 text-xs font-semibold">{e.event_type.replace(/_/g, " ")}</span>
           {e.summary}
         </li>
       ))}

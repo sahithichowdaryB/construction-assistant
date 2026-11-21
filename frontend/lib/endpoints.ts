@@ -44,7 +44,7 @@ export const ENDPOINTS = {
   // Proposed by the frontend (not yet in the workplan): list and context reads the screens need
   project: { route: "GET /projects/{pid}", implemented: false },
   activities: { route: "GET /projects/{pid}/activities", implemented: false },
-  incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: true },
+  incidents: { route: "GET /projects/{pid}/incidents (as_of optional; omitted = all incidents)", implemented: true },
   incident: { route: "GET /projects/{pid}/incidents/{id}?as_of", implemented: true },
   // Reasoning always comes from the backend (database + LLM); there are no fixtures for it.
   reasoning: { route: "GET /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
