@@ -196,6 +196,31 @@ and optionally the recipient, the day and what to stress. `correspondence.py` th
 .venv/Scripts/python.exe correspondence_schema.py   # idempotent DDL (same as migration 0009_correspondence)
 ```
 
+## 3D progress model (2D drawings + deadline -> 3D building coloured by progress)
+
+Plan: [../plan/3d-progress-model-plan.md](../plan/3d-progress-model-plan.md). Package `model3d/`:
+
+| Module | Job |
+|---|---|
+| `spec.py` | Building spec format (grid, levels, columns, walls, pours, activities in mm), the Riverside reference spec, validation (blocking/warning review notes, calendar) |
+| `prompts.py` | P5 "Building spec": reads the drawings' text tables into the spec, cited; three structured-output parts |
+| `generator.py` | Spec -> 3D boxes (metres) assigned to pours, split at construction joints. Pure |
+| `progress.py` | Pour states from `observations` (signed m3 fill pours in order) and confirmed `production` events; planned windows; forecast (latest slip carried forward); timeline; "why" reasons from events, report remarks and the drawings |
+| `store.py`, `routes.py`, `schema.py` | Database access, HTTP routes, idempotent DDL behind migration `0010_model3d` |
+| `seed_demo.py` | Demo: activates the Riverside model from the reference spec and writes 5 signed structure reports (A300 raft, A310 walls) |
+
+```bash
+.venv/Scripts/python.exe -m alembic upgrade head                      # 0010_model3d (or: python -m model3d.schema)
+.venv/Scripts/python.exe -m model3d.seed_demo --apply --model 2027-03-08   # demo model + reports (dry run without --apply)
+.venv/Scripts/python.exe -m pytest tests/test_model3d.py              # pure tests
+.venv/Scripts/python.exe verify_model3d.py                            # DB + routes in one rolled-back transaction; --llm runs P5 on Plan_3
+```
+
+Routes (under `/projects/{pid}`): `POST /models` (drawings PDF + `deadline`, manager), `GET /models`, `GET /models/{id}`,
+`PATCH /models/{id}` (spec, deadline), `POST /models/{id}/activate`, `POST /models/{id}/extract`, `GET /models/active`
+(geometry), `GET /models/active/progress?date=&as_of=` (stored as an `element_progress` version when the records changed),
+`GET /models/active/timeline`. Progress is only ever read from the database; nothing is entered for the 3D view itself.
+
 ## Performance evaluation (daily deviations and overall performance)
 
 Plan: [../plan/performance-evaluation-plan.md](../plan/performance-evaluation-plan.md). Package `performance/`:

@@ -296,7 +296,9 @@ def incident(project_id: str, incident_id: str, as_of: datetime | None = None, c
 from capture import router as capture_router  # noqa: E402
 from ops import router as ops_router  # noqa: E402  (manager actions: alerts, actions, incident corrections)
 from performance.routes import router as performance_router  # noqa: E402  (baselines, daily and overall evaluation)
+from model3d.routes import router as model3d_router  # noqa: E402  (3D progress model from the 2D drawings)
 
 app.include_router(ops_router)
 app.include_router(capture_router)
 app.include_router(performance_router)
+app.include_router(model3d_router)

@@ -55,6 +55,13 @@ def main():
                                  sitemate.performance_snapshots TO sitemate_reader;
                              END IF;
                            END $$""")
+            # 3D progress model (migration 0010_model3d), read-only.
+            cur.execute("""DO $$ BEGIN
+                             IF to_regclass('sitemate.building_models') IS NOT NULL THEN
+                               GRANT SELECT ON sitemate.building_models, sitemate.model_pours, sitemate.model_elements,
+                                 sitemate.element_progress TO sitemate_reader;
+                             END IF;
+                           END $$""")
             # Document search calls pg_trgm functions that live in Supabase's `extensions` schema.
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")
