@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AS_OF_PRESETS, fmtDateTime, fmtShort, isoToLocalInput, localToIso, PROJECT_TZ, zoneAbbrev } from "@/lib/time";
+import { AS_OF_PRESETS, fmtDateTime, fmtShort, isoToLocalInput, localToIso, PROJECT_TZ, toIsoWithOffset, zoneAbbrev } from "@/lib/time";
 
 /** Global replay clock. Every query is scoped to this instant; times shown in Europe/Vienna. */
 export function AsOfControl() {
@@ -47,6 +47,9 @@ export function AsOfControl() {
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Button variant="secondary" size="touch" onClick={() => apply(toIsoWithOffset(new Date()))}>
+            Now (live)
+          </Button>
           {AS_OF_PRESETS.map((p) => {
             const iso = localToIso(p.local);
             const active = iso === asOf;

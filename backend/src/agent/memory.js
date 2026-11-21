@@ -11,15 +11,16 @@ const parseValue = (v) => {
 /**
  * Writes the capture into project memory in one transaction:
  * source + passages (transcript and each manager answer) -> incidents -> proposed capture_facts -> evidence.
- * Facts stay review_status='proposed' until a person confirms them (see SiteMate capture flow).
+ * The speaker reviews the facts before this runs, so they are saved as confirmed (reviewed_by = the speaker).
  */
 export async function updateProjectMemory(state) {
-  const { projectId, sourceId, storagePath, transcript, recordedAt, events, validation, answers, matches } = state;
+  const { projectId, sourceId, storagePath, transcript, recordedAt, events, validation, answers, matches, author, authorRole, reviewNotes = [] } = state;
 
   return withTransaction(async (db) => {
     await db.query(
-      `INSERT INTO sitemate.sources (project_id, id, kind, path, available_at) VALUES ($1,$2,'voice_note',$3,$4)`,
-      [projectId, sourceId, storagePath, recordedAt]);
+      `INSERT INTO sitemate.sources (project_id, id, kind, path, available_at, author, author_role)
+       VALUES ($1,$2,'voice_note',$3,$4,$5,COALESCE($6,'unknown'))`,
+      [projectId, sourceId, storagePath, recordedAt, author ?? null, authorRole ?? null]);
     await db.query(
       `INSERT INTO sitemate.source_passages (project_id, source_id, locator, page, excerpt) VALUES ($1,$2,'transcript',NULL,$3)`,
       [projectId, sourceId, transcript]);
@@ -27,6 +28,12 @@ export async function updateProjectMemory(state) {
       await db.query(
         `INSERT INTO sitemate.source_passages (project_id, source_id, locator, page, excerpt) VALUES ($1,$2,$3,NULL,$4)`,
         [projectId, sourceId, `answer:${a.id}`, `Q: ${a.question}\nA: ${a.answer}`]);
+    }
+
+    for (const n of reviewNotes) {
+      await db.query(
+        `INSERT INTO sitemate.source_passages (project_id, source_id, locator, page, excerpt) VALUES ($1,$2,$3,NULL,$4)`,
+        [projectId, sourceId, `review:${n.id}`, n.text]);
     }
 
     // Allowed evidence: passages the search returned (as-of filtered) plus this note's own passages.
@@ -58,15 +65,18 @@ export async function updateProjectMemory(state) {
 
     const saved = [];
     for (const f of validation.validated_facts) {
-      const locator = f.source.startsWith("answer:") && answers.some((a) => `answer:${a.id}` === f.source)
+      const locator = (f.source.startsWith("answer:") && answers.some((a) => `answer:${a.id}` === f.source))
+        || (f.source.startsWith("review:") && reviewNotes.some((n) => `review:${n.id}` === f.source))
         ? f.source : "transcript";
       const effectiveAt = factValue(f.event_index, "occurred_at") ?? events[f.event_index]?.occurred_at ?? recordedAt;
       const { rows } = await db.query(
         `INSERT INTO sitemate.capture_facts
-           (project_id, incident_id, source_id, locator, field_name, value, basis, effective_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+           (project_id, incident_id, source_id, locator, field_name, value, basis, effective_at, review_status, reviewed_by, reviewed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8, $9, $10, CASE WHEN $10::text IS NULL THEN NULL ELSE now() END) RETURNING id`,
         [projectId, incidentIds[f.event_index] ?? null, sourceId, locator, f.field_name,
-          JSON.stringify(parseValue(f.value)), f.basis, effectiveAt]);
+          JSON.stringify(parseValue(f.value)), f.basis, effectiveAt,
+          // The speaker reviewed these before saving, so they are confirmed by that person.
+          author ? "confirmed" : "proposed", author ?? null]);
       for (const ref of f.evidence_refs.filter((r) => knownRefs.has(`${r.source_id}|${r.locator}`))) {
         await db.query(
           `INSERT INTO sitemate.fact_evidence (project_id, fact_id, source_id, locator) VALUES ($1,$2,$3,$4)
