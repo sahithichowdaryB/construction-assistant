@@ -1,0 +1,27 @@
+{
+  "headlines": [
+    { "work_date": "2026-11-10", "available_at": "2026-11-09T17:30:00+01:00", "text": "Tuesday 10 Nov: Zone B excavation continues after closing at 92 of 100 m³ yesterday." },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T10:15:00+01:00", "text": "EX-02 broke down in Zone B at 10:00. Three workers are stopped." },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T17:30:00+01:00", "text": "Signed R10: Zone B 65 of 100 m³, a high shortfall. The FND-B start on 12 Nov is at risk." },
+    { "work_date": "2026-11-11", "available_at": "2026-11-10T17:30:00+01:00", "text": "Wednesday 11 Nov: EX-02 awaits repair (forecast noon). Zone B handover to foundations is at risk." },
+    { "work_date": "2026-11-11", "available_at": "2026-11-11T11:35:00+01:00", "text": "EX-02 released at 11:30. The crew is back digging in Zone B." },
+    { "work_date": "2026-11-11", "available_at": "2026-11-11T17:30:00+01:00", "text": "The 11 Nov shift report has not been received. Today's quantities are unknown." },
+    { "work_date": "2026-11-12", "available_at": "2026-11-12T07:15:00+01:00", "text": "Thursday 12 Nov: R11 scan received. Zone B made 80 of 100 m³ on 11 Nov; foundations handover planned today." }
+  ],
+  "bullets": [
+    { "work_date": "2026-11-10", "available_at": "2026-11-09T17:30:00+01:00", "text": "Yesterday's Zone B output was 92 m³ of 100 m³ (signed).", "refs": [{ "source_id": "R9", "locator": "EXC-B", "page": 1, "passage_id": "R9:EXC-B" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-08T12:40:00+01:00", "text": "GroundWorks owes the backup excavator plan by 10 Nov 12:00; it was still outstanding on 8 Nov.", "refs": [{ "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" }, { "source_id": "M08", "locator": "actions", "passage_id": "M08:actions" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-06T15:30:00+01:00", "text": "EX-02 routine service is overdue; no workshop slot confirmed.", "refs": [{ "source_id": "E01", "locator": "body", "passage_id": "E01:body" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-09T14:30:00+01:00", "text": "The client asks for an update on the 12 Nov foundation handover after today's shift.", "refs": [{ "source_id": "E02", "locator": "body", "passage_id": "E02:body" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T10:15:00+01:00", "text": "10:00 hydraulic hose burst on the Zone B excavator; three workers stopped. EX-02 is inferred from the register.", "refs": [{ "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" }, { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T10:18:00+01:00", "text": "Mechanic's forecast: back tomorrow at noon (estimate).", "refs": [{ "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T16:05:00+01:00", "text": "Diary: the foreman estimates 70 m³ in Zone B (provisional).", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] },
+    { "work_date": "2026-11-10", "available_at": "2026-11-10T17:30:00+01:00", "text": "Delay notice draft v1 is ready. Contract reference and clause are missing.", "refs": [{ "source_id": "PRJ", "locator": "contract", "passage_id": "PRJ:contract" }] },
+    { "work_date": "2026-11-11", "available_at": "2026-11-10T17:30:00+01:00", "text": "Signed 10 Nov output: Zone B 65 m³ of 100 m³.", "refs": [{ "source_id": "R10", "locator": "EXC-B", "page": 2, "passage_id": "R10:EXC-B" }] },
+    { "work_date": "2026-11-11", "available_at": "2026-11-10T10:18:00+01:00", "text": "Mechanic's forecast for EX-02: noon today (estimate).", "refs": [{ "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" }] },
+    { "work_date": "2026-11-11", "available_at": "2026-11-11T11:35:00+01:00", "text": "EX-02 released at 11:30; crew back digging.", "refs": [{ "source_id": "V05", "locator": "transcript", "passage_id": "V05:transcript" }] },
+    { "work_date": "2026-11-11", "available_at": "2026-11-11T13:10:00+01:00", "text": "West wing: 4 t of rebar delivered; 1 t follows tomorrow.", "refs": [{ "source_id": "E03", "locator": "body", "passage_id": "E03:body" }] },
+    { "work_date": "2026-11-12", "available_at": "2026-11-12T07:15:00+01:00", "text": "Signed 11 Nov output: Zone B 80 m³ of 100 m³; Rebar L1 4 t of 5 t.", "refs": [{ "source_id": "R11", "locator": "EXC-B", "page": 1, "passage_id": "R11:EXC-B" }, { "source_id": "R11", "locator": "REBAR-L1", "page": 1, "passage_id": "R11:REBAR-L1" }] },
+    { "work_date": "2026-11-12", "available_at": "2026-11-07T12:40:00+01:00", "text": "CraneCo owes the TC-01 inspection booking confirmation by 12 Nov 12:00.", "refs": [{ "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" }] }
+  ]
+}

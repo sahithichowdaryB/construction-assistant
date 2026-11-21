@@ -1,0 +1,60 @@
+[
+  {
+    "id": "INC-1",
+    "activity_code": "EXC-B",
+    "type": "equipment_breakdown",
+    "title": "EX-02 hydraulic hose burst, Zone B",
+    "occurred_at": "2026-11-10T10:00:00+01:00",
+    "reported_at": "2026-11-10T10:15:00+01:00",
+    "resolved_at": "2026-11-11T11:35:00+01:00",
+    "status": "open",
+    "affected_workers": 3,
+    "equipment_id": "EX-02",
+    "refs": [{ "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" }],
+    "timeline": [
+      { "kind": "reported", "at": "2026-11-10T10:15:00+01:00", "label": "Foreman reports hose burst on the excavator; 3 workers stopped", "refs": [{ "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" }] },
+      { "kind": "evidence", "at": "2026-11-10T10:18:00+01:00", "label": "Mechanic forecasts return to service at noon tomorrow (forecast)", "refs": [{ "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" }] },
+      { "kind": "evidence", "at": "2026-11-10T10:20:00+01:00", "label": "Photo of the leaking hose attached", "refs": [{ "source_id": "P1", "locator": "image", "passage_id": "P1:image" }] },
+      { "kind": "evidence", "at": "2026-11-10T10:21:00+01:00", "label": "Follow-up note linked as the same incident", "refs": [{ "source_id": "V03", "locator": "transcript", "passage_id": "V03:transcript" }] },
+      { "kind": "evidence", "at": "2026-11-10T16:05:00+01:00", "label": "Diary: provisional 70 m³ estimate for Zone B", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] },
+      { "kind": "evidence", "at": "2026-11-10T17:30:00+01:00", "label": "Signed report R10: 65 m³ of 100 m³", "refs": [{ "source_id": "R10", "locator": "EXC-B", "page": 2, "passage_id": "R10:EXC-B" }] },
+      { "kind": "alert", "at": "2026-11-10T17:30:00+01:00", "label": "High shortfall alert on EXC-B; FND-B start at risk", "refs": [{ "source_id": "R10", "locator": "EXC-B", "page": 2, "passage_id": "R10:EXC-B" }], "link": "/alerts/alr-exc-b-2026-11-10" },
+      { "kind": "draft", "at": "2026-11-10T17:30:00+01:00", "label": "Delay notice draft v1 created from the alert", "refs": [], "link": "/drafts/DRF-1" },
+      { "kind": "resolved", "at": "2026-11-11T11:35:00+01:00", "label": "Mechanic released EX-02 at 11:30; crew back digging", "refs": [{ "source_id": "V05", "locator": "transcript", "passage_id": "V05:transcript" }] }
+    ]
+  },
+  {
+    "id": "INC-2",
+    "activity_code": "SLAB",
+    "type": "defect",
+    "title": "Hairline crack at the Zone A slab edge",
+    "occurred_at": null,
+    "reported_at": "2026-11-12T09:00:00+01:00",
+    "resolved_at": null,
+    "status": "open",
+    "affected_workers": null,
+    "equipment_id": null,
+    "refs": [{ "source_id": "V07", "locator": "transcript", "passage_id": "V07:transcript" }],
+    "timeline": [
+      { "kind": "reported", "at": "2026-11-12T09:00:00+01:00", "label": "Crack reported at the Zone A slab edge; width not measured", "refs": [{ "source_id": "V07", "locator": "transcript", "passage_id": "V07:transcript" }] },
+      { "kind": "evidence", "at": "2026-11-12T09:05:00+01:00", "label": "Photo of the slab edge attached", "refs": [{ "source_id": "P2" }] },
+      { "kind": "evidence", "at": "2026-11-12T17:30:00+01:00", "label": "R12: width and engineering assessment remain open", "refs": [{ "source_id": "R12", "locator": "reconciliation", "page": 1, "passage_id": "R12:reconciliation" }] }
+    ]
+  },
+  {
+    "id": "INC-3",
+    "activity_code": null,
+    "type": "delivery",
+    "title": "Concrete delivery late",
+    "occurred_at": null,
+    "reported_at": "2026-11-12T09:20:00+01:00",
+    "resolved_at": null,
+    "status": "open",
+    "affected_workers": null,
+    "equipment_id": null,
+    "refs": [{ "source_id": "V08", "locator": "transcript", "passage_id": "V08:transcript" }],
+    "timeline": [
+      { "kind": "reported", "at": "2026-11-12T09:20:00+01:00", "label": "Late concrete delivery reported; docket not available", "refs": [{ "source_id": "V08", "locator": "transcript", "passage_id": "V08:transcript" }] }
+    ]
+  }
+]

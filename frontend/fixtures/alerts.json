@@ -1,0 +1,188 @@
+[
+  {
+    "id": "alr-fnd-b-2026-11-12",
+    "activity_code": "FND-B",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-12T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-12T17:30:00+01:00",
+    "severity": "high",
+    "calculation": {
+      "planned": 30,
+      "actual": 20,
+      "shortfall_pct": 33.33,
+      "unit": "m³"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "FND-B"
+      },
+      {
+        "source_id": "R12",
+        "locator": "FND-B",
+        "page": 1
+      }
+    ],
+    "available_at": "2026-11-12T17:30:00+01:00",
+    "retired_at": null
+  },
+  {
+    "id": "alr-exc-b-2026-11-11",
+    "activity_code": "EXC-B",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-11T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-12T07:15:00+01:00",
+    "severity": "medium",
+    "calculation": {
+      "planned": 100,
+      "actual": 80,
+      "shortfall_pct": 20,
+      "unit": "m³"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "EXC-B"
+      },
+      {
+        "source_id": "R11",
+        "locator": "EXC-B",
+        "page": 1
+      }
+    ],
+    "available_at": "2026-11-12T07:15:00+01:00",
+    "retired_at": null
+  },
+  {
+    "id": "alr-missing-report-2026-11-11",
+    "activity_code": "EXC-B",
+    "kind": "missing_report",
+    "checkpoint_at": "2026-11-11T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-11T17:30:00+01:00",
+    "severity": "medium",
+    "calculation": null,
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "EXC-B"
+      }
+    ],
+    "available_at": "2026-11-11T17:30:00+01:00",
+    "retired_at": "2026-11-12T07:15:00+01:00"
+  },
+  {
+    "id": "alr-rebar-l1-2026-11-11",
+    "activity_code": "REBAR-L1",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-11T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-12T07:15:00+01:00",
+    "severity": "medium",
+    "calculation": {
+      "planned": 5,
+      "actual": 4,
+      "shortfall_pct": 20,
+      "unit": "t"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "REBAR-L1"
+      },
+      {
+        "source_id": "R11",
+        "locator": "REBAR-L1",
+        "page": 1
+      }
+    ],
+    "available_at": "2026-11-12T07:15:00+01:00",
+    "retired_at": null
+  },
+  {
+    "id": "alr-exc-b-2026-11-10",
+    "activity_code": "EXC-B",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-10T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-10T17:30:00+01:00",
+    "severity": "high",
+    "calculation": {
+      "planned": 100,
+      "actual": 65,
+      "shortfall_pct": 35,
+      "unit": "m³"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "EXC-B"
+      },
+      {
+        "source_id": "R10",
+        "locator": "EXC-B",
+        "page": 2
+      }
+    ],
+    "available_at": "2026-11-10T17:30:00+01:00",
+    "retired_at": null
+  },
+  {
+    "id": "alr-form-l1-2026-11-09",
+    "activity_code": "FORM-L1",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-09T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-09T17:30:00+01:00",
+    "severity": "medium",
+    "calculation": {
+      "planned": 40,
+      "actual": 32,
+      "shortfall_pct": 20,
+      "unit": "m²"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "FORM-L1"
+      },
+      {
+        "source_id": "R9",
+        "locator": "FORM-L1",
+        "page": 1
+      }
+    ],
+    "available_at": "2026-11-09T17:30:00+01:00",
+    "retired_at": null
+  },
+  {
+    "id": "alr-fnd-a-2026-11-08",
+    "activity_code": "FND-A",
+    "kind": "shortfall",
+    "checkpoint_at": "2026-11-08T17:30:00+01:00",
+    "version": 1,
+    "as_of": "2026-11-08T17:30:00+01:00",
+    "severity": "medium",
+    "calculation": {
+      "planned": 25,
+      "actual": 20,
+      "shortfall_pct": 20,
+      "unit": "m³"
+    },
+    "evidence_refs": [
+      {
+        "source_id": "SCH",
+        "locator": "FND-A"
+      },
+      {
+        "source_id": "R8",
+        "locator": "FND-A",
+        "page": 1
+      }
+    ],
+    "available_at": "2026-11-08T17:30:00+01:00",
+    "retired_at": null
+  }
+]

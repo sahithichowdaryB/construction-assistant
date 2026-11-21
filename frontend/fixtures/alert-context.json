@@ -1,0 +1,74 @@
+[
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-10",
+    "likely_causes": [
+      { "text": "EX-02 hydraulic hose burst at 10:00; three workers could not continue digging.", "refs": [{ "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" }, { "source_id": "R10", "locator": "incidents", "page": 1, "passage_id": "R10:incidents" }] },
+      { "text": "GroundWorks reported the EX-02 routine service overdue on 6 Nov (no hydraulic fault diagnosed then).", "refs": [{ "source_id": "E01", "locator": "body", "passage_id": "E01:body" }] },
+      { "text": "The backup excavator plan requested on 7 Nov was still outstanding on 8 Nov.", "refs": [{ "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" }, { "source_id": "M08", "locator": "actions", "passage_id": "M08:actions" }] }
+    ],
+    "successors_at_risk": [
+      { "code": "FND-B", "name": "Foundations Zone B", "planned_start": "2026-11-12", "refs": [{ "source_id": "SCH", "locator": "FND-B", "passage_id": "SCH:FND-B" }, { "source_id": "R10", "locator": "reconciliation", "page": 2, "passage_id": "R10:reconciliation" }] }
+    ],
+    "incident_id": "INC-1",
+    "draft_id": "DRF-1"
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-11",
+    "likely_causes": [
+      { "text": "EX-02 was released only at 11:30.", "refs": [{ "source_id": "V05", "locator": "transcript", "passage_id": "V05:transcript" }, { "source_id": "R11", "locator": "incidents", "page": 1, "passage_id": "R11:incidents" }] }
+    ],
+    "successors_at_risk": [
+      { "code": "FND-B", "name": "Foundations Zone B", "planned_start": "2026-11-12", "refs": [{ "source_id": "SCH", "locator": "FND-B", "passage_id": "SCH:FND-B" }] }
+    ],
+    "incident_id": "INC-1",
+    "draft_id": null
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-11",
+    "likely_causes": [
+      { "text": "One tonne of the west wing delivery was deferred to the next day's load.", "refs": [{ "source_id": "E03", "locator": "body", "passage_id": "E03:body" }, { "source_id": "V06", "locator": "transcript", "passage_id": "V06:transcript" }] }
+    ],
+    "successors_at_risk": [
+      { "code": "POUR-L1", "name": "Concrete pour L1", "planned_start": "2026-11-13", "refs": [{ "source_id": "SCH", "locator": "POUR-L1", "passage_id": "SCH:POUR-L1" }] }
+    ],
+    "incident_id": null,
+    "draft_id": null
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-12",
+    "likely_causes": [
+      { "text": "Foundations Zone B could only start after the Zone B excavation finished at 11:50.", "refs": [{ "source_id": "V09", "locator": "transcript", "passage_id": "V09:transcript" }, { "source_id": "R12", "locator": "incidents", "page": 1, "passage_id": "R12:incidents" }] }
+    ],
+    "successors_at_risk": [],
+    "incident_id": null,
+    "draft_id": null
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-08",
+    "likely_causes": [
+      { "text": "5 m³ of the day's booking was moved to Monday.", "refs": [{ "source_id": "R8", "locator": "reconciliation", "page": 1, "passage_id": "R8:reconciliation" }] }
+    ],
+    "successors_at_risk": [
+      { "code": "SLAB", "name": "Ground slab", "planned_start": "2026-11-10", "refs": [{ "source_id": "SCH", "locator": "SLAB", "passage_id": "SCH:SLAB" }] }
+    ],
+    "incident_id": null,
+    "draft_id": null
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-09",
+    "likely_causes": [
+      { "text": "The west wing formwork crew stopped early to clear access for deliveries.", "refs": [{ "source_id": "R9", "locator": "incidents", "page": 1, "passage_id": "R9:incidents" }] }
+    ],
+    "successors_at_risk": [
+      { "code": "REBAR-L1", "name": "Rebar L1", "planned_start": "2026-11-11", "refs": [{ "source_id": "SCH", "locator": "REBAR-L1", "passage_id": "SCH:REBAR-L1" }] }
+    ],
+    "incident_id": null,
+    "draft_id": null
+  }
+]
