@@ -2,6 +2,7 @@ import hashlib
 import sys
 from datetime import date as WorkDate, datetime
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +16,7 @@ from database import engine_for
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ai-agent"))
 from app import persist as analysis_store  # noqa: E402  (ai-agent/app: the incident evidence agent)
 from app.llm import LLMError, get_llm  # noqa: E402
-from app.orchestrator import IncidentNotFound, analyze_incident  # noqa: E402
+from app.orchestrator import IncidentNotFound, analyze_incident, input_digest  # noqa: E402
 from app.tools import SqlEvidenceStore, default_as_of  # noqa: E402
 
 app = FastAPI(title="SiteMate API")
@@ -61,6 +62,13 @@ def health():
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
     return {"database": "connected"}
+
+
+def check_incident_id(incident_id: str):
+    try:
+        UUID(incident_id)
+    except ValueError:
+        raise HTTPException(404, "Incident not found") from None
 
 
 def check_cutoff(as_of):
@@ -151,10 +159,11 @@ def original(project_id: str, source_id: str, as_of: datetime | None = None, con
     return FileResponse(path)
 
 
-@app.post("/projects/{project_id}/incidents/{incident_id}/analyze", dependencies=[Depends(check_manager)])
-def analyze(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+@app.post("/projects/{project_id}/incidents/{incident_id}/reasoning", dependencies=[Depends(check_manager)])
+def run_reasoning(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     """Find and cite what the records say caused an incident, with a confidence score (new immutable version)."""
     check_cutoff(as_of)
+    check_incident_id(incident_id)
     when = as_of or default_as_of()
     try:
         llm = get_llm()
@@ -162,17 +171,23 @@ def analyze(project_id: str, incident_id: str, as_of: datetime | None = None, co
     except IncidentNotFound:
         raise HTTPException(404, "Incident not found at this time") from None
     except LLMError as exc:
-        raise HTTPException(502, f"Analysis model unavailable: {exc}") from None
+        raise HTTPException(502, f"Reasoning model unavailable: {exc}") from None
     saved = analysis_store.save_analysis(conn, project_id, result)
     return {**saved, **result.model_dump(mode="json")}
 
 
-@app.get("/projects/{project_id}/incidents/{incident_id}/analysis", dependencies=[Depends(check_member)])
-def latest_analysis(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+@app.get("/projects/{project_id}/incidents/{incident_id}/reasoning", dependencies=[Depends(check_member)])
+def latest_reasoning(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     check_cutoff(as_of)
+    check_incident_id(incident_id)
     found = analysis_store.load_analysis(conn, project_id, incident_id, as_of)
     if found is None:
-        raise HTTPException(404, "No analysis for this incident yet")
+        raise HTTPException(404, "No reasoning for this incident yet")
+    # stale = the records available at this time differ from what the saved reasoning was based on
+    store = SqlEvidenceStore(conn, project_id, as_of or default_as_of())
+    incident = store.get_incident(incident_id)
+    saved_digest = found.pop("input_digest")
+    found["stale"] = bool(incident) and input_digest(incident_id, store.candidate_passages(incident)) != saved_digest
     return found
 
 
@@ -238,10 +253,8 @@ def incidents(project_id: str, as_of: datetime | None = None, conn=Depends(conne
 @app.get("/projects/{project_id}/incidents/{incident_id}", dependencies=[Depends(check_member)])
 def incident(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     check_cutoff(as_of)
-    try:
-        found = incident_rows(conn, project_id, as_of, incident_id)
-    except SQLAlchemyError:
-        raise HTTPException(404, "Incident not found at this time") from None
+    check_incident_id(incident_id)
+    found = incident_rows(conn, project_id, as_of, incident_id)
     if not found:
         raise HTTPException(404, "Incident not found at this time")
     return found[0]

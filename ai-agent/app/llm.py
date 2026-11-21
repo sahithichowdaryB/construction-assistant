@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from typing import Protocol
 
 from .config import llm_settings
@@ -9,6 +10,9 @@ from .config import llm_settings
 
 class LLMError(RuntimeError):
     pass
+
+
+RETRY_PAUSES = [2, 5, 10]  # seconds; only for "busy" errors (503/429)
 
 
 class LLMClient(Protocol):
@@ -42,13 +46,17 @@ class GeminiClient:
     def generate_json(self, system: str, user: str) -> dict:
         from google.genai import types
 
-        try:
-            response = self._client.models.generate_content(
-                model=self.model, contents=user,
-                config=types.GenerateContentConfig(
-                    system_instruction=system, response_mime_type="application/json", temperature=0.0))
-        except Exception as exc:  # SDK raises several error types; surface one
-            raise LLMError(f"Gemini request failed: {exc}") from exc
+        config = types.GenerateContentConfig(
+            system_instruction=system, response_mime_type="application/json", temperature=0.0)
+        for attempt, pause in enumerate(RETRY_PAUSES + [None]):
+            try:
+                response = self._client.models.generate_content(model=self.model, contents=user, config=config)
+                break
+            except Exception as exc:  # SDK raises several error types; surface one
+                busy = any(code in str(exc) for code in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
+                if pause is None or not busy:
+                    raise LLMError(f"Gemini request failed: {exc}") from exc
+                time.sleep(pause)
         if not response.text:
             raise LLMError("Gemini returned an empty response")
         return parse_json(response.text)

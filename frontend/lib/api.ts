@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { servedFromFixtures, type EndpointKey } from "@/lib/endpoints";
 import * as fx from "@/lib/fixture-server";
-import { alertsSchema, healthSchema, incidentAnalysisSchema, incidentSchema, incidentsSchema, progressSchema } from "@/lib/schemas";
+import { alertsSchema, healthSchema, incidentReasoningSchema, incidentSchema, incidentsSchema, progressSchema } from "@/lib/schemas";
 import type {
   Activity,
   Alert,
@@ -18,7 +18,7 @@ import type {
   Gap,
   HealthStatus,
   Incident,
-  IncidentAnalysis,
+  IncidentReasoning,
   NoticeType,
   Passage,
   Progress,
@@ -153,21 +153,19 @@ export async function getIncident(pid: string, id: string, asOf: string): Promis
   return http(`/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}${qs({ as_of: asOf })}`, incidentSchema);
 }
 
-/** Latest cause analysis for an incident (404 when the agent has not run yet, or nothing was known at as_of). */
-export async function getIncidentAnalysis(pid: string, id: string, asOf: string): Promise<IncidentAnalysis> {
-  if (servedFromFixtures("incidentAnalysis")) return fixture("incidentAnalysis", () => fx.fxIncidentAnalysis(id, asOf));
+/** Latest cause reasoning for an incident (404 until the agent has run, or nothing was known at as_of). */
+export async function getIncidentReasoning(pid: string, id: string, asOf: string): Promise<IncidentReasoning> {
   return http(
-    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/analysis${qs({ as_of: asOf })}`,
-    incidentAnalysisSchema,
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
+    incidentReasoningSchema,
   );
 }
 
-/** Runs the evidence agent and stores a new version. The caller refetches the analysis afterwards. */
-export async function analyzeIncident(pid: string, id: string, asOf: string): Promise<void> {
-  if (servedFromFixtures("analyzeIncident")) return fixture("analyzeIncident", () => void fx.fxIncidentAnalysis(id, asOf));
-  await http(
-    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/analyze${qs({ as_of: asOf })}`,
-    z.object({ version: z.number() }).passthrough(),
+/** Runs the evidence agent now (database read + LLM calls) and stores the result. Callers refetch afterwards. */
+export async function runIncidentReasoning(pid: string, id: string, asOf: string) {
+  return http(
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
+    z.object({ version: z.number(), reused: z.boolean() }).passthrough(),
     { method: "POST" },
   );
 }

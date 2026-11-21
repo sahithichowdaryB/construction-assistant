@@ -86,7 +86,7 @@ export const incidentSchema = z.object({
 });
 export const incidentsSchema = z.array(incidentSchema);
 
-// ---------- incident cause analysis (GET /projects/{pid}/incidents/{id}/analysis) ----------
+// ---------- incident cause analysis (GET /projects/{pid}/incidents/{id}/reasoning) ----------
 const authorRole = z.enum([
   "site_supervisor", "foreman", "signed_report", "contractor_internal", "external", "client", "system", "unknown",
 ]);
@@ -100,7 +100,7 @@ const analysisEvidence = z.object({
   stated_at: z.string().nullable(),
   hypothesis_id: z.string().nullish(),
 });
-export const incidentAnalysisSchema = z.object({
+export const incidentReasoningSchema = z.object({
   id: z.string(),
   version: z.number(),
   as_of: z.string(),
@@ -128,4 +128,6 @@ export const incidentAnalysisSchema = z.object({
   guardrail_flags: z.array(z.string()),
   model: z.string(),
   created_at: z.string(),
+  /** The records available now differ from those this reasoning used */
+  stale: z.boolean().optional(),
 });

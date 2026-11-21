@@ -408,7 +408,7 @@ export interface AnalysisScoreCard {
   flags: string[];
 }
 
-export interface IncidentAnalysis {
+export interface IncidentReasoning {
   id: string;
   version: number;
   as_of: IsoInstant;
@@ -425,4 +425,5 @@ export interface IncidentAnalysis {
   guardrail_flags: string[];
   model: string;
   created_at: IsoInstant;
+  stale?: boolean;
 }
