@@ -12,6 +12,7 @@ import alertsJson from "@/fixtures/alerts.json";
 import askJson from "@/fixtures/ask.json";
 import briefingsJson from "@/fixtures/briefings.json";
 import draftsJson from "@/fixtures/drafts.json";
+import incidentAnalysesJson from "@/fixtures/incident-analyses.json";
 import incidentsJson from "@/fixtures/incidents.json";
 import passagesJson from "@/fixtures/passages.json";
 import progressJson from "@/fixtures/progress.json";
@@ -32,6 +33,7 @@ import type {
   Export,
   Gap,
   Incident,
+  IncidentAnalysis,
   NoticeType,
   Passage,
   Progress,
@@ -210,6 +212,15 @@ export function fxIncident(id: string, asOf: string): Incident {
   const i = fxIncidents(asOf).find((x) => x.id === id);
   if (!i) throw new FixtureError(404, `Incident ${id} is not available at this time`);
   return i;
+}
+
+const incidentAnalyses = incidentAnalysesJson as unknown as { incident_id: string; analysis: IncidentAnalysis }[];
+
+/** Sample agent output for the Riverside incident; appears once its evidence (V01) is available. */
+export function fxIncidentAnalysis(incidentId: string, asOf: string): IncidentAnalysis {
+  const found = incidentAnalyses.find((a) => a.incident_id === incidentId);
+  if (!found || !isAvailable(found.analysis.as_of, asOf)) throw new FixtureError(404, "No analysis for this incident yet");
+  return found.analysis;
 }
 
 // ---------- today ----------

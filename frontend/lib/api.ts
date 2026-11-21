@@ -3,10 +3,10 @@
  * servedFromFixtures() in lib/endpoints.ts. Real calls go to the server-side proxy at /api/sm/*,
  * which attaches the bearer token; the browser never talks to FastAPI directly.
  */
-import type { z } from "zod";
+import { z } from "zod";
 import { servedFromFixtures, type EndpointKey } from "@/lib/endpoints";
 import * as fx from "@/lib/fixture-server";
-import { alertsSchema, healthSchema, progressSchema } from "@/lib/schemas";
+import { alertsSchema, healthSchema, incidentAnalysisSchema, incidentSchema, incidentsSchema, progressSchema } from "@/lib/schemas";
 import type {
   Activity,
   Alert,
@@ -18,6 +18,7 @@ import type {
   Gap,
   HealthStatus,
   Incident,
+  IncidentAnalysis,
   NoticeType,
   Passage,
   Progress,
@@ -143,13 +144,32 @@ export async function dismissAlert(pid: string, id: string, reason: string, asOf
 
 // ---------- incidents ----------
 export async function getIncidents(pid: string, asOf: string): Promise<Incident[]> {
-  void pid;
-  return fixture("incidents", () => fx.fxIncidents(asOf));
+  if (servedFromFixtures("incidents")) return fixture("incidents", () => fx.fxIncidents(asOf));
+  return http(`/projects/${encodeURIComponent(pid)}/incidents${qs({ as_of: asOf })}`, incidentsSchema);
 }
 
 export async function getIncident(pid: string, id: string, asOf: string): Promise<Incident> {
-  void pid;
-  return fixture("incidents", () => fx.fxIncident(id, asOf));
+  if (servedFromFixtures("incident")) return fixture("incident", () => fx.fxIncident(id, asOf));
+  return http(`/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}${qs({ as_of: asOf })}`, incidentSchema);
+}
+
+/** Latest cause analysis for an incident (404 when the agent has not run yet, or nothing was known at as_of). */
+export async function getIncidentAnalysis(pid: string, id: string, asOf: string): Promise<IncidentAnalysis> {
+  if (servedFromFixtures("incidentAnalysis")) return fixture("incidentAnalysis", () => fx.fxIncidentAnalysis(id, asOf));
+  return http(
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/analysis${qs({ as_of: asOf })}`,
+    incidentAnalysisSchema,
+  );
+}
+
+/** Runs the evidence agent and stores a new version. The caller refetches the analysis afterwards. */
+export async function analyzeIncident(pid: string, id: string, asOf: string): Promise<void> {
+  if (servedFromFixtures("analyzeIncident")) return fixture("analyzeIncident", () => void fx.fxIncidentAnalysis(id, asOf));
+  await http(
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/analyze${qs({ as_of: asOf })}`,
+    z.object({ version: z.number() }).passthrough(),
+    { method: "POST" },
+  );
 }
 
 // ---------- documents & evidence ----------

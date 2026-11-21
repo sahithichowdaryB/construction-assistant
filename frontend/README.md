@@ -50,8 +50,10 @@ The source of truth is `lib/endpoints.ts`. Settings lists the same table at runt
 | `GET /projects/{pid}/alerts?as_of` | **Real** |
 | `GET /projects/{pid}/activities/{code}/progress?date&as_of` | **Real** |
 | `GET /projects/{pid}/sources/{sid}/file` | **Real** (demo pack fallback in fixture mode) |
+| `GET /projects/{pid}/incidents?as_of`, `GET /projects/{pid}/incidents/{id}?as_of` | **Real** (built from `incidents`, `capture_facts`, `fact_evidence`) |
+| `GET /projects/{pid}/incidents/{id}/analysis?as_of`, `POST …/analyze` | **Real**. The cause-and-evidence agent (see `../ai-agent/README.md`). Fixture mode shows one sample analysis for `INC-1` |
 | `GET /today`, `POST /ask`, `POST /sources`, `GET /jobs/{id}`, `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `GET /sources/{id}/summary`, `GET /evidence/{passage_id}`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
-| `GET /projects/{pid}`, `GET /activities`, `GET /sources?as_of`, `GET /incidents?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+| `GET /projects/{pid}`, `GET /activities`, `GET /sources?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
 
 Fixture routes run in the browser (`lib/fixture-server.ts`). They filter records by the as-of clock, add about 250 ms of
 latency so loading states are visible, and keep draft lifecycle state in memory. That state resets on reload.
@@ -63,6 +65,15 @@ Capture confirmations are not persisted.
 2. Set `implemented: true` for its key in `lib/endpoints.ts`.
 3. In `lib/api.ts`, give its function a `servedFromFixtures(key)` branch that calls `http(path, schema)`, like `getAlerts`, and add a zod schema in `lib/schemas.ts`.
 4. Run with `NEXT_PUBLIC_USE_FIXTURES=false`. Pages and hooks don't change; query keys already include project id and `as_of`.
+
+## Cause & evidence panel
+
+`components/incident-reasoning.tsx` renders on `/incidents/[id]`: status, confidence meter, the agent's reasoning, quotes from
+the supervisor-side records that state the cause (role chip, source, time stated), outside-party claims shown separately as
+context, candidate causes with the code's score next to the LLM's choice, and what is still unknown. "Analyse cause" /
+"Re-run analysis" (site manager or approver) calls `POST …/analyze` and refetches. With `NEXT_PUBLIC_USE_FIXTURES=false` the
+Riverside incident id is a UUID from the database. To browse the dummy agent cases set `NEXT_PUBLIC_PROJECT_ID=TST` and use the
+`TST_DEMO_TOKEN` value as `SITEMATE_API_TOKEN`.
 
 ## The as-of clock
 
