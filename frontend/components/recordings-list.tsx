@@ -16,8 +16,8 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyl
 
 function Analysis({ rec }: { rec: SavedRecording }) {
   return (
-    <details className="rounded-md border bg-muted/30 p-3 text-sm">
-      <summary className="cursor-pointer font-medium">
+    <details className="rounded-2xl bg-muted/50 p-4 text-sm">
+      <summary className="cursor-pointer font-semibold">
         Analysis · {rec.facts.length} fact{rec.facts.length === 1 ? "" : "s"}
         {rec.incidents.length ? ` · ${rec.incidents.length} incident${rec.incidents.length === 1 ? "" : "s"}` : ""}
       </summary>
@@ -81,7 +81,7 @@ export function RecordingsList({ projectId }: { projectId: string }) {
 
   return (
     <section aria-labelledby="recordings-title" className="mt-8">
-      <h2 id="recordings-title" className="mb-3 text-lg font-semibold">
+      <h2 id="recordings-title" className="mb-3 text-lg font-bold">
         Your recordings
       </h2>
       {recordings.isPending ? (
