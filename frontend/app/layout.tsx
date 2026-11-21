@@ -15,8 +15,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    // Browser extensions (password managers, translators, Brave/QB tools) add attributes to <html> and <body>
+    // before React loads. suppressHydrationWarning ignores those attribute differences on these two tags only;
+    // mismatches inside the app are still reported.
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

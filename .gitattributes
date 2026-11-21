@@ -1,0 +1,11 @@
+# Evidence files are hashed and cited byte-for-byte: never convert line endings.
+data/** -text
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.wav binary
+*.mp3 binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.zip binary

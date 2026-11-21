@@ -50,8 +50,16 @@ The source of truth is `lib/endpoints.ts`. Settings lists the same table at runt
 | `GET /projects/{pid}/alerts?as_of` | **Real** |
 | `GET /projects/{pid}/activities/{code}/progress?date&as_of` | **Real** |
 | `GET /projects/{pid}/sources/{sid}/file` | **Real** (demo pack fallback in fixture mode) |
-| `GET /today`, `POST /ask`, `POST /sources`, `GET /jobs/{id}`, `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `GET /sources/{id}/summary`, `GET /evidence/{passage_id}`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
-| `GET /projects/{pid}`, `GET /activities`, `GET /sources?as_of`, `GET /incidents?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+| Documents and search: `GET /sources?as_of`, `GET /sources/{id}` (with passages), `GET`/`POST /sources/{id}/summary`, `GET /evidence/{passage_id}`, `GET /sources/{id}/readings`, `POST /sources` (Documents upload), `GET /jobs/{id}` (document jobs), `GET /search`, `GET`/`PATCH /action-items` | **Real** (`backend/documents`) |
+| `GET /today`, `POST /ask`, `POST /sources` + `GET /jobs/{id}` from Capture (typed or voice notes), `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
+| `GET /projects/{pid}`, `GET /activities`, `GET /incidents?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+
+Documents pages in live mode: **Documents** (upload with job status and review notes), **Document detail** (original,
+extracted report quantities, cited summary with provisional values and quoted external text, regenerate, passages),
+**Search** (`/search`, evidence search at the as-of time) and **Actions** (`/actions`, open actions with owner, due date
+and citation). Passage ids are `<source_id>:<locator>`; the backend also resolves short legacy locators used in fixtures
+(`E01:body`, `R10:incidents`). With the backend and frontend running in live mode, `node scripts/check-live-api.mts`
+validates every documents response through the proxy with the zod schemas.
 
 Fixture routes run in the browser (`lib/fixture-server.ts`). They filter records by the as-of clock, add about 250 ms of
 latency so loading states are visible, and keep draft lifecycle state in memory. That state resets on reload.

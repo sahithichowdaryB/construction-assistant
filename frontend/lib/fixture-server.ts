@@ -21,6 +21,7 @@ import sourcesJson from "@/fixtures/sources.json";
 import summariesJson from "@/fixtures/summaries.json";
 import { isAvailable, localDateOf } from "@/lib/time";
 import type {
+  ActionItem,
   Activity,
   Alert,
   AlertContext,
@@ -38,7 +39,9 @@ import type {
   ProgressObservation,
   Project,
   Proposal,
+  ReportReadings,
   Role,
+  SearchResponse,
   Source,
   SourceSummary,
   SourceType,
@@ -136,6 +139,68 @@ export function fxSummary(sourceId: string, asOf: string): SourceSummary {
   const s = summaries.find((x) => x.source_id === sourceId);
   if (!s) throw new FixtureError(404, "No summary for this source yet");
   return s;
+}
+
+/** Fixture stand-in for GET /search: keyword overlap over the fixture passages (no ranking model). */
+export function fxSearch(query: string, asOf: string): SearchResponse {
+  const terms = query.toLowerCase().split(/[^a-z0-9³²-]+/).filter((t) => t.length > 2);
+  const visible = new Map(fxSources(asOf).map((s) => [s.id, s]));
+  const results = passages
+    .filter((p) => visible.has(p.source_id))
+    .map((p) => ({ p, score: terms.filter((t) => p.text.toLowerCase().includes(t)).length }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(({ p, score }) => {
+      const s = visible.get(p.source_id)!;
+      return {
+        passage_id: p.id,
+        source_id: p.source_id,
+        locator: p.locator,
+        page: p.page,
+        excerpt: p.text,
+        kind: "paragraph",
+        section: null,
+        untrusted: s.type === "email",
+        source_kind: s.type,
+        source_title: s.title,
+        available_at: s.available_at,
+        score,
+        ref: { source_id: p.source_id, locator: p.locator, page: p.page, passage_id: p.id },
+      };
+    });
+  return { query, reranked: false, results };
+}
+
+/** Fixture stand-in for GET /action-items: the open actions of the fixture summaries. */
+export function fxActionItems(asOf: string): ActionItem[] {
+  const visible = new Map(fxSources(asOf).map((s) => [s.id, s]));
+  return summaries
+    .filter((s) => visible.has(s.source_id))
+    .flatMap((s) =>
+      s.open_actions.map((a, i) => {
+        const src = visible.get(s.source_id)!;
+        return {
+          id: `${s.source_id}-${i}`,
+          description: a.text,
+          owner_name: a.owner,
+          due_at: a.due,
+          completed_at: null,
+          quote: null,
+          source_id: s.source_id,
+          source_type: src.type,
+          source_title: src.title,
+          available_at: src.available_at,
+          overdue: !!a.due && isAvailable(a.due, asOf),
+          ref: a.refs[0] ?? { source_id: s.source_id },
+        };
+      }),
+    );
+}
+
+export function fxReadings(sourceId: string, asOf: string): ReportReadings {
+  fxSource(sourceId, asOf);
+  throw new FixtureError(404, "Report readings come from the live API (set NEXT_PUBLIC_USE_FIXTURES=false)");
 }
 
 // ---------- progress and alerts ----------

@@ -23,7 +23,13 @@ def main():
             cur.execute("""GRANT SELECT ON sitemate.project_members, sitemate.projects,
                            sitemate.activities, sitemate.sources, sitemate.source_passages,
                            sitemate.plan_targets, sitemate.observations,
-                           sitemate.alerts, sitemate.alert_revisions TO sitemate_reader""")
+                           sitemate.alerts, sitemate.alert_revisions, sitemate.contractors,
+                           sitemate.equipment, sitemate.equipment_assignments,
+                           sitemate.activity_dependencies, sitemate.ingestion_jobs,
+                           sitemate.document_summaries, sitemate.action_items,
+                           sitemate.diary_entries TO sitemate_reader""")
+            # Search calls pg_trgm functions that live in Supabase's `extensions` schema.
+            cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")
 
 

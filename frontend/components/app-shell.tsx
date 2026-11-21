@@ -1,6 +1,21 @@
 "use client";
 
-import { Bell, CalendarRange, FileText, FilePen, HardHat, Home, Menu, MessageCircleQuestion, Mic, Settings, Siren, TriangleAlert } from "lucide-react";
+import {
+  Bell,
+  CalendarRange,
+  FileText,
+  FilePen,
+  HardHat,
+  Home,
+  ListChecks,
+  Menu,
+  MessageCircleQuestion,
+  Mic,
+  Settings,
+  Siren,
+  TextSearch,
+  TriangleAlert,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,6 +40,8 @@ const PRIMARY = [
 const SECONDARY = [
   { href: "/schedule", label: "Schedule", Icon: CalendarRange },
   { href: "/incidents", label: "Incidents", Icon: Siren },
+  { href: "/search", label: "Search", Icon: TextSearch },
+  { href: "/actions", label: "Actions", Icon: ListChecks },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];
 

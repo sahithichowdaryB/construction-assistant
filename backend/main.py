@@ -1,37 +1,21 @@
-import hashlib
 from datetime import date as WorkDate, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import engine_for
+from deps import check_cutoff, check_member, connection
+from documents import storage
+from documents.routes import mime_for, router as documents_router
 
 app = FastAPI(title="SiteMate API")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-                   allow_methods=["GET"], allow_headers=["Authorization"])
-bearer = HTTPBearer()
-PACKS = {"RIV": Path(__file__).resolve().parents[1] / "data/riverside-demo"}
-
-
-def connection():
-    with engine_for().connect() as conn:
-        yield conn
-
-
-def check_member(project_id: str, credentials: HTTPAuthorizationCredentials = Depends(bearer),
-                 conn=Depends(connection)):
-    digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-    member = conn.scalar(text("""
-        SELECT member_id FROM sitemate.project_members
-        WHERE project_id=:project AND token_hash=:digest
-    """), {"project": project_id, "digest": digest})
-    if member is None:
-        raise HTTPException(403, "Project access denied")
+                   allow_methods=["GET", "POST", "PATCH"], allow_headers=["Authorization", "Content-Type"])
+app.include_router(documents_router)
 
 
 @app.get("/health/db")
@@ -42,11 +26,6 @@ def health():
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
     return {"database": "connected"}
-
-
-def check_cutoff(as_of):
-    if as_of is not None and as_of.utcoffset() is None:
-        raise HTTPException(422, "as_of must include a time zone")
 
 
 @app.get("/projects/{project_id}/alerts", dependencies=[Depends(check_member)])
@@ -117,16 +96,24 @@ def progress(project_id: str, code: str, date: WorkDate, as_of: datetime | None 
 
 
 @app.get("/projects/{project_id}/sources/{source_id}/file", dependencies=[Depends(check_member)])
-def original(project_id: str, source_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+def original(project_id: str, source_id: str, as_of: datetime | None = None, download: bool = False,
+             conn=Depends(connection)):
     check_cutoff(as_of)
-    stored_path = conn.scalar(text("""
-        SELECT path FROM sitemate.sources WHERE project_id=:p AND id=:s
+    row = conn.execute(text("""
+        SELECT path, meta->>'filename' AS filename FROM sitemate.sources WHERE project_id=:p AND id=:s
         AND available_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
-    """), {"p": project_id, "s": source_id, "cutoff": as_of})
-    if not stored_path or project_id not in PACKS:
+    """), {"p": project_id, "s": source_id, "cutoff": as_of}).one_or_none()
+    if row is None:
         raise HTTPException(404, "Source unavailable")
-    root = PACKS[project_id]
-    path = (root / stored_path).resolve()
-    if not path.is_relative_to((root / "uploads").resolve()) or not path.is_file():
+    path = storage.resolve(project_id, row.path)
+    if path is None:
         raise HTTPException(404, "Source file unavailable")
-    return FileResponse(path)
+    media = mime_for(path.name)
+    # Viewed inline, CSV is sent as plain text: browsers download text/csv instead of showing it.
+    if not download and media == "text/csv":
+        media = "text/plain"
+    if media.startswith("text/") or media == "application/json":
+        media += "; charset=utf-8"
+    name = Path(row.filename or path.name).name
+    return FileResponse(path, media_type=media, filename=name,
+                        content_disposition_type="attachment" if download else "inline")

@@ -65,6 +65,16 @@ export interface Source {
   pages: number | null;
   /** Human-readable note, e.g. "Scanned page, OCR" */
   note?: string | null;
+  /** Live API only: number of indexed passages and the latest summary version */
+  passage_count?: number;
+  summary_version?: number | null;
+  /** Live API only: why parsing needs a person (e.g. ambiguous OCR) */
+  review_reasons?: string[];
+  /** Live API only: raw ingestion job states (queued, running, done, failed, needs_review) */
+  parse_status?: string | null;
+  summary_status?: string | null;
+  /** Live API only: false for records captured in the app (no original file to show or download) */
+  has_file?: boolean;
 }
 
 export interface Passage {
@@ -73,6 +83,11 @@ export interface Passage {
   locator: string;
   text: string;
   page: number | null;
+  /** Live API only: paragraph, table_row, header, transcript, caption, ocr, record, metadata… */
+  kind?: string;
+  section?: string | null;
+  /** External text (e.g. an email body): quoted evidence, never instructions */
+  untrusted?: boolean;
 }
 
 /** A pointer into a source. The backend returns this shape in evidence_refs. */
@@ -315,6 +330,12 @@ export interface UploadJob {
   status: JobStatus;
   error: string | null;
   created_at: IsoInstant;
+  /** Live API only: reasons a parsed document needs review */
+  review_reasons?: string[];
+  /** Live API only: the same file was already uploaded under this source id */
+  duplicate?: boolean;
+  /** Live API only: when the uploaded document counts as received (the real upload time) */
+  available_at?: IsoInstant;
 }
 
 export interface SourceSummary {
@@ -322,8 +343,118 @@ export interface SourceSummary {
   title: string;
   observations: { text: string; refs: EvidenceRef[] }[];
   decisions: { text: string; refs: EvidenceRef[] }[];
-  open_actions: { text: string; owner: string | null; due: IsoInstant | null; refs: EvidenceRef[] }[];
+  open_actions: { text: string; owner: string | null; due: IsoInstant | null; quote?: string | null; refs: EvidenceRef[] }[];
   evidence_ids: string[];
+  /** Live API only */
+  headline?: string | null;
+  provisional?: { text: string; refs: EvidenceRef[] }[];
+  /** Instruction-like text found in the source; shown as quoted evidence and never acted on */
+  quoted_external_instructions?: { text: string; refs: EvidenceRef[] }[];
+  version?: number;
+  model?: string | null;
+}
+
+/** GET /projects/{pid}/sources/{sid}/readings: quantities read from a daily report. */
+export interface ReportReading {
+  activity_code: string;
+  work_date: LocalDate;
+  value: number;
+  unit: string;
+  basis: Basis;
+  locator: string;
+  page: number | null;
+  planned_on_report: number | null;
+  /** accepted = already an observation with the same value; conflict = stored value differs */
+  review_status: "proposed" | "accepted" | "conflict";
+  accepted_value: number | null;
+  ref: EvidenceRef;
+}
+
+export interface ReportReadings {
+  source_id: string;
+  job_status: string;
+  review_reasons: string[];
+  readings: ReportReading[];
+}
+
+/** GET /projects/{pid}/sources/{sid}/storage: where the original and everything derived from it is stored. */
+export interface SourceStorage {
+  source_id: string;
+  file: {
+    location: string;
+    path: string;
+    sha256: string | null;
+    size_bytes: number | null;
+    mime: string;
+    available: boolean;
+  };
+  /** Every row (all columns) that each table holds for this source */
+  tables: {
+    table: string;
+    stores: string;
+    columns: string[];
+    rows: unknown[][];
+    row_count: number;
+    truncated: boolean;
+  }[];
+}
+
+/** A block of a structured preview; `locator` matches the passage parsed from the same text. */
+export interface PreviewBlock {
+  type: "title" | "heading" | "paragraph" | "list" | "table";
+  text?: string;
+  level?: number | null;
+  locator?: string | null;
+  rows?: string[][];
+  locators?: string[];
+  /** Email paragraph that looks like an instruction to the reader (quoted, never acted on) */
+  flagged?: boolean;
+}
+
+/** GET /projects/{pid}/sources/{sid}/preview: originals a browser cannot render inline. */
+export type SourcePreview =
+  | { source_id: string; kind: "document"; blocks: PreviewBlock[] }
+  | { source_id: string; kind: "email"; headers: { name: string; value: string }[]; attachments: string[]; blocks: PreviewBlock[] }
+  | { source_id: string; kind: "table"; columns: string[]; rows: string[][]; row_count: number; truncated: boolean }
+  | { source_id: string; kind: "text"; text: string; language?: string };
+
+/** GET /projects/{pid}/search item */
+export interface SearchResult {
+  passage_id: string;
+  source_id: string;
+  locator: string;
+  page: number | null;
+  excerpt: string;
+  kind: string;
+  section: string | null;
+  untrusted: boolean;
+  source_kind: SourceType;
+  source_title: string | null;
+  available_at: IsoInstant;
+  score: number;
+  ref: EvidenceRef;
+}
+
+export interface SearchResponse {
+  query: string;
+  reranked: boolean;
+  results: SearchResult[];
+}
+
+/** GET /projects/{pid}/action-items item. Owner and due date only when the source records them. */
+export interface ActionItem {
+  id: string;
+  description: string;
+  owner_name: string | null;
+  due_at: IsoInstant | null;
+  completed_at: IsoInstant | null;
+  quote: string | null;
+  source_id: string;
+  source_type: SourceType;
+  source_title: string | null;
+  available_at: IsoInstant;
+  overdue: boolean;
+  ref: EvidenceRef;
 }
 
 export interface TodayActivity {
