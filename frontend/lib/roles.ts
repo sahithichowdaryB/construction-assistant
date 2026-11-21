@@ -32,13 +32,13 @@ export type Action =
 
 const PERMISSIONS: Record<Role, Action[]> = {
   foreman: ["capture", "confirm_capture", "upload"],
-  site_manager: ["upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning"],
+  site_manager: ["capture", "confirm_capture", "upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning"],
   approver: ["ask", "approve", "request_changes", "export", "run_reasoning"],
 };
 
 const WHO: Record<Action, string> = {
-  capture: "the foreman",
-  confirm_capture: "the foreman",
+  capture: "the foreman or site manager",
+  confirm_capture: "the foreman or site manager",
   upload: "the foreman or site manager",
   dismiss_alert: "the site manager",
   link_incident: "the site manager",

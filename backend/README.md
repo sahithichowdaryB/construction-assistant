@@ -39,3 +39,45 @@ HTTP service is read-only; capture, review and export writes need their own hand
 The transactional seed upserts the source manifest, registers, dependencies, dated targets, signed report readings and provisional diary estimate. The R11 scan uses a manually verified transcription bound to its file hash. The evaluation answer key is used only by the verifier.
 
 With the API running, execute `.venv/Scripts/python.exe verify_riverside.py` to check the 50 activity/day cases, historical cutoffs, PDF access and project isolation.
+
+## Voice capture agent (Node.js + LangChain + Claude)
+
+`src/` is a Node.js service that turns a recorded voice note into reviewed project memory.
+It is a LangGraph pipeline over four LangChain tools in `src/agent/tools/`:
+
+```
+audio ─Whisper─▶ transcript ─fact_extraction (Claude fills JSON)─▶ events
+  ─database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)─▶ matches
+  ─relationship_matching (dependencies, contractors, shared equipment, open alerts)─▶ relationships
+  ─question_generation (Claude + sitemate.business_rules)─▶ validated facts / missing fields / questions
+  ─[pause: ask manager ─▶ answers ─▶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
+  ─▶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
+```
+
+Facts are stored with `review_status='proposed'`; a person confirms them later. Each manager answer is
+stored as its own passage (`answer:<question id>`) so every fact cites where it came from.
+
+Setup (adds the `business_rules` table and a `sitemate_agent` role with SELECT + INSERT on capture tables):
+
+```powershell
+.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe provision_agent.py     # needs AGENT_DATABASE_URL in .env
+npm install
+npm start                                       # http://127.0.0.1:4000
+```
+
+Endpoints (bearer token of a `contributor`, `manager` or `approver` member):
+
+- `POST /projects/RIV/captures` — multipart `audio` file (or form/JSON field `transcript`), optional `recorded_at`
+  (ISO 8601 with offset). Returns `201 saved`, or `202 needs_input` with `thread_id` and `questions`.
+- `POST /projects/RIV/captures/{thread_id}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`.
+  Answer `unknown` to record a field as a gap.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -F audio=@../data/riverside-demo/uploads/voice/V01.wav \
+     -F recorded_at=2026-11-10T10:05:00+01:00 http://127.0.0.1:4000/projects/RIV/captures
+```
+
+Business rules are rows in `sitemate.business_rules` (seeded from `rules/business_rules.json`); edit rows to
+change what the agent requires or asks. Paused captures are held in memory and lost on restart; swap in
+`@langchain/langgraph-checkpoint-postgres` before production.

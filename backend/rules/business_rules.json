@@ -1,0 +1,86 @@
+[
+  {
+    "rule_key": "equipment_failure.required",
+    "event_type": "equipment_failure",
+    "required_fields": ["occurred_at", "activity_code", "equipment_id", "workers_affected"],
+    "ask_if_missing": true,
+    "description": "A breakdown must record when it happened, the affected activity, the machine and how many workers are idle. If the machine is not named, infer it from equipment_assignments for the activity on that date; when exactly one machine of the described type is assigned, record it with basis 'inferred' instead of asking."
+  },
+  {
+    "rule_key": "equipment_failure.duplicate",
+    "event_type": "equipment_failure",
+    "required_fields": [],
+    "ask_if_missing": false,
+    "description": "If an open incident for the same activity and equipment already exists within 12 hours, treat the note as an update to that incident (set duplicate_of_incident_id) unless the manager says it is a new failure. Ask only when it is genuinely unclear."
+  },
+  {
+    "rule_key": "repair_forecast.required",
+    "event_type": "repair_forecast",
+    "required_fields": ["equipment_id", "expected_restart_at"],
+    "ask_if_missing": true,
+    "description": "A repair forecast needs the machine and the expected restart time. A mechanic's estimate is basis 'forecast', never an actual restart."
+  },
+  {
+    "rule_key": "repair_release.required",
+    "event_type": "repair_release",
+    "required_fields": ["equipment_id", "occurred_at"],
+    "ask_if_missing": true,
+    "description": "A repair release records the machine and the actual release time. It resolves the open breakdown incident for that machine."
+  },
+  {
+    "rule_key": "quantity.required",
+    "event_type": "quantity_estimate",
+    "required_fields": ["activity_code", "quantity", "unit"],
+    "ask_if_missing": true,
+    "description": "Spoken tallies are basis 'estimated'. An estimate never replaces a signed quantity from a daily report; if a signed observation already exists for the activity and date, keep the estimate as context only."
+  },
+  {
+    "rule_key": "production.required",
+    "event_type": "production",
+    "required_fields": ["activity_code", "quantity", "unit"],
+    "ask_if_missing": true,
+    "description": "Production must name an activity from the schedule, the quantity and the activity's unit. Reject units that do not match the activity's unit and ask for clarification."
+  },
+  {
+    "rule_key": "material_delivery.required",
+    "event_type": "material_delivery",
+    "required_fields": ["material", "quantity", "unit"],
+    "ask_if_missing": true,
+    "description": "Deliveries record material, delivered quantity and unit. Record any outstanding quantity and its due date if mentioned."
+  },
+  {
+    "rule_key": "delivery_delay.required",
+    "event_type": "delivery_delay",
+    "required_fields": ["material", "delay_minutes"],
+    "ask_if_missing": true,
+    "description": "A delay needs the material or supplier and the length of the delay. Link the activity that consumes the material when the schedule makes it clear."
+  },
+  {
+    "rule_key": "quality_observation.required",
+    "event_type": "quality_observation",
+    "required_fields": ["location", "description"],
+    "ask_if_missing": true,
+    "description": "Quality observations need an exact location and description. For cracks, ask for the measured width in mm; never guess it."
+  },
+  {
+    "rule_key": "handover.required",
+    "event_type": "handover",
+    "required_fields": ["activity_code", "occurred_at", "successor_activity_code"],
+    "ask_if_missing": true,
+    "description": "A handover finishes a predecessor activity and starts its successor. The successor must be a schedule successor of the finished activity in activity_dependencies."
+  },
+  {
+    "rule_key": "safety_incident.required",
+    "event_type": "safety_incident",
+    "required_fields": ["occurred_at", "location", "description", "injured_count"],
+    "ask_if_missing": true,
+    "description": "Safety incidents always need time, location, description and number of injured people (0 if none). Flag any injury as high impact."
+  },
+  {
+    "rule_key": "general.no_guessing",
+    "event_type": "*",
+    "required_fields": [],
+    "ask_if_missing": false,
+    "description": "Never invent IDs, quantities or times. Values not said by the manager and not derivable from database records stay missing. Relative times ('at ten', 'tomorrow at noon') are resolved against the note's recording time in the project time zone."
+  }
+]

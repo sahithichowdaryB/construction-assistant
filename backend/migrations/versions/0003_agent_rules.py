@@ -1,10 +1,9 @@
-"""Placeholder for the teammate's `0003_agent_rules` revision (adds sitemate.business_rules).
+"""Add business rules used by the capture agent and seed them from rules/business_rules.json."""
 
-The shared database is already at this revision, but the original file is not in this repo.
-This no-op stub only keeps the alembic chain intact so 0004 can apply. Replace it with the
-teammate's real file when available (same revision id).
-"""
+import json
+from pathlib import Path
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "0003_agent_rules"
@@ -12,16 +11,24 @@ down_revision = "0002_workflows"
 branch_labels = None
 depends_on = None
 
+RULES = Path(__file__).resolve().parents[2] / "rules/business_rules.json"
+
 
 def upgrade():
-    # No-op on the shared DB (table exists). IF NOT EXISTS lets a fresh database chain through.
+    op.execute("SET LOCAL search_path TO sitemate, pg_catalog")
     op.execute("""
-        CREATE TABLE IF NOT EXISTS sitemate.business_rules (
-            rule_key text PRIMARY KEY, event_type text NOT NULL, required_fields text[] NOT NULL DEFAULT '{}',
-            ask_if_missing boolean NOT NULL DEFAULT false, description text NOT NULL,
-            active boolean NOT NULL DEFAULT true)
+        CREATE TABLE business_rules (
+            rule_key text PRIMARY KEY, event_type text NOT NULL,
+            required_fields text[] NOT NULL DEFAULT '{}', ask_if_missing boolean NOT NULL DEFAULT true,
+            description text NOT NULL, active boolean NOT NULL DEFAULT true)
     """)
+    insert = sa.text("""
+        INSERT INTO sitemate.business_rules (rule_key, event_type, required_fields, ask_if_missing, description)
+        VALUES (:rule_key, :event_type, :required_fields, :ask_if_missing, :description)
+    """)
+    for rule in json.loads(RULES.read_text(encoding="utf8")):
+        op.get_bind().execute(insert, rule)
 
 
 def downgrade():
-    pass
+    op.drop_table("business_rules", schema="sitemate")
