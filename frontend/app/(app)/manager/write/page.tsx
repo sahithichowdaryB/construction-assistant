@@ -67,6 +67,49 @@ function Pill({ className, children }: { className?: string; children: ReactNode
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset", className)}>{children}</span>;
 }
 
+/** A pen writing ink lines across lined paper: shown while SiteMate drafts. */
+function PenWriting({ label }: { label: string }) {
+  const lines = [300, 340, 260, 320, 190];
+  return (
+    <div className="flex flex-col items-center gap-4 py-6" role="status" aria-live="polite">
+      <div className="paper-lines relative h-44 w-full max-w-md overflow-hidden rounded-2xl border bg-[#fffdf7] px-6 pt-4 shadow-inner dark:bg-[#1c1d20]">
+        <svg viewBox="0 0 380 170" className="absolute inset-x-6 top-4 h-40" aria-hidden>
+          {lines.map((w, i) => (
+            <path key={i} pathLength={1} strokeDasharray="1" fill="none" strokeWidth="2.4" strokeLinecap="round"
+                  className="stroke-foreground/70 motion-safe:animate-[ink-line_1.1s_ease-in-out_both]"
+                  style={{ animationDelay: `${i * 0.9}s`, animationIterationCount: "infinite", animationDuration: "4.5s" }}
+                  d={`M4 ${26 + i * 32} ${Array.from({ length: Math.round(w / 14) }, (_, k) => `q 3.5 ${k % 2 ? 5 : -5} 7 0 t 7 0`).join(" ")}`} />
+          ))}
+        </svg>
+        <span className="absolute top-3 left-5 motion-safe:animate-[pen-glide_4.5s_ease-in-out_infinite]" style={{ ["--pen-x" as string]: "280px" }}>
+          <svg viewBox="0 0 48 48" className="size-11 drop-shadow-md" aria-hidden>
+            <path d="M8 40 l4 -12 L34 6 a4 4 0 0 1 6 0 l2 2 a4 4 0 0 1 0 6 L20 36 z" className="fill-primary stroke-foreground" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M8 40 l4 -12 l8 8 z" className="fill-foreground" />
+            <path d="M30 10 l8 8" className="stroke-foreground" strokeWidth="2" />
+          </svg>
+        </span>
+      </div>
+      <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Sparkles className="size-4 text-warning" aria-hidden /> {label}</p>
+    </div>
+  );
+}
+
+/** The letter writes itself in from the top while a pen runs down beside it. */
+function InkLetter({ body }: { body: string }) {
+  return (
+    <div className="relative">
+      <div className="max-h-[70vh] overflow-y-auto rounded-2xl border bg-[#fffdf7] p-5 shadow-inner sm:p-7 dark:bg-[#1c1d20]">
+        <div className="motion-safe:animate-[ink-reveal_1.6s_cubic-bezier(.4,0,.2,1)_both]">
+          <NoticeText body={body} />
+        </div>
+      </div>
+      <span aria-hidden className="pointer-events-none absolute -right-3 motion-safe:animate-[pen-down_1.6s_cubic-bezier(.4,0,.2,1)_both] motion-reduce:hidden">
+        <PenLine className="size-7 -rotate-12 text-primary drop-shadow" />
+      </span>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ request form
 
 function RequestForm({ onCreated }: { onCreated: (id: string) => void }) {
@@ -83,12 +126,19 @@ function RequestForm({ onCreated }: { onCreated: (id: string) => void }) {
 
   if (options.isPending) return <LoadingSkeleton variant="cards" rows={2} />;
   if (options.isError) return <ErrorState error={options.error} onRetry={() => void options.refetch()} />;
+  if (create.isPending) {
+    return (
+      <div className="rounded-[22px] bg-card p-6">
+        <PenWriting label="SiteMate is checking the records and writing your draft… (20–40 s)" />
+      </div>
+    );
+  }
   const chosen = options.data.kinds.find((k) => k.key === kind);
   const rates = options.data.rates;
 
   return (
     <form
-      className="flex w-full flex-col gap-5 rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
+      className="flex w-full flex-col gap-6 rounded-[22px] bg-card p-5 sm:p-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
       onSubmit={(e) => {
         e.preventDefault();
         const pick = options.data.recipients.find((r) => `${r.type}:${r.id}` === recipient);
@@ -104,99 +154,93 @@ function RequestForm({ onCreated }: { onCreated: (id: string) => void }) {
         );
       }}
     >
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="what" className="text-sm font-semibold">
-          What happened?
+      {/* the notepad */}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="what" className="flex items-center gap-2 text-base font-bold">
+          <PenLine className="size-4 text-primary" aria-hidden /> What happened?
         </Label>
-        <Textarea
-          id="what"
-          rows={4}
-          maxLength={3000}
-          value={what}
-          onChange={(e) => setWhat(e.target.value)}
-          placeholder="What happened, when, who or what is affected, who is responsible"
-          className="min-h-28 text-base"
-        />
+        <div className="paper-lines relative overflow-hidden rounded-2xl border bg-[#fffdf7] shadow-inner dark:bg-[#1c1d20]">
+          <span aria-hidden className="absolute inset-y-0 left-10 w-px bg-red-300/70" />
+          <Textarea
+            id="what"
+            rows={5}
+            maxLength={3000}
+            value={what}
+            onChange={(e) => setWhat(e.target.value)}
+            placeholder="What happened, when, who or what is affected, who is responsible"
+            className="min-h-40 resize-none border-0 bg-transparent pt-3.5 pl-14 text-base leading-8 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          />
+        </div>
       </div>
 
+      {/* what to write: picture cards */}
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold">What should it be?</span>
-        <div role="radiogroup" aria-label="Type" className="flex flex-wrap gap-1.5">
-          {options.data.kinds.map((k) => (
-            <button
-              key={k.key}
-              type="button"
-              role="radio"
-              aria-checked={kind === k.key}
-              onClick={() => setKind(k.key)}
-              className={cn(
-                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors",
-                kind === k.key ? "border-foreground bg-foreground text-background" : "bg-background hover:bg-muted",
-              )}
-            >
-              {k.formal ? <PenLine className="size-3.5" aria-hidden /> : <Mail className="size-3.5" aria-hidden />}
-              {k.label}
-            </button>
-          ))}
+        <span className="text-sm font-bold">What should it be?</span>
+        <div role="radiogroup" aria-label="Type" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {options.data.kinds.map((k) => {
+            const on = kind === k.key;
+            return (
+              <button
+                key={k.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setKind(k.key)}
+                className={cn(
+                  "group flex flex-col items-start gap-2 rounded-2xl border-2 p-3.5 text-left transition",
+                  on ? "border-primary bg-primary/10" : "border-transparent bg-muted/50 hover:-translate-y-0.5 hover:bg-muted",
+                )}
+              >
+                <span className={cn("flex size-10 items-center justify-center rounded-xl transition", on ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground group-hover:text-foreground")}>
+                  {k.formal ? <PenLine className="size-5" aria-hidden /> : <Mail className="size-5" aria-hidden />}
+                </span>
+                <span className="text-sm font-semibold">{k.label}</span>
+              </button>
+            );
+          })}
         </div>
         {chosen && <p className="text-xs text-muted-foreground">{chosen.description}</p>}
         {chosen?.uses_costs && rates.set < rates.total && (
-          <p className="flex items-center gap-1.5 text-xs text-amber-900">
+          <p className="flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-300">
             <Calculator className="size-3.5" aria-hidden /> {rates.total - rates.set} rate{rates.total - rates.set === 1 ? "" : "s"} not set.{" "}
-            <Link href="/settings" className="font-medium underline">
-              Set rates
-            </Link>
+            <Link href="/settings" className="font-medium underline">Set rates</Link>
           </p>
         )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem]">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="recipient" className="text-sm font-semibold">
-            To whom?
-          </Label>
+          <Label htmlFor="recipient" className="text-sm font-bold">To whom?</Label>
           <Select value={recipient} onValueChange={setRecipient}>
-            <SelectTrigger id="recipient" className="h-11 w-full md:h-10">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger id="recipient" className="h-11 w-full md:h-10"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="suggest">Let SiteMate suggest</SelectItem>
               {options.data.recipients.map((r) => (
-                <SelectItem key={`${r.type}:${r.id}`} value={`${r.type}:${r.id}`}>
-                  {r.label}
-                </SelectItem>
+                <SelectItem key={`${r.type}:${r.id}`} value={`${r.type}:${r.id}`}>{r.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="day" className="text-sm font-semibold">
-            Day
-          </Label>
+          <Label htmlFor="day" className="text-sm font-bold">Day</Label>
           <Input id="day" type="date" max={clockDay} value={day || clockDay} onChange={(e) => setDay(e.target.value)} className="h-11 md:h-10" />
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="emphasis" className="text-sm font-semibold">
+        <Label htmlFor="emphasis" className="text-sm font-bold">
           Anything to stress? <span className="font-normal text-muted-foreground">(optional)</span>
         </Label>
-        <Input
-          id="emphasis"
-          maxLength={1000}
-          value={emphasis}
-          onChange={(e) => setEmphasis(e.target.value)}
-          placeholder="e.g. ask for a replacement machine by tomorrow 07:00"
-          className="h-11 md:h-10"
-        />
+        <Input id="emphasis" maxLength={1000} value={emphasis} onChange={(e) => setEmphasis(e.target.value)}
+               placeholder="e.g. ask for a replacement machine by tomorrow 07:00" className="h-11 md:h-10" />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock3 className="size-3.5" aria-hidden /> Records as of {fmtDateTime(asOf)} · nothing is sent
         </p>
-        <GatedButton type="submit" reason={blocked} size="touch" disabled={what.trim().length < 5 || create.isPending}>
-          <Sparkles aria-hidden /> {create.isPending ? "Writing… (20–40 s)" : "Create draft"}
+        <GatedButton type="submit" reason={blocked} size="touch" disabled={what.trim().length < 5} className="group rounded-xl px-5">
+          <PenLine aria-hidden className="transition-transform group-hover:-rotate-12" /> Write it
         </GatedButton>
       </div>
       {create.isError && <ErrorState error={create.error} />}
@@ -407,7 +451,7 @@ function Workspace({ item }: { item: Correspondence }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="flex min-w-0 flex-col gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:p-6">
+      <section className="flex min-w-0 flex-col gap-4 rounded-[22px] bg-card p-5 sm:p-7">
         {/* header */}
         <header className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -515,7 +559,7 @@ function Workspace({ item }: { item: Correspondence }) {
             {save.isError && <ErrorState error={save.error} />}
           </div>
         ) : (
-          <NoticeText body={d.latest.body} className="max-h-[70vh] overflow-y-auto" />
+          regenerate.isPending ? <PenWriting label="Rewriting with the latest records…" /> : <InkLetter body={d.latest.body} />
         )}
 
         <NoticeDownloads notice={d} />
@@ -527,10 +571,10 @@ function Workspace({ item }: { item: Correspondence }) {
   );
 }
 
-// ------------------------------------------------------------------ drafts grid
+// ------------------------------------------------------------------ drafts list
 
 type DraftItem = ReturnType<typeof useCorrespondenceList>["data"] extends (infer T)[] | undefined ? T : never;
-const GRID_TOP = 4;
+const LIST_TOP = 6;
 const DOT: Record<string, string> = {
   draft: "bg-muted-foreground/60",
   awaiting_review: "bg-amber-500",
@@ -538,8 +582,8 @@ const DOT: Record<string, string> = {
   approved: "bg-emerald-500",
 };
 
-/** Even cards that wrap (no sideways scrolling); the newest four first, the rest on request. */
-function DraftGrid({
+/** The drafts as a stack of small letters down the side; the newest six first. */
+function DraftList({
   drafts,
   pending,
   error,
@@ -552,57 +596,58 @@ function DraftGrid({
   error: unknown;
   onRetry: () => void;
   selected: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
 }) {
   const [all, setAll] = useState(false);
-  if (pending) return <LoadingSkeleton rows={1} />;
+  if (pending) return <LoadingSkeleton rows={3} />;
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
-  if (!drafts.length) return null;
-  let shown = all ? drafts : drafts.slice(0, GRID_TOP);
+  let shown = all ? drafts : drafts.slice(0, LIST_TOP);
   const picked = drafts.find((d) => d.id === selected);
-  if (picked && !shown.includes(picked)) shown = [...shown.slice(0, GRID_TOP - 1), picked];
+  if (picked && !shown.includes(picked)) shown = [...shown.slice(0, LIST_TOP - 1), picked];
 
   return (
-    <section aria-label="Your drafts" className="flex flex-col gap-2.5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Your drafts <span className="tabular-nums">({drafts.length})</span>
-        </h2>
-        {drafts.length > GRID_TOP && (
-          <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium underline underline-offset-2">
-            {all ? "Show fewer" : `Show all (${drafts.length})`}
-          </button>
-        )}
-      </div>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {shown.map((d) => (
-          <li key={d.id} className="min-w-0">
+    <nav aria-label="Your drafts" className="flex flex-col gap-2">
+      <button type="button" onClick={() => onSelect(null)} aria-current={!selected ? "true" : undefined}
+              className={cn("flex items-center gap-3 rounded-2xl border-2 border-dashed px-3.5 py-3 text-left text-sm font-bold transition",
+                !selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/60")}>
+        <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Plus className="size-4" aria-hidden /></span>
+        New draft
+      </button>
+      {drafts.length > 0 && (
+        <p className="mt-2 px-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Your drafts · {drafts.length}</p>
+      )}
+      <ul className="flex flex-col gap-2">
+        {shown.map((d, i) => (
+          <li key={d.id} className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2 motion-safe:fill-mode-both" style={{ animationDelay: `${i * 50}ms` }}>
             <button
               type="button"
               aria-current={d.id === selected ? "true" : undefined}
               onClick={() => onSelect(d.id)}
               className={cn(
-                "flex h-full w-full flex-col gap-1.5 rounded-xl border bg-card px-3.5 py-3 text-left shadow-xs transition-colors hover:border-foreground/30",
-                d.id === selected && "border-primary bg-primary/5 ring-1 ring-primary",
+                "group relative flex w-full flex-col gap-1 overflow-hidden rounded-2xl bg-card px-3.5 py-3 text-left transition hover:-translate-y-0.5 hover:shadow-md",
+                d.id === selected && "ring-2 ring-primary",
               )}
             >
+              <span aria-hidden className="absolute top-0 right-0 size-0 border-t-[18px] border-l-[18px] border-t-muted border-l-transparent" />
               <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className={cn("size-2 shrink-0 rounded-full", DOT[d.status])} aria-hidden />
-                <span className="truncate font-medium">{STATUS_LABEL[d.status]}</span>
-                <span className="ml-auto shrink-0">
-                  {d.kind_label} · v{d.version}
-                </span>
+                <span className="truncate font-semibold">{STATUS_LABEL[d.status]}</span>
               </span>
-              <span className="line-clamp-2 text-sm leading-snug font-semibold">{d.subject ?? d.kind_label}</span>
-              <span className="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="truncate">To {d.recipient_label}</span>
-                {!!d.missing && <span className="ml-auto shrink-0 font-semibold text-red-700">{d.missing} missing</span>}
+              <span className="line-clamp-2 text-[13px] leading-snug font-semibold">{d.subject ?? d.kind_label}</span>
+              <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span className="truncate">{d.kind_label} · to {d.recipient_label}</span>
+                {!!d.missing && <span className="ml-auto shrink-0 font-semibold text-red-700 dark:text-red-400">{d.missing} missing</span>}
               </span>
             </button>
           </li>
         ))}
       </ul>
-    </section>
+      {drafts.length > LIST_TOP && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="self-start px-1 text-xs font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          {all ? "Show fewer" : `Show all ${drafts.length}`}
+        </button>
+      )}
+    </nav>
   );
 }
 
@@ -617,27 +662,17 @@ export default function WritePage() {
 
   return (
     <>
-      <PageHeader
-        title="Write with SiteMate"
-        description="Describe the situation; SiteMate checks the records and drafts the email or letter for your review."
-        actions={
-          <Button onClick={() => setSelected(null)} variant={selected ? "default" : "outline"} disabled={!selected}>
-            <Plus aria-hidden /> New draft
-          </Button>
-        }
-      />
-
-      <div className="flex flex-col gap-5">
-        {/* Row 1: the drafts, full width */}
-        <DraftGrid drafts={drafts} pending={list.isPending} error={list.isError ? list.error : null} onRetry={() => void list.refetch()}
-          selected={selected} onSelect={setSelected} />
-
-        {/* Row 2 and below: the form, or the letter and what SiteMate found */}
+      <PageHeader title="Write with SiteMate" description="Say what happened. SiteMate checks the records and writes the email or letter for you to review." />
+      <div className="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <div className="lg:sticky lg:top-24">
+          <DraftList drafts={drafts} pending={list.isPending} error={list.isError ? list.error : null} onRetry={() => void list.refetch()}
+            selected={selected} onSelect={setSelected} />
+        </div>
         <div className="min-w-0">
           {!selected ? (
             <RequestForm onCreated={setSelected} />
           ) : item.isPending ? (
-            <LoadingSkeleton variant="cards" rows={2} />
+            <div className="rounded-[22px] bg-card p-6"><PenWriting label="Opening the draft…" /></div>
           ) : item.isError ? (
             <ErrorState error={item.error} onRetry={() => void item.refetch()} />
           ) : item.data ? (

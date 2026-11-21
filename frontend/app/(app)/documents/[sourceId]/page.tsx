@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, ChevronRight, Database, FileSearch, Info, RefreshCw, Ruler, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileSearch, Info, RefreshCw, Ruler, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useState } from "react";
@@ -11,7 +11,6 @@ import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
 import { SourceIcon } from "@/components/source-icon";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api";
 import { USE_FIXTURES } from "@/lib/endpoints";
@@ -22,10 +21,10 @@ import {
   useRegenerateSummary,
   useReportReadings,
   useSource,
-  useSourceStorage,
   useSourceSummary,
 } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
+import { passageWords, sourceTitle } from "@/lib/source-title";
 import { fmtDateTime } from "@/lib/time";
 import type { Passage, ReportReading, SourceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -236,11 +235,11 @@ function SummaryPanel({ sourceId, pending }: { sourceId: string; pending: boolea
 
 // ------------------------------------------------------------------ passages
 
-function PassagesPanel({ passages, selected, onSelect }: { passages: Passage[]; selected: string | null; onSelect: (p: Passage) => void }) {
-  if (!passages.length) return <p className="text-sm text-muted-foreground">No passages indexed for this source.</p>;
+function PassagesPanel({ passages, selected, onSelect, words }: { passages: Passage[]; selected: string | null; onSelect: (p: Passage) => void; words: ReturnType<typeof passageWords> }) {
+  if (!passages.length) return <p className="text-sm text-muted-foreground">{words.none}</p>;
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">Select a passage to find it in the original.</p>
+      <p className="text-sm text-muted-foreground">{words.hint}</p>
       <ul className="flex flex-col gap-2">
         {passages.map((p) => {
           const active = selected === p.locator;
@@ -268,133 +267,6 @@ function PassagesPanel({ passages, selected, onSelect }: { passages: Passage[]; 
         })}
       </ul>
     </div>
-  );
-}
-
-// ------------------------------------------------------------------ storage
-
-function fmtBytes(n: number | null) {
-  if (n === null) return "Unknown size";
-  return n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** One stored value: null stays visible as "null"; JSON and long text fold open on click. */
-function CellValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span className="text-muted-foreground italic">null</span>;
-  if (typeof value === "boolean") return <span className="font-mono">{String(value)}</span>;
-  const isJson = typeof value === "object";
-  const text = isJson ? JSON.stringify(value) : String(value);
-  if (text.length <= 140) return <span className={cn(isJson && "font-mono")}>{text}</span>;
-  return (
-    <details>
-      <summary className="cursor-pointer text-sky-800">
-        <span className={cn(isJson && "font-mono")}>{text.slice(0, 90)}…</span> <span className="underline">show all</span>
-      </summary>
-      <pre className="mt-1 max-h-96 overflow-auto rounded bg-muted p-2 font-mono text-[11px] whitespace-pre-wrap">
-        {isJson ? JSON.stringify(value, null, 2) : text}
-      </pre>
-    </details>
-  );
-}
-
-function StorageSection({ sourceId }: { sourceId: string }) {
-  const storage = useSourceStorage(sourceId);
-  return (
-    <section aria-labelledby="storage-title" className="rounded-2xl border bg-card shadow-xs">
-      <header className="flex flex-col gap-1 border-b px-5 py-4">
-        <h2 id="storage-title" className="flex items-center gap-2 text-base font-semibold">
-          <Database className="size-4 text-muted-foreground" aria-hidden /> Where this is stored
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Every row this document has in schema <span className="font-mono">sitemate</span>, with every column, exactly as stored.
-        </p>
-      </header>
-      <div className="flex flex-col gap-3 p-5">
-        {storage.isPending ? (
-          <LoadingSkeleton rows={3} />
-        ) : storage.isError ? (
-          <ErrorState error={storage.error} onRetry={() => void storage.refetch()} />
-        ) : (
-          <>
-            <dl className="grid gap-x-6 gap-y-3 rounded-xl border bg-muted/30 p-4 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs text-muted-foreground">Original file</dt>
-                <dd>{storage.data.file.location}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Type and size</dt>
-                <dd>
-                  {storage.data.file.mime} · {fmtBytes(storage.data.file.size_bytes)}
-                  {storage.data.file.available ? "" : " · file missing"}
-                </dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-xs text-muted-foreground">Path</dt>
-                <dd className="font-mono text-xs break-all">{storage.data.file.path}</dd>
-              </div>
-              {storage.data.file.sha256 && (
-                <div className="sm:col-span-2">
-                  <dt className="text-xs text-muted-foreground">SHA-256</dt>
-                  <dd className="font-mono text-xs break-all">{storage.data.file.sha256}</dd>
-                </div>
-              )}
-            </dl>
-            {storage.data.tables.map((t) => (
-              <details
-                key={t.table}
-                open={t.row_count > 0 && t.row_count <= 25}
-                className={cn("group rounded-xl border", t.row_count === 0 && "text-muted-foreground")}
-              >
-                <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl p-3 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  <ChevronRight className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="font-mono text-sm font-semibold">{t.table}</span>
-                    <span className="text-xs text-muted-foreground">{t.stores}</span>
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-xs tabular-nums",
-                      t.row_count ? "bg-sky-50 text-sky-900 ring-1 ring-sky-200 ring-inset" : "bg-muted",
-                    )}
-                  >
-                    {t.row_count} {t.row_count === 1 ? "row" : "rows"}
-                    {t.truncated ? " (first 200)" : ""}
-                  </span>
-                </summary>
-                {t.row_count > 0 ? (
-                  <div className="max-h-[32rem] overflow-auto border-t">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
-                        <TableRow>
-                          {t.columns.map((c) => (
-                            <TableHead key={c} className="font-mono text-xs whitespace-nowrap">
-                              {c}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {t.rows.map((row, i) => (
-                          <TableRow key={i}>
-                            {row.map((value, j) => (
-                              <TableCell key={t.columns[j]} className="max-w-[28rem] min-w-24 align-top text-xs break-words whitespace-pre-wrap">
-                                <CellValue value={value} />
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <p className="border-t px-3 py-2 pl-10 text-xs">No rows for this document.</p>
-                )}
-              </details>
-            ))}
-          </>
-        )}
-      </div>
-    </section>
   );
 }
 
@@ -439,12 +311,13 @@ function DocumentInner() {
   const hasQuantities = s.type === "daily_report" && !USE_FIXTURES;
   const activeTab = tab ?? (hasSummary ? "summary" : hasQuantities ? "quantities" : "passages");
   const focusPage = focus.page ?? s.passages.find((p) => p.locator === focus.locator)?.page ?? null;
+  const words = passageWords(s.type);
   const facts: [string, ReactNode][] = [
     ["Document ID", <span key="id" className="font-mono">{s.id}</span>],
     ["Type", SOURCE_TYPE_LABEL[s.type]],
     ["Received", fmtDateTime(s.available_at)],
     ...(s.pages ? ([["Pages", s.pages]] as [string, ReactNode][]) : []),
-    ["Passages", s.passages.length],
+    [words.count, s.passages.length],
     ...(s.summary_version ? ([["Summary", `v${s.summary_version}`]] as [string, ReactNode][]) : []),
   ];
 
@@ -457,7 +330,7 @@ function DocumentInner() {
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
           <SourceIcon type={s.type} size="lg" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight break-words md:text-2xl">{s.title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight break-words md:text-2xl">{sourceTitle(s)}</h1>
             <p className="mt-1 truncate text-sm text-muted-foreground">{s.filename}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -533,7 +406,7 @@ function DocumentInner() {
                 </TabsTrigger>
               )}
               <TabsTrigger value="passages" className="flex-none px-3 pb-2.5">
-                <FileSearch aria-hidden /> Passages
+                <FileSearch aria-hidden /> {words.tab}
                 <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums">{s.passages.length}</span>
               </TabsTrigger>
             </TabsList>
@@ -557,17 +430,13 @@ function DocumentInner() {
                 passages={s.passages}
                 selected={focus.locator}
                 onSelect={(p) => setFocus({ locator: p.locator, page: p.page ?? null })}
+                words={words}
               />
             </TabsContent>
           </div>
         </Tabs>
       </div>
 
-      {!USE_FIXTURES && (
-        <div className="mt-6">
-          <StorageSection sourceId={s.id} />
-        </div>
-      )}
     </>
   );
 }

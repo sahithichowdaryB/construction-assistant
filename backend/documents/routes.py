@@ -61,6 +61,17 @@ def ref(source_id, locator, page=None):
 
 SOURCE_SELECT = f"""
     SELECT s.id, s.project_id, s.kind, s.title, s.path, s.available_at, s.sha256, s.meta, s.ingested_at,
+           -- A short line saying what the record is about: the site event read from it, else what was said or
+           -- typed when it was captured, else its first passage.
+           coalesce(
+             (SELECT e.summary FROM sitemate.events e
+               WHERE e.project_id=s.project_id AND e.source_id=s.id AND e.summary IS NOT NULL
+               ORDER BY e.recorded_at LIMIT 1),
+             (SELECT coalesce(nullif(c.transcript, ''), nullif(c.raw_text, '')) FROM sitemate.captures c
+               WHERE c.project_id=s.project_id AND c.source_id=s.id ORDER BY c.created_at LIMIT 1),
+             (SELECT sp.excerpt FROM sitemate.source_passages sp
+               WHERE sp.project_id=s.project_id AND sp.source_id=s.id
+               ORDER BY sp.page NULLS FIRST, length(sp.locator), sp.locator LIMIT 1)) AS headline,
            (SELECT status FROM sitemate.ingestion_jobs j
              WHERE j.project_id=s.project_id AND j.source_id=s.id AND j.stage='parse') AS parse_status,
            (SELECT status FROM sitemate.ingestion_jobs j
@@ -118,7 +129,20 @@ def _view(row, meta, kind, title, filename, mime, has_file, file_missing=False):
         "summary_version": row["summary_version"], "parse_status": row["parse_status"],
         "summary_status": row["summary_status"], "review_reasons": reasons, "has_file": has_file, "file_missing": file_missing,
         "file_url": f"/projects/{row['project_id']}/sources/{row['id']}/file" if has_file else None,
+        "headline": _headline(row.get("headline")),
     }
+
+
+def _headline(text, limit=90):
+    """First sentence of a record's text, cut at a word, for titling records that only have a file name."""
+    if not text:
+        return None
+    first = " ".join(str(text).split())
+    for stop in (". ", "; ", "! ", "? "):
+        if stop in first:
+            first = first.split(stop)[0]
+    first = first.rstrip(".;")
+    return first if len(first) <= limit else first[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
 def passage_view(row):

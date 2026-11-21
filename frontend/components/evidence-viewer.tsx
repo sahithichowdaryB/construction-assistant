@@ -391,7 +391,7 @@ export function OriginalEmbed({
       <EmptyState
         icon={<FileQuestion />}
         title="No inline preview for this file"
-        description="Download the original to view it. Its text is listed under Indexed passages."
+        description={`Download the original to view it. Its text is listed under ${source.type === "voice" ? "Transcript" : "Indexed passages"}.`}
         action={<OriginalActions source={source} />}
       />
     );
