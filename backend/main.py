@@ -54,22 +54,31 @@ def check_incident_id(incident_id: str):
 
 
 @app.get("/projects/{project_id}/alerts", dependencies=[Depends(check_member)])
-def alerts(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+def alerts(project_id: str, as_of: datetime | None = None, status: str | None = None, kind: str | None = None,
+           conn=Depends(connection)):
+    """Shortfall alerts and incident alerts. `kind=incident` / `kind=shortfall`, and `status`, narrow the list."""
     check_cutoff(as_of)
     rows = conn.execute(text("""
-        SELECT a.id, a.activity_code, a.kind, a.checkpoint_at, r.version, r.as_of,
-               r.severity, r.calculation, r.evidence_refs
+        SELECT a.id, a.activity_code, a.kind, a.checkpoint_at, a.status, a.title, a.assigned_to,
+               a.incident_id::text AS incident_id, a.acknowledged_by, a.acknowledged_at, a.resolved_by, a.resolved_at,
+               r.version, r.as_of, r.severity, r.calculation, r.evidence_refs, r.reason, r.analysis_id::text AS analysis_id,
+               i.category, i.report_count, i.reporter_count, i.status AS incident_status, i.zone, i.asset_key
         FROM sitemate.alerts a
         JOIN LATERAL (
-            SELECT version, as_of, severity, calculation, evidence_refs
+            SELECT version, as_of, severity, calculation, evidence_refs, reason, analysis_id
             FROM sitemate.alert_revisions r
             WHERE r.project_id=a.project_id AND r.alert_id=a.id
               AND r.as_of <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')
             ORDER BY r.as_of DESC, version DESC LIMIT 1
         ) r ON true
+        LEFT JOIN sitemate.incidents i ON (i.project_id, i.id) = (a.project_id, a.incident_id)
         WHERE a.project_id=:project
+          AND (CAST(:status AS text) IS NULL OR a.status = CAST(:status AS text))
+          AND (CAST(:kind AS text) IS NULL
+               OR (CAST(:kind AS text) = 'incident' AND a.kind = 'incident')
+               OR (CAST(:kind AS text) = 'shortfall' AND a.kind <> 'incident'))
         ORDER BY a.checkpoint_at DESC, a.activity_code, a.id
-    """), {"project": project_id, "cutoff": as_of})
+    """), {"project": project_id, "cutoff": as_of, "status": status, "kind": kind})
     return [dict(row) for row in rows.mappings()]
 
 
@@ -177,13 +186,17 @@ def latest_reasoning(project_id: str, incident_id: str, as_of: datetime | None =
 
 
 def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
-    """Incidents in the shape the web app expects, derived from incidents + capture_facts + evidence links."""
+    """Incidents in the shape the web app expects, derived from incidents + events + capture_facts + evidence links."""
     params = {"p": project_id, "cutoff": as_of, "i": incident_id}
     rows = conn.execute(text("""
         SELECT i.id::text AS id, i.activity_code, i.kind, i.title, i.occurred_at, i.resolved_at,
-               (i.occurred_at AT TIME ZONE p.timezone)::date AS local_day
+               (i.occurred_at AT TIME ZONE p.timezone)::date AS local_day,
+               i.category, i.event_type, i.summary, i.zone, i.asset_key, i.status, i.severity,
+               i.report_count, i.reporter_count, i.first_reported_at, i.last_reported_at,
+               i.merged_into_id::text AS merged_into_id, i.recurrence_of_id::text AS recurrence_of_id
         FROM sitemate.incidents i JOIN sitemate.projects p ON p.id=i.project_id
         WHERE i.project_id=:p AND (CAST(:i AS uuid) IS NULL OR i.id=CAST(:i AS uuid))
+          AND (CAST(:i AS uuid) IS NOT NULL OR i.merged_into_id IS NULL)
           AND i.occurred_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
         ORDER BY i.occurred_at DESC, i.id
     """), params).mappings().all()
@@ -198,33 +211,61 @@ def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
           AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
         ORDER BY s.available_at, fe.source_id, fe.locator
     """), params).mappings().all()
+    linked = conn.execute(text("""
+        SELECT ie.incident_id::text AS incident_id, ie.link_type, e.source_id, e.locator, e.summary, s.available_at
+        FROM sitemate.incident_events ie
+        JOIN sitemate.events e ON (e.project_id,e.id)=(ie.project_id,ie.event_id)
+        JOIN sitemate.sources s ON (s.project_id,s.id)=(e.project_id,e.source_id)
+        WHERE ie.project_id=:p AND ie.unlinked_at IS NULL
+          AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
+        ORDER BY s.available_at, e.source_id
+    """), params).mappings().all()
     out = []
     for r in rows:
         mine = [f for f in facts if f["incident_id"] == r["id"]]
+        events = [e for e in linked if e["incident_id"] == r["id"]]
         refs, seen = [], set()
-        for f in mine:
-            if (f["source_id"], f["locator"]) not in seen:
-                seen.add((f["source_id"], f["locator"]))
-                refs.append({"source_id": f["source_id"], "locator": f["locator"],
-                             "passage_id": f"{f['source_id']}:{f['locator']}"})
-        workers = [int(f["value"]["count"]) for f in mine if f["field_name"] == "workers_affected"]
-        reported = mine[0]["available_at"] if mine else r["occurred_at"]
+        for src, loc in [(f["source_id"], f["locator"]) for f in mine] + [(e["source_id"], e["locator"]) for e in events]:
+            if (src, loc) not in seen:
+                seen.add((src, loc))
+                refs.append({"source_id": src, "locator": loc, "passage_id": f"{src}:{loc}"})
+        workers = [int(f["value"]["count"] if isinstance(f["value"], dict) else f["value"]) for f in mine
+                   if f["field_name"] == "workers_affected"
+                   and (isinstance(f["value"], (int, float)) or (isinstance(f["value"], dict) and "count" in f["value"]))]
+        times = [f["available_at"] for f in mine] + [e["available_at"] for e in events]
+        reported = min(times) if times else r["occurred_at"]
         equipment = conn.execute(text("""
             SELECT equipment_id FROM sitemate.equipment_assignments
             WHERE project_id=:p AND activity_code=:a AND work_date=:d
         """), {"p": project_id, "a": r["activity_code"], "d": r["local_day"]}).scalars().all()
+        asset_equipment = r["asset_key"][3:] if r["asset_key"] and r["asset_key"].startswith("eq:") else None
         resolved = r["resolved_at"] if r["resolved_at"] and (as_of is None or r["resolved_at"] <= as_of) else None
-        timeline = [{"kind": "reported" if n == 0 else "evidence", "at": f["available_at"],
-                     "label": f"{f['source_id']} {f['locator']}", "refs": [
-                         {"source_id": f["source_id"], "locator": f["locator"],
-                          "passage_id": f"{f['source_id']}:{f['locator']}"}]}
-                    for n, f in enumerate(mine)]
+        status = "open" if (r["status"] in ("resolved", "closed") and not resolved) else r["status"]
+        timeline = [{"kind": "reported" if e["link_type"] == "origin" else "evidence", "at": e["available_at"],
+                     "label": e["summary"], "refs": [{"source_id": e["source_id"], "locator": e["locator"],
+                                                      "passage_id": f"{e['source_id']}:{e['locator']}"}]}
+                    for e in events]
+        timeline += [{"kind": "evidence", "at": f["available_at"], "label": f"{f['source_id']} {f['locator']}",
+                      "refs": [{"source_id": f["source_id"], "locator": f["locator"],
+                                "passage_id": f"{f['source_id']}:{f['locator']}"}]} for f in mine]
+        if resolved:
+            timeline.append({"kind": "resolved", "at": resolved, "label": "Resolved", "refs": []})
+        timeline.sort(key=lambda t: t["at"])
+        if timeline and timeline[0]["kind"] != "reported":
+            timeline[0] = {**timeline[0], "kind": "reported"}
         out.append({"id": r["id"], "activity_code": r["activity_code"],
-                    "type": "equipment_breakdown" if r["kind"] == "equipment_failure" else "other",
-                    "title": r["title"], "occurred_at": r["occurred_at"], "reported_at": reported,
-                    "resolved_at": resolved, "status": "resolved" if resolved else "open",
+                    "type": {"equipment_failure": "equipment_breakdown", "delivery_delay": "delivery",
+                             "quality_observation": "defect"}.get(r["kind"], "other"),
+                    "category": r["category"] or "general", "event_type": r["event_type"] or r["kind"],
+                    "title": r["title"], "summary": r["summary"] or r["title"], "zone": r["zone"],
+                    "asset_key": r["asset_key"], "severity": r["severity"],
+                    "report_count": r["report_count"], "reporter_count": r["reporter_count"],
+                    "first_reported_at": r["first_reported_at"], "last_reported_at": r["last_reported_at"],
+                    "merged_into_id": r["merged_into_id"], "recurrence_of_id": r["recurrence_of_id"],
+                    "occurred_at": r["occurred_at"], "reported_at": reported,
+                    "resolved_at": resolved, "status": status,
                     "affected_workers": max(workers) if workers else None,
-                    "equipment_id": equipment[0] if len(equipment) == 1 else None,
+                    "equipment_id": asset_equipment or (equipment[0] if len(equipment) == 1 else None),
                     "refs": refs, "timeline": timeline})
     return out
 
@@ -243,3 +284,10 @@ def incident(project_id: str, incident_id: str, as_of: datetime | None = None, c
     if not found:
         raise HTTPException(404, "Incident not found at this time")
     return found[0]
+
+
+from capture import router as capture_router  # noqa: E402
+from ops import router as ops_router  # noqa: E402  (manager actions: alerts, actions, incident corrections)
+
+app.include_router(ops_router)
+app.include_router(capture_router)

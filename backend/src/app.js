@@ -2,6 +2,7 @@ import express from "express";
 import { config } from "./config.js";
 import { pool } from "./database/pool.js";
 import { captures } from "./routes/captures.js";
+import { categories } from "./routes/categories.js";
 
 export const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -20,10 +21,12 @@ app.get("/health", async (_req, res) => {
   res.json({ database: "connected" });
 });
 app.use("/projects/:projectId/captures", captures);
+app.use("/projects/:projectId/event-categories", categories);
 
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(err.status ?? 500).json({ detail: err.expose ? err.message : "Capture failed" });
+  if (!err.expose) console.error(err);
+  if (err.name === "MulterError") return res.status(422).json({ detail: `Upload rejected: ${err.message}` });
+  res.status(err.expose ? (err.status ?? 500) : 500).json({ detail: err.expose ? err.message : "Capture failed" });
 });
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -18,7 +18,7 @@ For every event:
    ask_if_missing, write one short question for the manager. Offer options drawn from the database when
    there are candidates (e.g. the machines assigned to the activity that day).
 3. Do not ask about anything the transcript, an answer or an unambiguous database record already settles.
-4. Flag duplicates of existing open incidents, and incidents this note resolves (e.g. a repair release).
+4. Do not decide whether an event duplicates or resolves an existing incident; a separate correlation step does that.
 Never invent values. An answer of "unknown" or "skip" means record the field as missing without asking again.`;
 
 export const questionGenerationTool = tool(
@@ -61,7 +61,7 @@ export function enforceRequiredFields(result, events, rules, answers) {
   events.forEach((event, i) => {
     for (const rule of rules.filter((r) => r.event_type === event.event_type)) {
       for (const field of rule.required_fields) {
-        if (has(result.validated_facts, i, field) || answered.has(`${i}:${field}`)) continue;
+        if (has(result.validated_facts, i, field) || answered.has(`${i}:${field}`) || event[field] != null) continue;
         if (!has(result.missing, i, field)) {
           result.missing.push({ event_index: i, field_name: field, rule_key: rule.rule_key, why: "required by rule" });
         }

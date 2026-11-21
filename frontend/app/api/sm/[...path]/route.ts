@@ -40,6 +40,8 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
   headers.set("authorization", `Bearer ${bearer}`);
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
+  const range = req.headers.get("range"); // lets <audio> seek in a stored recording
+  if (range) headers.set("range", range);
 
   let upstream: Response;
   try {
@@ -48,9 +50,9 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       headers,
       body: method === "GET" ? undefined : await req.arrayBuffer(),
       cache: "no-store",
-      // POST may run the LLM (reasoning, uploads); reranked search and PATCH are slower than plain reads.
+      // POST may run the LLM (reasoning, uploads, capture chains several calls); reranked search and PATCH are slower than plain reads.
       signal: AbortSignal.timeout(
-        method === "POST" ? 120_000 : method === "PATCH" || joined.endsWith("/search") ? 60_000 : 15_000,
+        method === "POST" ? 150_000 : method === "PATCH" || joined.endsWith("/search") ? 60_000 : 15_000,
       ),
     });
   } catch {
@@ -61,7 +63,7 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
   }
 
   const out = new Headers();
-  for (const h of ["content-type", "content-disposition", "content-length", "etag", "last-modified"]) {
+  for (const h of ["content-type", "content-disposition", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
     const v = upstream.headers.get(h);
     if (v) out.set(h, v);
   }

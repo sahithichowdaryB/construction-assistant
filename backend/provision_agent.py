@@ -9,8 +9,12 @@ from database import engine_for
 
 READ = ("projects", "project_members", "activities", "activity_dependencies", "contractors", "equipment",
         "equipment_assignments", "plan_targets", "observations", "sources", "source_passages", "alerts",
-        "alert_revisions", "incidents", "capture_facts", "fact_evidence", "business_rules")
-WRITE = ("sources", "source_passages", "incidents", "capture_facts", "fact_evidence")
+        "alert_revisions", "incidents", "capture_facts", "fact_evidence", "business_rules",
+        "captures", "capture_attachments", "events", "incident_events", "incident_severity_history",
+        "event_categories", "event_types", "agent_jobs", "agent_runs", "action_items", "alert_activity")
+WRITE = ("sources", "source_passages", "incidents", "capture_facts", "fact_evidence",
+         "captures", "capture_attachments", "events", "incident_events", "incident_severity_history",
+         "alerts", "alert_revisions", "alert_activity", "agent_jobs", "agent_runs")
 
 
 def main():
@@ -30,7 +34,15 @@ def main():
             cur.execute(sql.SQL("GRANT INSERT ON {} TO sitemate_agent").format(
                 sql.SQL(", ").join(sql.Identifier("sitemate", t) for t in WRITE)))
             # A repair release closes the open breakdown incident; nothing else may be updated.
-            cur.execute("GRANT UPDATE (resolved_at) ON sitemate.incidents TO sitemate_agent")
+            cur.execute("GRANT UPDATE (resolved_at, status, severity, severity_version, summary, report_count, "
+                        "reporter_count, last_reported_at, recurrence_of_id) ON sitemate.incidents TO sitemate_agent")
+            cur.execute("GRANT UPDATE (status, state) ON sitemate.captures TO sitemate_agent")
+            # "Discard" at the review step removes the capture, its source row (no passages exist yet) and its files.
+            cur.execute("GRANT DELETE ON sitemate.captures, sitemate.capture_attachments, sitemate.sources TO sitemate_agent")
+            cur.execute("GRANT UPDATE (incident_id, status) ON sitemate.events TO sitemate_agent")
+            cur.execute("GRANT UPDATE (unlinked_at) ON sitemate.incident_events TO sitemate_agent")
+            cur.execute("GRANT UPDATE (status, checkpoint_at) ON sitemate.alerts TO sitemate_agent")
+            cur.execute("GRANT UPDATE (status, run_after, updated_at, attempts) ON sitemate.agent_jobs TO sitemate_agent")
     print("Database agent role provisioned.")
 
 

@@ -1,4 +1,4 @@
-"""Idempotent DDL for sign-in (used by migration 0007_auth_sessions).
+"""Idempotent DDL for sign-in (used by migration 0008_auth_sessions).
 
 Accounts live in Supabase Auth (`auth.users`). A project member is linked to an account through
 `project_members.auth_user_id`; the static `token_hash` stays for scripts and the demo proxy.

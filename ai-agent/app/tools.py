@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from .models import Incident, Passage
 
-EVIDENCE_KINDS = ("voice", "email", "minutes", "diary", "daily_report", "photo")
+EVIDENCE_KINDS = ("voice", "voice_note", "text", "email", "minutes", "diary", "daily_report", "photo")
 LOOKBACK = timedelta(days=30)
 MAX_PASSAGES = 120
 
@@ -45,7 +45,12 @@ class SqlEvidenceStore:
             WHERE p.project_id=:p AND s.available_at <= :cutoff AND s.available_at >= :since
               AND s.kind = ANY(:kinds)
               AND (s.kind <> 'daily_report' OR p.locator = :activity)
-            ORDER BY EXISTS (
+            ORDER BY EXISTS (  -- sources of events grouped into this incident (voice, text, photo captures)
+                SELECT 1 FROM sitemate.events ev
+                JOIN sitemate.incident_events ie ON (ie.project_id,ie.event_id)=(ev.project_id,ev.id)
+                WHERE ev.project_id=p.project_id AND ev.source_id=p.source_id
+                  AND ie.incident_id=CAST(:incident AS uuid) AND ie.unlinked_at IS NULL
+            ) DESC, EXISTS (
                 SELECT 1 FROM sitemate.fact_evidence fe
                 JOIN sitemate.capture_facts cf ON (cf.project_id,cf.id)=(fe.project_id,fe.fact_id)
                 WHERE fe.project_id=p.project_id AND fe.source_id=p.source_id
