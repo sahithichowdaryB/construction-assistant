@@ -37,17 +37,29 @@ class SqlEvidenceStore:
 
     def candidate_passages(self, incident):
         rows = self.conn.execute(text("""
+            SELECT * FROM (
             SELECT p.source_id, p.locator, s.kind, s.author, s.author_role, s.available_at, p.excerpt AS text
             FROM sitemate.source_passages p
             JOIN sitemate.sources s ON (s.project_id,s.id)=(p.project_id,p.source_id)
             WHERE p.project_id=:p AND s.available_at <= :cutoff AND s.available_at >= :since
               AND s.kind = ANY(:kinds)
               AND (s.kind <> 'daily_report' OR p.locator = :activity)
-            ORDER BY s.available_at, p.source_id, p.locator
+            ORDER BY EXISTS (
+                SELECT 1 FROM sitemate.fact_evidence fe
+                JOIN sitemate.capture_facts cf ON (cf.project_id,cf.id)=(fe.project_id,fe.fact_id)
+                WHERE fe.project_id=p.project_id AND fe.source_id=p.source_id
+                  AND cf.incident_id=CAST(:incident AS uuid) AND cf.review_status<>'rejected'
+                  AND EXISTS (
+                      SELECT 1 FROM sitemate.sources origin
+                      WHERE (origin.project_id,origin.id)=(cf.project_id,cf.source_id)
+                        AND origin.available_at <= :cutoff
+                  )
+            ) DESC, s.available_at DESC, p.source_id, p.locator
             LIMIT :limit
+            ) chosen ORDER BY available_at, source_id, locator
         """), {"p": self.project_id, "cutoff": self.as_of, "since": incident.occurred_at - LOOKBACK,
                "kinds": list(EVIDENCE_KINDS), "activity": incident.activity_code or "",
-               "limit": MAX_PASSAGES}).mappings().all()
+               "incident": incident.id, "limit": MAX_PASSAGES}).mappings().all()
         return [Passage(**row) for row in rows]
 
     def rules(self, incident):

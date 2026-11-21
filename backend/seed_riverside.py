@@ -37,6 +37,8 @@ INCIDENT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "sitemate/RIV/incident/EX-02-ho
 
 
 def author_of(entry):
+    if "author_role" in entry:
+        return entry["author"], entry["author_role"]
     return SOURCE_AUTHORS.get(entry["id"]) or KIND_ROLES.get(entry["type"]) or (None, "unknown")
 
 
@@ -261,6 +263,8 @@ def main():
             conn.execute(statement, rows)
         seed_workflows(conn)
         seed_incident(conn)
+        from seed_field_cases import seed as seed_field_cases
+        seed_field_cases(conn, ROOT, text_passages)
     print(f"Imported {len(tables['sources'])} sources and {len(tables['observations'])} observations.")
 
 
