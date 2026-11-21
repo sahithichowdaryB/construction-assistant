@@ -36,6 +36,9 @@ class Store:
     def trust_config(self):
         return {}
 
+    def timezone(self):
+        return "Europe/Vienna"
+
 
 def claim(cid, passage, stance="states_cause", role=None, **kw):
     return Claim(id=cid, source_id=passage.source_id, locator=passage.locator, quote="x", stance=stance,

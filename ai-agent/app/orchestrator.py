@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
@@ -124,22 +125,33 @@ def guardrail_flags(verdict: Verdict, hypotheses, claims, cards, dropped) -> lis
     return flags
 
 
-def _extract_payload(incident, passages, rules):
+def _local(value: datetime | None, tz: str):
+    """Times go to the model in the project's own time zone, as people on site would read them."""
+    return value.astimezone(ZoneInfo(tz)).isoformat() if value else None
+
+
+def _incident_view(incident, tz):
+    return {**json.loads(incident.model_dump_json()), "occurred_at": _local(incident.occurred_at, tz)}
+
+
+def _extract_payload(incident, passages, rules, tz):
     return json.dumps({
-        "incident": json.loads(incident.model_dump_json()),
+        "time_zone": tz,
+        "incident": _incident_view(incident, tz),
         "project_rules": rules,
         "passages": [{"passage_ref": p.ref, "source_kind": p.kind, "author": p.author,
-                      "author_role": p.author_role, "available_at": p.available_at.isoformat(),
+                      "author_role": p.author_role, "available_at": _local(p.available_at, tz),
                       "text": p.text} for p in passages]}, ensure_ascii=False)
 
 
-def _decide_payload(incident, claims, hypotheses, cards, errors=None):
+def _decide_payload(incident, claims, hypotheses, cards, tz, errors=None):
     payload = {
-        "incident": json.loads(incident.model_dump_json()),
+        "time_zone": tz,
+        "incident": _incident_view(incident, tz),
         "claims": [{"id": c.id, "passage": f"{c.source_id}#{c.locator}", "author_role": c.author_role,
                     "stance": c.stance, "statement": c.statement, "quote": c.quote,
                     "speaker_certainty": c.speaker_certainty, "derived_from": c.derived_from,
-                    "stated_at": c.stated_at.isoformat() if c.stated_at else None} for c in claims],
+                    "stated_at": _local(c.stated_at, tz)} for c in claims],
         "hypotheses": [h.model_dump() for h in hypotheses],
         "score_cards": [c.model_dump() for c in cards]}
     if errors:
@@ -166,7 +178,8 @@ def analyze_incident(store: EvidenceStore, llm: LLMClient, incident_id: str,
         return _undetermined(incident, as_of, digest, llm.model,
                              "No dated records about this incident were available at this time.",
                              ["No voice note, diary, report or email is available yet."])
-    extracted = llm.generate_json(EXTRACT_SYSTEM, _extract_payload(incident, passages, store.rules(incident)))
+    tz = store.timezone()
+    extracted = llm.generate_json(EXTRACT_SYSTEM, _extract_payload(incident, passages, store.rules(incident), tz))
     claims, dropped = validate_claims(extracted.get("claims"), passages)
     hypotheses = validate_hypotheses(extracted.get("hypotheses"), claims)
     if not hypotheses:
@@ -181,7 +194,7 @@ def analyze_incident(store: EvidenceStore, llm: LLMClient, incident_id: str,
     for _ in range(2):  # one retry with validator feedback
         try:
             verdict = Verdict(**llm.generate_json(DECIDE_SYSTEM, _decide_payload(
-                incident, claims, hypotheses, cards, errors or None)))
+                incident, claims, hypotheses, cards, tz, errors or None)))
             errors = verdict_errors(verdict, hypotheses, claims, cards)
         except (ValidationError, TypeError) as exc:
             verdict, errors = None, [f"invalid verdict shape: {exc}"]

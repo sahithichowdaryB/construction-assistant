@@ -1,5 +1,5 @@
 pydantic>=2.8
-google-genai>=1.0
+anthropic>=2.12
 pytest>=8
 python-dotenv>=1.0
 SQLAlchemy>=2.0
