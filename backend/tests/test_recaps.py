@@ -43,7 +43,7 @@ def test_items_done_before_due_are_not_overdue_and_open_items_carry_over():
     days = by_date(build_recaps(rows, TZ, at(12), include_today=False))
     assert "2026-11-09" not in days
     today = days["2026-11-08"]["cards"][-1]
-    assert today["chapter"] == "today" and today["done"] == ["GroundWorks: Action 2"]
+    assert today["chapter"] == "today" and today["done"] == ["GroundWorks · Action 2"]
 
 
 def test_today_so_far_is_live_and_first():
@@ -52,13 +52,20 @@ def test_today_so_far_is_live_and_first():
     live = recaps[0]
     assert live["live"] is True and live["work_date"] == "2026-11-11"
     assert live["short_label"] == "so far" and live["mood"] == "minor"
-    assert "up to 14:00" in live["cards"][0]["kicker"]
+    assert "live to 14:00" in live["cards"][0]["kicker"]
     today = live["cards"][-1]
-    assert today["title"] == "2 actions open right now" and today["done"][0].startswith("Plant desk:")
+    assert today["title"] == "2 open now" and today["done"][0].startswith("Plant desk · ")
     assert all(not r["live"] for r in recaps[1:])
 
 
 def test_quiet_today_still_shows_open_items():
     (live, _) = build_recaps([item(1, at(7))], TZ, at(9, 10))
-    assert live["cards"][0]["title"] == "Nothing new yet today"
+    assert live["cards"][0]["title"] == "Quiet so far"
     assert live["cards"][-1]["chapter"] == "today"
+
+
+def test_phrases_drop_repeated_owner_and_stop():
+    row = item(1, at(7), owner="plant desk")
+    row["description"] = "Plant desk to propose cover for the Zone B shifts."
+    (recap,) = build_recaps([row], TZ, at(9), include_today=False)
+    assert recap["cards"][-1]["done"] == ["Plant desk · Propose cover for the Zone B shifts"]

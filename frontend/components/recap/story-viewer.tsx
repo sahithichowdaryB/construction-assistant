@@ -165,8 +165,11 @@ export function StoryViewer({
         <SidePreview card={prevCard} onClick={() => go(-1)} side="left" />
         <NavButton dir="left" onClick={() => go(-1)} disabled={cardIdx === 0 && dayIdx === 0} />
 
-        <div className="relative h-full max-h-[760px] w-full max-w-[430px] overflow-hidden rounded-[28px] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)] md:h-[calc(100%-1rem)]">
-          <StoryCard key={`${day.work_date}/${card.id}`} card={card} />
+        <div className="relative h-full max-h-[760px] w-full max-w-[430px] overflow-hidden rounded-[28px] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)] animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-6 duration-500 ease-out motion-reduce:animate-none md:h-[calc(100%-1rem)]">
+          {/* Each card fades and slides in as the story moves on. */}
+          <div key={`${day.work_date}/${card.id}`} className="h-full animate-in fade-in-0 slide-in-from-right-3 duration-300 ease-out motion-reduce:animate-none">
+            <StoryCard card={card} />
+          </div>
           {/* progress + header overlay */}
           <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-3.5 pt-3 pb-8">
             <div className="flex gap-1">

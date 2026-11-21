@@ -35,11 +35,6 @@ def _ref(row):
             "passage_id": f"{row['source_id']}:{row['locator']}"}
 
 
-def _title(description, limit=90):
-    d = " ".join((description or "").split())
-    return d if len(d) <= limit else d[: limit - 1].rstrip() + "…"
-
-
 def _when(dt, tz):
     local = dt.astimezone(tz)
     return f"{local.day} {MONTH[local.month - 1]} {local:%H:%M}"
@@ -54,12 +49,29 @@ def _owner(row):
     return name[:1].upper() + name[1:] if name else None
 
 
+def _phrase(row, limit):
+    """Short, story-sized wording of an action: no trailing stop, no repeated owner, cut at a word."""
+    d = " ".join((row["description"] or "").split()).rstrip(".")
+    owner = _owner(row)
+    if owner and d.lower().startswith(owner.lower()):
+        d = d[len(owner):].lstrip(" :,-")
+        for lead in ("to ", "will "):
+            if d.lower().startswith(lead):
+                d = d[len(lead):]
+    d = d.replace(" still needs to be ", " to be ")
+    d = d[:1].upper() + d[1:]
+    if len(d) <= limit:
+        return d
+    cut = d[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:")
+    return cut + "…"
+
+
 def _quote(row):
     return {"text": row["quote"], "who": row["source_title"] or row["source_id"]} if row["quote"] else None
 
 
 def _item_card(row, chapter, tone, kicker, at, tz, card_id):
-    return {"id": card_id, "chapter": chapter, "title": _title(row["description"]), "kicker": kicker,
+    return {"id": card_id, "chapter": chapter, "title": _phrase(row, 64), "kicker": kicker,
             "at": at.isoformat() if at else None, "tone": tone, "cover": None, "quote": _quote(row),
             "refs": [_ref(row)], "action": {"label": "Open action items", "href": "/actions"}}
 
@@ -118,9 +130,9 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
     elif closed:
         headline = f"{_plural(len(closed), 'action')} closed"
     elif live and not new:
-        headline = "Nothing new yet today"
+        headline = "Quiet so far"
     else:
-        headline = f"{_plural(len(new), 'new action')} from the records"
+        headline = f"{_plural(len(new), 'new action')}"
 
     day_refs, seen = [], set()
     for r in [*late, *closed, *new]:
@@ -129,11 +141,11 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
             day_refs.append(_ref(r))
     overview = {
         "id": f"{day}-overview", "chapter": "overview", "title": headline,
-        "kicker": f"{WEEKDAY[day.weekday()]} {day.day} {MONTH[day.month - 1]}"
-                  + (f" · so far, up to {end_of_day.astimezone(tz):%H:%M}" if live else ""),
+        "kicker": f"{WEEKDAY[day.weekday()][:3]} {day.day} {MONTH[day.month - 1]}"
+                  + (f" · live to {end_of_day.astimezone(tz):%H:%M}" if live else ""),
         "tone": "bad" if len(late) >= 2 else "warn" if late else "good", "cover": "meeting",
         "stats": [
-            {"value": str(len(new)), "label": "New actions", "tone": "info"},
+            {"value": str(len(new)), "label": "New", "tone": "info"},
             {"value": str(len(closed)), "label": "Closed", "tone": "good"},
             {"value": str(len(late)), "label": "Overdue", "tone": "bad" if late else "good"},
         ],
@@ -152,11 +164,11 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
         carried = open_items[:5]
         cards.append({
             "id": f"{day}-today", "chapter": "today",
-            "title": f"{_plural(len(open_items), 'action')} " + ("open right now" if live else "still open"),
-            "kicker": "Still to do today" if live else "Carried into the next day", "tone": "neutral",
-            "done": [(f"{_owner(r)}: " if _owner(r) else "") + _title(r["description"], 70)
-                     + (" (overdue)" if r["due_at"] and r["due_at"] < end_of_day else "") for r in carried],
-            "refs": [_ref(r) for r in carried],
+            "title": f"{len(open_items)} open" + (" now" if live else ""),
+            "kicker": "To do today" if live else "Carried to the next day", "tone": "neutral",
+            "done": [(f"{_owner(r)} · " if _owner(r) else "") + _phrase(r, 44)
+                     + (" · overdue" if r["due_at"] and r["due_at"] < end_of_day else "") for r in carried],
+            "refs": list({_ref(r)["passage_id"]: _ref(r) for r in carried}.values()),
             "action": {"label": "Open action items", "href": "/actions"},
         })
 
