@@ -1,0 +1,203 @@
+@startuml 01_components
+title SiteMate components
+skinparam shadowing false
+actor "Site manager / foreman" as User
+component "Next.js web app" as Web
+package "FastAPI application" {
+component "Project API" as API
+component "Capture" as Cap
+component "Document ingestion" as Doc
+component "Progress rules" as Rules
+component "Correspondence" as Draft
+component "Ask SiteMate" as Ask
+component "Project repository" as Repo
+component "PDF / Word export" as Render
+}
+component "Speech-to-text" as STT
+component "Language model" as LLM
+component "PDF / DOCX / email parsers and OCR" as Parse
+database "PostgreSQL" as DB
+folder "Private object storage" as Files
+User --> Web
+Web --> API : authenticated project request
+API --> Repo : check role and as-of time
+Repo --> DB
+Repo --> Files
+API --> Cap
+API --> Doc
+API --> Rules
+API --> Draft : keywords or incident
+API --> Ask
+API --> Render : approved version
+Cap --> STT : audio
+Cap --> LLM : transcript to proposed fields
+Doc --> Parse : text, tables, page locators
+Doc --> LLM : extract facts and produce cited summaries
+Rules --> Repo : targets and accepted readings
+Rules --> Draft : qualifying alert revision
+Draft --> LLM : evidence packet to cited text
+Ask --> LLM : choose read tools and compose answer
+Ask --> Repo : project-scoped evidence and progress
+Cap --> Repo : store proposed observations
+Doc --> Repo : store passages and proposals
+Draft --> Repo : save version for review
+Render --> Repo : save approved export
+@enduml
+
+@startuml 06_use_cases
+title SiteMate user roles and use cases
+skinparam shadowing false
+actor "Foreman" as A0
+actor "Site manager" as A1
+actor "Authorized approver" as A2
+rectangle SiteMate {
+usecase "Dictate or type a note" as U00
+usecase "Attach site evidence" as U01
+usecase "Confirm captured fields" as U02
+usecase "Inspect schedule and alerts" as U10
+usecase "Read cited summaries and ask" as U11
+usecase "Draft a notice from keywords" as U12
+usecase "Inspect evidence and gaps" as U20
+usecase "Approve or request changes" as U21
+usecase "Export approved PDF or Word" as U22
+}
+A0 -- U00
+A0 -- U01
+A0 -- U02
+A1 -- U10
+A1 -- U11
+A1 -- U12
+A2 -- U20
+A2 -- U21
+A2 -- U22
+@enduml
+
+@startuml 02_capture
+title From a voice note to an incident
+skinparam shadowing false
+actor "Foreman / manager" as P0
+participant "Web app" as P1
+participant "Project API" as P2
+participant "Model services" as P3
+participant "Project repository" as P4
+P0 -> P1 : Record V01 or type the note
+P1 -> P2 : Submit note in project RIV
+P2 -> P4 : Save original and availability time
+P2 -> P3 : Audio only: transcribe V01
+P3 --> P2 : Transcript with available time locators
+P2 -> P4 : Look up Zone B activity and equipment
+P2 -> P3 : Extract fields with transcript and allowed IDs
+P2 --> P1 : Show three workers, 10:00, EX-02 inferred
+P0 -> P1 : Check values and confirm
+P1 -> P2 : Submit reviewed values and source IDs
+P2 -> P4 : Save incident, observations and evidence links
+@enduml
+
+@startuml 03_report
+title From a signed report to a reviewed notice
+skinparam shadowing false
+actor "Site manager" as P0
+participant "Project API" as P1
+participant "Ingestion / model" as P2
+participant "Rules and data" as P3
+participant "Drafting / model" as P4
+P0 -> P1 : Upload signed report R10
+P1 -> P2 : Extract table and page locator, use OCR for scans
+P2 --> P1 : Return EXC-B, 65 m³ and evidence
+P1 -> P3 : Accept validated row or route ambiguity for review
+P3 --> P1 : 100 m³ plan, 35% shortfall, FND-B at risk
+P1 -> P4 : Start draft with alert revision and dated sources
+P4 --> P1 : Return cited text and missing fields
+P1 --> P0 : Open evidence panel and editable draft
+P0 -> P1 : Resolve or omit gaps with a reason and review version
+P1 -> P3 : Record decision and load approved version
+P1 --> P0 : Return PDF or Word export of approved wording
+@enduml
+
+@startuml 04_domain
+title SiteMate domain model
+skinparam shadowing false
+class Project {
+  id, timezone
+  thresholds, sender, recipient
+}
+class Source {
+  id, project_id, external_id
+  available_at, storage_key
+}
+class Passage {
+  id, source_id
+  locator, text
+}
+class Observation {
+  id, effective_at, basis
+  kind, value, unit, review_status
+}
+class Activity {
+  id, project_id, code
+  zone, unit
+}
+class Target {
+  id, activity_id, source_id
+  checkpoint_at, planned_qty
+}
+class Incident {
+  id, activity_id, type
+  occurred_at, resolved_at
+}
+class Alert {
+  id, activity_id, checkpoint_at
+  kind, status
+}
+class AlertRevision {
+  id, alert_id, as_of
+  inputs, evidence_refs, result
+}
+class Draft {
+  id, project_id, type
+  incident_id, alert_id
+}
+class DraftVersion {
+  id, draft_id, as_of
+  body, evidence_refs, gaps
+}
+class Review {
+  id, draft_version_id
+  reviewer, decision, decided_at
+}
+class Export {
+  id, draft_version_id
+  format, storage_key, digest
+}
+Project "1" -- "0..*" Source
+Source "1" -- "0..*" Passage
+Passage "1..*" -- "0..*" Observation
+Target "0..*" -- "1" Activity
+Activity "0..1" -- "0..*" Incident
+Incident "0..1" -- "0..*" Observation
+Activity "1" -- "0..*" Alert
+Alert "1" -- "1..*" AlertRevision
+AlertRevision "0..1" -- "0..*" DraftVersion
+Draft "1" -- "1..*" DraftVersion
+DraftVersion "1" -- "0..*" Review
+DraftVersion "1" -- "0..*" Export
+Project "1" -- "0..*" Activity
+Activity "0..1" -- "0..*" Observation
+Activity "0..*" -- "0..*" Activity : predecessor to successor
+Observation "0..1" <-- "0..*" Observation : supersedes
+Alert "0..1" -- "0..*" Draft
+Incident "0..1" -- "0..*" Draft
+@enduml
+
+@startuml 05_notice
+title Notice version lifecycle
+skinparam shadowing false
+[*] --> Draft : qualifying alert or user request
+Draft --> InReview : submit version
+InReview --> ChangesRequested : reviewer returns with reason
+ChangesRequested --> Draft : save new revision
+InReview --> Approved : authorized review and gaps addressed
+Approved --> Approved : export exact approved version
+Approved --> Draft : edit or material evidence change / create new version
+note bottom of Approved : The approval and export history for the old version are retained.
+@enduml
