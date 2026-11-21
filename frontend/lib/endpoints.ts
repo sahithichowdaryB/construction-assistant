@@ -34,8 +34,9 @@ export const ENDPOINTS = {
   sources: { route: "GET /projects/{pid}/sources?as_of", implemented: false },
   incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: true },
   incident: { route: "GET /projects/{pid}/incidents/{id}?as_of", implemented: true },
-  incidentAnalysis: { route: "GET /projects/{pid}/incidents/{id}/analysis?as_of", implemented: true },
-  analyzeIncident: { route: "POST /projects/{pid}/incidents/{id}/analyze?as_of", implemented: true },
+  // Reasoning always comes from the backend (database + LLM); there are no fixtures for it.
+  reasoning: { route: "GET /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
+  runReasoning: { route: "POST /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
   alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: false },
   dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: false },
   drafts: { route: "GET /projects/{pid}/drafts?as_of", implemented: false },

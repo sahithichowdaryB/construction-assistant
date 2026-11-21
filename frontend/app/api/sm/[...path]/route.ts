@@ -41,7 +41,7 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       headers,
       body: method === "GET" ? undefined : await req.arrayBuffer(),
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(method === "POST" ? 120_000 : 15_000), // POST may run the LLM
     });
   } catch {
     return Response.json(

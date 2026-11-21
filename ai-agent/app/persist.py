@@ -11,10 +11,15 @@ from .models import IncidentAnalysis
 
 def save_analysis(conn, project_id: str, analysis: IncidentAnalysis) -> dict:
     latest = conn.execute(text("""
-        SELECT id::text AS id, version, input_digest, status FROM sitemate.incident_analyses
+        SELECT id::text AS id, version, input_digest, status, confidence, headline_cause, reasoning
+        FROM sitemate.incident_analyses
         WHERE project_id=:p AND incident_id=CAST(:i AS uuid) ORDER BY version DESC LIMIT 1
     """), {"p": project_id, "i": analysis.incident_id}).mappings().one_or_none()
-    if latest and latest["input_digest"] == analysis.input_digest and latest["status"] != "needs_review":
+    # Same evidence AND the same finding -> nothing new to record. A different answer is a new version.
+    if (latest and latest["input_digest"] == analysis.input_digest and latest["status"] == analysis.status
+            and float(latest["confidence"]) == round(analysis.confidence, 3)
+            and latest["headline_cause"] == analysis.headline_cause and latest["reasoning"] == analysis.reasoning
+            and analysis.status != "needs_review"):
         return {"id": latest["id"], "version": latest["version"], "reused": True}
     analysis_id, version = str(uuid.uuid4()), (latest["version"] + 1 if latest else 1)
     conn.execute(text("""
@@ -51,7 +56,7 @@ def save_analysis(conn, project_id: str, analysis: IncidentAnalysis) -> dict:
 def load_analysis(conn, project_id: str, incident_id: str, as_of: datetime | None = None):
     row = conn.execute(text("""
         SELECT id::text AS id, version, as_of, status, confidence, headline_cause, reasoning, score_cards,
-               guardrail_flags, gaps, external_claims, model, created_at
+               guardrail_flags, gaps, external_claims, model, created_at, input_digest
         FROM sitemate.incident_analyses
         WHERE project_id=:p AND incident_id=CAST(:i AS uuid) AND as_of <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
         ORDER BY as_of DESC, version DESC LIMIT 1

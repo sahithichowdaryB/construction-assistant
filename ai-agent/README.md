@@ -15,7 +15,8 @@ New provider = one adapter class + one branch in `app/llm.py:get_llm()`.
 
 ## Run (from `backend/`, venv active)
 - Tests (no DB, no key): `cd ../ai-agent && python -m pytest -q tests`
-- API: `POST /projects/{id}/incidents/{incident_id}/analyze[?as_of=ISO]` (manager/approver) and
-  `GET /projects/{id}/incidents/{incident_id}/analysis[?as_of=ISO]`
+- API: `POST /projects/{id}/incidents/{incident_id}/reasoning[?as_of=ISO]` (manager/approver; runs the agent now: DB read +
+  LLM calls, ~10 s, saves a new version unless the finding is identical) and
+  `GET /projects/{id}/incidents/{incident_id}/reasoning[?as_of=ISO]` (latest saved)
 - CLI: `cd ../ai-agent && python -m app RIV 4d1b3a3d-752e-5157-a01e-4447dcc06bd7 [--as-of ISO]`
 - Dummy cases: `python seed_agent_demo.py` (project TST, needs `TST_DEMO_TOKEN`); `--clean` removes it.
