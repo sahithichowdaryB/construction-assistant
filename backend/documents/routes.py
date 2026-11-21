@@ -36,7 +36,10 @@ MAX_UPLOAD = 25 * 1024 * 1024
 LOCATOR_ALIASES = {"image": "caption", "photo": "caption", "contract": "contract_reference"}
 MIME = {".eml": "text/plain", ".csv": "text/csv", ".json": "application/json", ".txt": "text/plain",
         ".wav": "audio/wav", ".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+        ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+        # in-app recordings (browser MediaRecorder: webm, Safari/iOS: m4a)
+        ".webm": "audio/webm", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".aiff": "audio/aiff",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 
 
 # ------------------------------------------------------------------ shaping helpers
@@ -87,12 +90,17 @@ def source_view(row):
             f"{TYPE_LABEL.get(kind, 'Record')} {row['id']}"
         return _view(row, meta, kind, title, filename, "text/plain", has_file=False)
     filename = meta.get("filename") or Path(row["path"]).name
-    return _view(row, meta, kind, row["title"] or filename, filename, mime_for(filename), has_file=True)
+    # The database is shared but files live on the disk of the server that received them: check it is really here.
+    present = storage.resolve(row["project_id"], row["path"]) is not None
+    return _view(row, meta, kind, row["title"] or filename, filename, mime_for(filename), has_file=present,
+                 file_missing=not present)
 
 
-def _view(row, meta, kind, title, filename, mime, has_file):
+def _view(row, meta, kind, title, filename, mime, has_file, file_missing=False):
     reasons = meta.get("review_reasons") or []
     notes = []
+    if file_missing:
+        notes.append("The recording is not stored on this server" if kind == "voice" else "The original file is not stored on this server")
     if meta.get("scanned_pages"):
         notes.append("Scanned page, text read by OCR")
     if row["parse_status"] == "needs_review":
@@ -108,7 +116,7 @@ def _view(row, meta, kind, title, filename, mime, has_file):
         # backend extras
         "sha256": row["sha256"], "passage_count": row["passage_count"],
         "summary_version": row["summary_version"], "parse_status": row["parse_status"],
-        "summary_status": row["summary_status"], "review_reasons": reasons, "has_file": has_file,
+        "summary_status": row["summary_status"], "review_reasons": reasons, "has_file": has_file, "file_missing": file_missing,
         "file_url": f"/projects/{row['project_id']}/sources/{row['id']}/file" if has_file else None,
     }
 

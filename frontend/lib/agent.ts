@@ -213,3 +213,35 @@ export async function listRecordings(projectId: string): Promise<SavedRecording[
 
 export const recordingAudioUrl = (projectId: string, sourceId: string) =>
   `/api/sm/${base(projectId)}/${encodeURIComponent(sourceId)}/audio`;
+
+// ---------- sources behind an incident ----------
+export interface IncidentSource {
+  source_id: string;
+  kind: string;
+  title: string | null;
+  author: string | null;
+  recorded_at: string;
+  transcript: string | null;
+  has_audio: boolean;
+  photos: { id: string; url: string }[];
+  file: { name: string; media: string } | null;
+}
+
+const incidentPath = (projectId: string, incidentId: string) =>
+  `projects/${encodeURIComponent(projectId)}/incidents/${encodeURIComponent(incidentId)}`;
+
+/** Every `sources` row behind an incident (reports, notes and the records their facts cite), as of `asOf`. */
+export async function listIncidentSources(projectId: string, incidentId: string, asOf?: string): Promise<IncidentSource[]> {
+  const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+  const res = await fetch(`/api/sm/${incidentPath(projectId, incidentId)}/sources${query}`, { cache: "no-store" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new ApiError(res.status, typeof data?.detail === "string" ? data.detail : `Could not load sources (HTTP ${res.status})`);
+  }
+  if (!Array.isArray(data)) throw new ApiError(502, "Unexpected response from the API");
+  return data as IncidentSource[];
+}
+
+/** A voice note's recording, readable by any project member because it belongs to this incident. */
+export const incidentRecordingAudioUrl = (projectId: string, incidentId: string, sourceId: string) =>
+  `/api/sm/${incidentPath(projectId, incidentId)}/sources/${encodeURIComponent(sourceId)}/audio`;

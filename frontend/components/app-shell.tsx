@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -30,6 +30,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/performance", label: "Performance", Icon: TrendingUp },
     { href: "/documents", label: "Documents", Icon: Files },
     { href: "/incidents", label: "Incident insights", Icon: Siren },
+    { href: "/capture", label: "Record a statement", Icon: Mic },
   ],
   approver: [{ href: ROLE_HOME.approver, label: "Review queue", Icon: BadgeCheck }],
 };

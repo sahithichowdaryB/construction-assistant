@@ -354,6 +354,87 @@ def attachment(project_id: str, attachment_id: str, conn=Depends(connection)):
     return FileResponse(path, media_type=row["mime"])
 
 
+# Every source behind an incident: its linked reports, the notes its facts came from, and the records those facts cite.
+_INCIDENT_SOURCE_IDS = """
+    SELECT e.source_id FROM sitemate.incident_events ie
+    JOIN sitemate.events e ON (e.project_id, e.id) = (ie.project_id, ie.event_id)
+    WHERE ie.project_id = :p AND ie.incident_id = CAST(:i AS uuid) AND ie.unlinked_at IS NULL
+    UNION
+    SELECT f.source_id FROM sitemate.capture_facts f
+    WHERE f.project_id = :p AND f.incident_id = CAST(:i AS uuid) AND f.review_status <> 'rejected'
+    UNION
+    SELECT fe.source_id FROM sitemate.fact_evidence fe
+    JOIN sitemate.capture_facts f ON (f.project_id, f.id) = (fe.project_id, fe.fact_id)
+    WHERE f.project_id = :p AND f.incident_id = CAST(:i AS uuid) AND f.review_status <> 'rejected'"""
+
+
+def _incident_sources(conn, project_id, incident_id, as_of, source_id=None):
+    from capture import AUDIO_JOIN, AUDIO_KEY  # capture.py pulls in the ai-agent pipeline; import on use
+
+    _uuid(incident_id, "Incident")
+    found = conn.scalar(text("SELECT 1 FROM sitemate.incidents WHERE project_id=:p AND id=CAST(:i AS uuid)"),
+                        {"p": project_id, "i": incident_id})
+    if found is None:
+        raise HTTPException(404, "Incident not found")
+    return conn.execute(text(f"""
+        SELECT s.id AS source_id, s.kind, s.title, s.author, s.available_at AS recorded_at, s.path,
+               s.meta->>'filename' AS filename, c.id::text AS capture_id, {AUDIO_KEY} AS audio_key, audio.mime AS audio_mime,
+               (SELECT sp.excerpt FROM sitemate.source_passages sp
+                WHERE (sp.project_id, sp.source_id, sp.locator) = (s.project_id, s.id, 'transcript')) AS transcript
+        FROM sitemate.sources s
+        LEFT JOIN sitemate.captures c ON (c.project_id, c.source_id) = (s.project_id, s.id)
+        {AUDIO_JOIN}
+        WHERE s.project_id = :p AND s.id IN ({_INCIDENT_SOURCE_IDS})
+          AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')
+          AND (CAST(:s AS text) IS NULL OR s.id = :s)
+        ORDER BY s.available_at, s.id"""),
+                        {"p": project_id, "i": incident_id, "cutoff": as_of, "s": source_id}).mappings().all()
+
+
+@router.get("/projects/{project_id}/incidents/{incident_id}/sources", dependencies=[Depends(check_member)])
+def incident_sources(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    """Each `sources` row behind an incident, with what can be shown for it: recording, capture photos or original file."""
+    from capture import audio_storage, recording_file
+    from documents import storage
+    from documents.routes import mime_for
+
+    rows = _incident_sources(conn, project_id, incident_id, as_of)
+    photos = conn.execute(text("""
+        SELECT id::text AS id, source_id FROM sitemate.capture_attachments
+        WHERE project_id = :p AND source_id = ANY(CAST(:ids AS text[])) AND kind = 'image'
+        ORDER BY source_id, passage_locator, id"""),
+                          {"p": project_id, "ids": [r["source_id"] for r in rows]}).mappings().all() if rows else []
+    audio = audio_storage()
+    out = []
+    for r in rows:
+        has_audio = recording_file(audio, r["audio_key"]) is not None
+        # Captures store their media as attachments; any other source (report, e-mail, register) has an original file.
+        original = None if r["capture_id"] or has_audio else storage.resolve(project_id, r["path"])
+        name = Path(r["filename"] or original.name).name if original else None
+        out.append({
+            "source_id": r["source_id"], "kind": r["kind"], "title": r["title"], "author": r["author"],
+            "recorded_at": r["recorded_at"], "transcript": r["transcript"], "has_audio": has_audio,
+            "photos": [{"id": p["id"], "url": f"/projects/{project_id}/attachments/{p['id']}"}
+                       for p in photos if p["source_id"] == r["source_id"]],
+            "file": {"name": name, "media": mime_for(name)} if original else None,
+        })
+    return out
+
+
+@router.get("/projects/{project_id}/incidents/{incident_id}/sources/{source_id}/audio",
+            dependencies=[Depends(check_member)])
+def incident_source_audio(project_id: str, incident_id: str, source_id: str, conn=Depends(connection)):
+    """The recording of a voice note behind this incident, for any project member (Range requests supported)."""
+    from capture import AUDIO_TYPES, audio_storage, recording_file
+
+    row = next(iter(_incident_sources(conn, project_id, incident_id, None, source_id)), None)
+    file = recording_file(audio_storage(), row["audio_key"] if row else None)
+    if file is None:
+        raise HTTPException(404, "No recording for this source")
+    return FileResponse(file, media_type=row["audio_mime"] or AUDIO_TYPES.get(file.suffix.lower()) or "application/octet-stream",
+                        headers={"Cache-Control": "private, max-age=300"})
+
+
 def _refresh_counts(conn, project_id, incident_id):
     conn.execute(text("""
         UPDATE sitemate.incidents i SET
