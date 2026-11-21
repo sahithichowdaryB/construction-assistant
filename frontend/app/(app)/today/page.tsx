@@ -110,7 +110,7 @@ export default function TodayPage() {
                 {t.open_alerts.length ? (
                   <div className="flex flex-col gap-2">
                     {t.open_alerts.map((a) => (
-                      <AlertCard key={a.id} alert={a} activity={byCode.get(a.activity_code)} />
+                      <AlertCard key={a.id} alert={a} activity={byCode.get(a.activity_code ?? "")} />
                     ))}
                   </div>
                 ) : (

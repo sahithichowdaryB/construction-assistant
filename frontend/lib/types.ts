@@ -12,7 +12,8 @@ export type Role = "foreman" | "site_manager" | "approver";
 
 /** The backend stores the diary estimate as "estimated"; the domain model calls it provisional. */
 export type Basis = "signed" | "provisional" | "estimated" | "forecast";
-export type Severity = "none" | "medium" | "high";
+/** Shortfall alerts use none|medium|high; incident alerts use low|medium|high|critical. */
+export type Severity = "none" | "low" | "medium" | "high" | "critical";
 export type Provenance = "verified" | "inferred" | "missing";
 export type ReviewStatus = "proposed" | "accepted" | "rejected" | "superseded";
 
@@ -134,7 +135,7 @@ export interface Target {
   locator: string;
 }
 
-export type IncidentStatus = "pending_confirmation" | "open" | "resolved";
+export type IncidentStatus = "pending_confirmation" | "open" | "monitoring" | "resolved" | "closed";
 
 export type TimelineKind =
   | "reported"
@@ -165,6 +166,19 @@ export interface Incident {
   equipment_id: string | null;
   refs: EvidenceRef[];
   timeline: TimelineEvent[];
+  // Event pipeline (absent on fixture data)
+  category?: string;
+  event_type?: string;
+  summary?: string;
+  zone?: string | null;
+  asset_key?: string | null;
+  severity?: Severity | null;
+  report_count?: number;
+  reporter_count?: number;
+  first_reported_at?: IsoInstant | null;
+  last_reported_at?: IsoInstant | null;
+  merged_into_id?: string | null;
+  recurrence_of_id?: string | null;
 }
 
 export interface AlertCalculation {
@@ -175,16 +189,32 @@ export interface AlertCalculation {
 }
 
 /** GET /projects/{pid}/alerts item. Matches backend/main.py. */
+export type AlertStatus = "open" | "acknowledged" | "in_progress" | "resolved" | "dismissed";
+
 export interface Alert {
   id: string;
-  activity_code: string;
-  kind: "shortfall" | "missing_report" | string;
+  /** Null for incident alerts that are not tied to a schedule activity */
+  activity_code: string | null;
+  kind: "shortfall" | "missing_report" | "incident" | string;
   checkpoint_at: IsoInstant;
   version: number;
   as_of: IsoInstant;
   severity: Severity;
   calculation: AlertCalculation | null;
   evidence_refs: EvidenceRef[];
+  // Event pipeline (absent on fixture data)
+  status?: AlertStatus;
+  title?: string | null;
+  assigned_to?: string | null;
+  incident_id?: string | null;
+  reason?: string | null;
+  analysis_id?: string | null;
+  category?: string | null;
+  report_count?: number | null;
+  reporter_count?: number | null;
+  incident_status?: IncidentStatus | null;
+  zone?: string | null;
+  asset_key?: string | null;
 }
 
 /** One stored revision of an alert (domain model). */
@@ -557,4 +587,115 @@ export interface IncidentReasoning {
   model: string;
   created_at: IsoInstant;
   stale?: boolean;
+}
+
+// ---------- event pipeline ----------
+export interface EventTypeInfo {
+  key: string;
+  label: string;
+  severity_hint: Severity | null;
+}
+
+export interface EventCategory {
+  key: string;
+  label: string;
+  description: string;
+  icon: string | null;
+  creates_incident: boolean;
+  default_severity: Severity | null;
+  sort_order: number;
+  types: EventTypeInfo[];
+}
+
+export type LinkType = "origin" | "corroborating" | "update" | "resolution" | "contradicting";
+
+/** One report (event) that is a source of an incident: GET /incidents/{id}/events */
+export interface IncidentEventLink {
+  id: string;
+  summary: string;
+  category: string;
+  event_type: string;
+  zone: string | null;
+  recorded_by: string;
+  occurred_at: IsoInstant;
+  recorded_at: IsoInstant;
+  source_id: string;
+  locator: string;
+  suggested_category: string | null;
+  suggestion_confidence: number | null;
+  suggestion_rationale: string | null;
+  link_type: LinkType;
+  match_score: number | null;
+  match_reason: string | null;
+  linked_by: string;
+  linked_at: IsoInstant;
+  unlinked_at: IsoInstant | null;
+  channel: "voice" | "photo" | "text" | "mixed";
+  attachments: { id: string; kind: string; mime: string | null; url: string }[];
+}
+
+export type ActionType =
+  | "assign_owner" | "notify_contractor" | "schedule_repair" | "stop_work" | "isolate_area"
+  | "request_evidence" | "draft_notice" | "create_rfi" | "resolve_incident";
+export type ActionStatus = "proposed" | "approved" | "in_progress" | "done" | "rejected" | "superseded";
+
+export interface RecommendedAction {
+  id: string;
+  action_type: ActionType;
+  title: string;
+  rationale: string | null;
+  owner_role: string | null;
+  contractor_id: string | null;
+  priority: "low" | "medium" | "high" | "urgent" | null;
+  due_at: IsoInstant | null;
+  status: ActionStatus;
+  proposed_by: string;
+  decided_by: string | null;
+  decided_at: IsoInstant | null;
+  executed_at: IsoInstant | null;
+  result: Record<string, unknown> | null;
+  evidence_refs: EvidenceRef[];
+  incident_id: string | null;
+}
+
+export interface AlertActivity {
+  id: string;
+  actor: string;
+  action: string;
+  from_status: string | null;
+  to_status: string | null;
+  note: string | null;
+  at: IsoInstant;
+}
+
+/** GET /alerts/{id} */
+export interface AlertDetail {
+  id: string;
+  status: AlertStatus;
+  kind: string;
+  title: string | null;
+  incident_id: string | null;
+  assigned_to: string | null;
+  incident: {
+    id: string; category: string; event_type: string; summary: string; zone: string | null; asset_key: string | null;
+    status: IncidentStatus; severity: Severity | null; report_count: number; reporter_count: number;
+    first_reported_at: IsoInstant | null; last_reported_at: IsoInstant | null;
+  } | null;
+  analysis: {
+    id: string; version: number; as_of: IsoInstant; status: AnalysisStatus; confidence: number;
+    headline_cause: string | null; reasoning: string; gaps: string[];
+  } | null;
+  revisions: { version: number; as_of: IsoInstant; severity: Severity; reason: string | null; analysis_id: string | null }[];
+  activity: AlertActivity[];
+  actions: RecommendedAction[];
+}
+
+export interface CapturePrompt {
+  id: string;
+  title: string;
+  rationale: string | null;
+  owner_role: string | null;
+  incident_id: string | null;
+  incident_title: string | null;
+  decided_at: IsoInstant | null;
 }

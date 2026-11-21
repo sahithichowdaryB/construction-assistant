@@ -2,14 +2,16 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { SeverityBadge } from "@/components/badges";
+import { AlertStatusBadge, SeverityBadge } from "@/components/badges";
 import { CitationList } from "@/components/citation-chip";
+import { useCategoryLabel } from "@/lib/queries";
 import { basisLabel, fmtPct, fmtQty } from "@/lib/format";
 import { fmtDateTime, fmtLocalDate, localDateOf } from "@/lib/time";
 import type { Activity, Alert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function alertSummary(alert: Alert): string {
+  if (alert.kind === "incident") return alert.title ?? "Incident";
   if (alert.kind === "missing_report") return "Shift report not received. Quantity unknown.";
   const c = alert.calculation;
   if (!c) return "No calculation recorded";
@@ -19,10 +21,12 @@ export function alertSummary(alert: Alert): string {
 }
 
 export function AlertCard({ alert, activity, className }: { alert: Alert; activity?: Activity; className?: string }) {
+  const categoryLabel = useCategoryLabel();
+  const incident = alert.kind === "incident";
   const tone =
     alert.kind === "missing_report"
       ? "border-l-amber-500"
-      : alert.severity === "high"
+      : alert.severity === "high" || alert.severity === "critical"
         ? "border-l-red-500"
         : alert.severity === "medium"
           ? "border-l-amber-500"
@@ -33,7 +37,14 @@ export function AlertCard({ alert, activity, className }: { alert: Alert; activi
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <SeverityBadge severity={alert.severity} kind={alert.kind} />
-            <span className="font-mono text-sm font-semibold">{alert.activity_code}</span>
+            {incident ? (
+              <>
+                {alert.status && <AlertStatusBadge status={alert.status} />}
+                {alert.category && <span className="rounded-md border bg-secondary px-1.5 py-0.5 text-xs font-medium">{categoryLabel(alert.category)}</span>}
+              </>
+            ) : (
+              <span className="font-mono text-sm font-semibold">{alert.activity_code}</span>
+            )}
             {activity && <span className="truncate text-sm text-muted-foreground">{activity.name}</span>}
           </div>
           <p className="mt-1 text-sm">
@@ -41,10 +52,17 @@ export function AlertCard({ alert, activity, className }: { alert: Alert; activi
               {alertSummary(alert)}
             </Link>
           </p>
+          {incident ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {alert.report_count} report{alert.report_count === 1 ? "" : "s"} from {alert.reporter_count} {alert.reporter_count === 1 ? "person" : "people"}
+              {alert.assigned_to ? ` · assigned to ${alert.assigned_to}` : ""} · revision {alert.version} as of {fmtDateTime(alert.as_of)}
+            </p>
+          ) : (
           <p className="mt-0.5 text-xs text-muted-foreground">
             Work date {fmtLocalDate(localDateOf(alert.checkpoint_at))} · revision {alert.version} as of {fmtDateTime(alert.as_of)}
             {alert.kind !== "missing_report" && " · " + basisLabel("signed")}
           </p>
+          )}
         </div>
         <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />
       </div>

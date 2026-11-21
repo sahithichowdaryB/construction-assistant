@@ -75,8 +75,13 @@ def clean(conn):
         conn.execute(text(f"ALTER TABLE sitemate.{table} DISABLE TRIGGER keep_revision"))
         conn.execute(text(f"DELETE FROM sitemate.{table} WHERE project_id=:p"), {"p": PID})
         conn.execute(text(f"ALTER TABLE sitemate.{table} ENABLE TRIGGER keep_revision"))
-    for table in ("fact_evidence", "capture_facts", "incidents", "source_passages", "sources",
-                  "activities", "project_members", "projects"):
+    for table in ("alert_revisions", "incident_severity_history"):  # immutable history, same cleanup rule
+        conn.execute(text(f"ALTER TABLE sitemate.{table} DISABLE TRIGGER keep_revision"))
+        conn.execute(text(f"DELETE FROM sitemate.{table} WHERE project_id=:p"), {"p": PID})
+        conn.execute(text(f"ALTER TABLE sitemate.{table} ENABLE TRIGGER keep_revision"))
+    for table in ("action_items", "agent_runs", "agent_jobs", "alert_activity", "alerts", "incident_events", "events",
+                  "capture_attachments", "captures", "fact_evidence", "capture_facts", "incidents", "source_passages",
+                  "sources", "equipment", "contractors", "activities", "project_members", "projects"):
         column = "id" if table == "projects" else "project_id"
         conn.execute(text(f"DELETE FROM sitemate.{table} WHERE {column}=:p"), {"p": PID})
 

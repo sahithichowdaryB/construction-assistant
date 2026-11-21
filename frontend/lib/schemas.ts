@@ -3,7 +3,9 @@ import { z } from "zod";
 // Response validation for routes the backend already implements (backend/main.py).
 
 const basis = z.enum(["signed", "provisional", "estimated", "forecast"]);
-const severity = z.enum(["none", "medium", "high"]);
+const severity = z.enum(["none", "low", "medium", "high", "critical"]);
+const incidentStatus = z.enum(["pending_confirmation", "open", "monitoring", "resolved", "closed"]);
+const alertStatus = z.enum(["open", "acknowledged", "in_progress", "resolved", "dismissed"]);
 // FastAPI serialises Decimal columns as strings in some drivers; accept both and keep the number.
 const num = z.union([z.number(), z.string().regex(/^-?\d+(\.\d+)?$/).transform(Number)]);
 
@@ -16,16 +18,30 @@ const evidenceRef = z.object({
 
 export const alertSchema = z.object({
   id: z.string(),
-  activity_code: z.string(),
+  activity_code: z.string().nullable(),
   kind: z.string(),
   checkpoint_at: z.string(),
   version: z.number(),
   as_of: z.string(),
   severity,
-  calculation: z
-    .object({ planned: num, actual: num.nullable(), shortfall_pct: num.nullable(), unit: z.string() })
-    .nullable(),
+  // shortfall alerts carry the calculation; incident alerts carry a small summary object instead
+  calculation: z.unknown().transform((c) => {
+    const parsed = z.object({ planned: num, actual: num.nullable(), shortfall_pct: num.nullable(), unit: z.string() }).safeParse(c);
+    return parsed.success ? parsed.data : null;
+  }),
   evidence_refs: z.array(evidenceRef),
+  status: alertStatus.optional(),
+  title: z.string().nullish(),
+  assigned_to: z.string().nullish(),
+  incident_id: z.string().nullish(),
+  reason: z.string().nullish(),
+  analysis_id: z.string().nullish(),
+  category: z.string().nullish(),
+  report_count: z.number().nullish(),
+  reporter_count: z.number().nullish(),
+  incident_status: incidentStatus.nullish(),
+  zone: z.string().nullish(),
+  asset_key: z.string().nullish(),
 });
 export const alertsSchema = z.array(alertSchema);
 
@@ -278,9 +294,21 @@ export const incidentSchema = z.object({
   occurred_at: z.string().nullable(),
   reported_at: z.string(),
   resolved_at: z.string().nullable(),
-  status: z.enum(["pending_confirmation", "open", "resolved"]),
+  status: incidentStatus,
   affected_workers: z.number().nullable(),
   equipment_id: z.string().nullable(),
+  category: z.string().optional(),
+  event_type: z.string().optional(),
+  summary: z.string().optional(),
+  zone: z.string().nullish(),
+  asset_key: z.string().nullish(),
+  severity: severity.nullish(),
+  report_count: z.number().optional(),
+  reporter_count: z.number().optional(),
+  first_reported_at: z.string().nullish(),
+  last_reported_at: z.string().nullish(),
+  merged_into_id: z.string().nullish(),
+  recurrence_of_id: z.string().nullish(),
   refs: z.array(evidenceRefLoose),
   timeline: z.array(
     z.object({
@@ -339,3 +367,105 @@ export const incidentReasoningSchema = z.object({
   /** The records available now differ from those this reasoning used */
   stale: z.boolean().optional(),
 });
+
+
+// ---------- event pipeline ----------
+export const eventCategoriesSchema = z.array(
+  z.object({
+    key: z.string(),
+    label: z.string(),
+    description: z.string(),
+    icon: z.string().nullable(),
+    creates_incident: z.boolean(),
+    default_severity: severity.nullable(),
+    sort_order: z.number(),
+    types: z.array(z.object({ key: z.string(), label: z.string(), severity_hint: severity.nullable() })),
+  }),
+);
+
+const nullableNum = z.number().nullable();
+export const incidentEventsSchema = z.array(
+  z.object({
+    id: z.string(),
+    summary: z.string(),
+    category: z.string(),
+    event_type: z.string(),
+    zone: z.string().nullable(),
+    recorded_by: z.string(),
+    occurred_at: z.string(),
+    recorded_at: z.string(),
+    source_id: z.string(),
+    locator: z.string(),
+    suggested_category: z.string().nullable(),
+    suggestion_confidence: nullableNum,
+    suggestion_rationale: z.string().nullable(),
+    link_type: z.enum(["origin", "corroborating", "update", "resolution", "contradicting"]),
+    match_score: nullableNum,
+    match_reason: z.string().nullable(),
+    linked_by: z.string(),
+    linked_at: z.string(),
+    unlinked_at: z.string().nullable(),
+    channel: z.enum(["voice", "photo", "text", "mixed"]),
+    attachments: z.array(z.object({ id: z.string(), kind: z.string(), mime: z.string().nullable(), url: z.string() })),
+  }),
+);
+
+const actionItem = z.object({
+  id: z.string(),
+  action_type: z.enum(["assign_owner", "notify_contractor", "schedule_repair", "stop_work", "isolate_area",
+    "request_evidence", "draft_notice", "create_rfi", "resolve_incident"]),
+  title: z.string(),
+  rationale: z.string().nullable(),
+  owner_role: z.string().nullable(),
+  contractor_id: z.string().nullable(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).nullable(),
+  due_at: z.string().nullable(),
+  status: z.enum(["proposed", "approved", "in_progress", "done", "rejected", "superseded"]),
+  proposed_by: z.string(),
+  decided_by: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  executed_at: z.string().nullable(),
+  result: z.record(z.string(), z.unknown()).nullable(),
+  evidence_refs: z.array(evidenceRef),
+  incident_id: z.string().nullable(),
+});
+export const actionsSchema = z.array(actionItem);
+
+export const alertDetailSchema = z.object({
+  id: z.string(),
+  status: alertStatus,
+  kind: z.string(),
+  title: z.string().nullable(),
+  incident_id: z.string().nullable(),
+  assigned_to: z.string().nullable(),
+  incident: z
+    .object({
+      id: z.string(), category: z.string(), event_type: z.string(), summary: z.string(), zone: z.string().nullable(),
+      asset_key: z.string().nullable(), status: incidentStatus, severity: severity.nullable(),
+      report_count: z.number(), reporter_count: z.number(),
+      first_reported_at: z.string().nullable(), last_reported_at: z.string().nullable(),
+    })
+    .nullable(),
+  analysis: z
+    .object({
+      id: z.string(), version: z.number(), as_of: z.string(),
+      status: z.enum(["established", "probable", "unconfirmed", "undetermined", "needs_review"]),
+      confidence: num, headline_cause: z.string().nullable(), reasoning: z.string(), gaps: z.array(z.string()),
+    })
+    .nullable(),
+  revisions: z.array(z.object({
+    version: z.number(), as_of: z.string(), severity, reason: z.string().nullable(), analysis_id: z.string().nullable(),
+  })),
+  activity: z.array(z.object({
+    id: z.string(), actor: z.string(), action: z.string(), from_status: z.string().nullable(),
+    to_status: z.string().nullable(), note: z.string().nullable(), at: z.string(),
+  })),
+  actions: actionsSchema,
+});
+
+export const capturePromptsSchema = z.array(z.object({
+  id: z.string(), title: z.string(), rationale: z.string().nullable(), owner_role: z.string().nullable(),
+  incident_id: z.string().nullable(), incident_title: z.string().nullable(), decided_at: z.string().nullable(),
+}));
+
+export const okSchema = z.object({}).passthrough();

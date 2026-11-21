@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useApp } from "@/components/providers/app-context";
 import * as api from "@/lib/api";
 import { toIsoWithOffset } from "@/lib/time";
+import { getEventCategories } from "@/lib/agent";
 import type { Alert, Export, Gap, NoticeType } from "@/lib/types";
 
 /** Query keys always start with the project id; time-scoped reads include as_of. */
@@ -32,6 +33,10 @@ export const keys = {
   drafts: (pid: string, asOf: string) => ["sm", pid, "drafts", asOf] as const,
   draft: (pid: string, id: string, asOf: string) => ["sm", pid, "draft", id, asOf] as const,
   health: () => ["sm", "health"] as const,
+  categories: (pid: string) => ["sm", pid, "event-categories"] as const,
+  incidentEvents: (pid: string, id: string) => ["sm", pid, "incident-events", id] as const,
+  alertDetail: (pid: string, id: string) => ["sm", pid, "alert-detail", id] as const,
+  capturePrompts: (pid: string) => ["sm", pid, "capture-prompts"] as const,
 };
 
 export function useHealth() {
@@ -241,7 +246,7 @@ export function useDraft(id: string) {
 }
 
 // ---------- mutations ----------
-function useInvalidateProject() {
+export function useInvalidateProject() {
   const qc = useQueryClient();
   const { projectId } = useApp();
   return () => qc.invalidateQueries({ queryKey: keys.all(projectId) });
@@ -356,4 +361,89 @@ export function useExportDraft(id: string) {
       api.exportDraftVersion(id, version, format, role, asOf),
     onSuccess: invalidate,
   });
+}
+
+// ---------- event pipeline ----------
+export function useEventCategories() {
+  const { projectId } = useApp();
+  return useQuery({ queryKey: keys.categories(projectId), queryFn: () => getEventCategories(projectId), staleTime: 5 * 60_000 });
+}
+
+export function useCapturePrompts() {
+  const { projectId } = useApp();
+  return useQuery({ queryKey: keys.capturePrompts(projectId), queryFn: () => api.getCapturePrompts(projectId), retry: false, staleTime: 30_000 });
+}
+
+export function useIncidentEvents(id: string) {
+  const { projectId } = useApp();
+  return useQuery({ queryKey: keys.incidentEvents(projectId, id), queryFn: () => api.getIncidentEvents(projectId, id) });
+}
+
+/** Alert + its incident, latest likely cause, revisions, activity log and recommended actions. */
+export function useAlertDetail(id: string, enabled = true) {
+  const { projectId } = useApp();
+  return useQuery({
+    queryKey: keys.alertDetail(projectId, id),
+    queryFn: () => api.getAlertDetail(projectId, id),
+    enabled,
+    // the worker adds the likely cause and the actions a minute or so after capture
+    refetchInterval: (q) => (q.state.data && (!q.state.data.analysis || !q.state.data.actions.length) ? 10_000 : false),
+  });
+}
+
+export function useAlertTransition(id: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (v: { action: api.AlertTransition; note?: string; assignee?: string; resolve_incident?: boolean }) =>
+      api.transitionAlert(projectId, id, v.action, v),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDecideAction(alertId: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (v: { actionId: string; decision: "approve" | "reject" | "complete"; assignee?: string }) =>
+      api.decideAction(projectId, alertId, v.actionId, v.decision, { assignee: v.assignee }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useEditAction(alertId: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (v: { actionId: string; patch: Parameters<typeof api.editAction>[3] }) => api.editAction(projectId, alertId, v.actionId, v.patch),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePatchIncident(id: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({ mutationFn: (status: "open" | "monitoring" | "resolved" | "closed") => api.patchIncident(projectId, id, status), onSuccess: invalidate });
+}
+
+export function useMergeIncident(id: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({ mutationFn: (intoId: string) => api.mergeIncident(projectId, id, intoId), onSuccess: invalidate });
+}
+
+export function useUnlinkEvent(id: string) {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (v: { eventId: string; makeNew: boolean }) => api.unlinkIncidentEvent(projectId, id, v.eventId, v.makeNew),
+    onSuccess: invalidate,
+  });
+}
+
+/** key -> label for event categories ("equipment" -> "Equipment / plant failure"); falls back to the key. */
+export function useCategoryLabel() {
+  const { data } = useEventCategories();
+  const map = new Map(data?.map((c) => [c.key, c.label]));
+  return (key: string | null | undefined) => (key ? (map.get(key) ?? key.replace(/_/g, " ")) : "");
 }

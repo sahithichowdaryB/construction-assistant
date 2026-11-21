@@ -1,124 +1,185 @@
 "use client";
 
-import { CheckCircle2, Keyboard, Paperclip, RefreshCw, Send } from "lucide-react";
+import { ImagePlus, Keyboard, Megaphone, Send, X } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { AgentReview } from "@/components/agent-review";
-import { JobStatusBadge } from "@/components/badges";
 import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
-import { ReviewForm } from "@/components/review-form";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { answerQuestions, submitNote, type AgentResult } from "@/lib/agent";
-import type { UploadInput } from "@/lib/api";
-import { useJob, useProposals, useUpload } from "@/lib/queries";
+import {
+  answerQuestions,
+  confirmCategories,
+  submitCapture,
+  type AddedEvent,
+  type AgentResult,
+  type CaptureInput,
+  type CategoryDecision,
+} from "@/lib/agent";
+import { useCapturePrompts, useEventCategories, useInvalidateProject } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 
+const MAX_IMAGES = 5;
+
 const DEMO_NOTES = [
-  { id: "V01", label: "V01 breakdown", text: "The excavator broke down at ten. Hydraulic hose burst. Three workers can't continue digging in Zone B." },
-  { id: "V02", label: "V02 forecast", text: "Just heard from the mechanic. He expects it back tomorrow at noon. That's his estimate." },
-  { id: "V03", label: "V03 duplicate", text: "Same machine at Zone B. Three of us are still waiting on the excavator." },
+  { id: "L1", label: "Lift broken", text: "The goods lift in core A is not working, it is stuck between floors." },
+  { id: "L2", label: "Lift again", text: "The lift is out again, nobody can get materials up to level 4." },
+  { id: "L3", label: "Lift fixed", text: "The lift is working again, the mechanic finished at eleven." },
+  { id: "V01", label: "Excavator", text: "The excavator broke down at ten. Hydraulic hose burst. Three workers can't continue digging in Zone B." },
 ];
 
 export default function CapturePage() {
   const { role, projectId } = useApp();
   const blocked = denyReason(role, "capture");
+  const invalidate = useInvalidateProject();
+  const categories = useEventCategories();
+  const prompts = useCapturePrompts();
+
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [lastInput, setLastInput] = useState<UploadInput | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [images, setImages] = useState<File[]>([]);
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
-  const [lastText, setLastText] = useState("");
+  const [lastInput, setLastInput] = useState<CaptureInput | null>(null);
 
-  // Typed notes go to the capture agent (Claude + database); photos/files still use the fixture flow.
-  const note = useMutation({ mutationFn: (t: string) => submitNote(projectId, t), onSuccess: setAgentResult });
+  const onResult = (r: AgentResult) => {
+    setAgentResult(r);
+    if (r.status === "saved") invalidate(); // new incidents and alerts exist now
+  };
+  // Voice, photos and typed text all go to the same agent. It replies with category suggestions to confirm.
+  const capture = useMutation({ mutationFn: (input: CaptureInput) => submitCapture(projectId, input), onSuccess: onResult });
+  const categoriesMut = useMutation({
+    mutationFn: (v: { decisions: CategoryDecision[]; added: AddedEvent[] }) => {
+      if (agentResult?.status !== "needs_category") throw new Error("No capture is waiting for categories");
+      return confirmCategories(projectId, agentResult.thread_id, v.decisions, v.added);
+    },
+    onSuccess: onResult,
+  });
   const answers = useMutation({
     mutationFn: (a: { id: string; answer: string }[]) => {
       if (agentResult?.status !== "needs_input") throw new Error("No capture is waiting for answers");
       return answerQuestions(projectId, agentResult.thread_id, a);
     },
-    onSuccess: setAgentResult,
+    onSuccess: onResult,
   });
-  const agentActive = !!agentResult || note.isPending || note.isError;
+  const busy = capture.isPending || categoriesMut.isPending || answers.isPending;
 
-  const upload = useUpload();
-  const job = useJob(jobId);
-  const indexedSource = job.data?.status === "indexed" ? job.data.source_id : null;
-  const proposals = useProposals(indexedSource);
-
-  const send = (input: UploadInput) => {
-    setDone(null);
+  const send = (input: CaptureInput) => {
     setLastInput(input);
-    upload.mutate(input, { onSuccess: (j) => setJobId(j.id) });
+    capture.mutate(input);
   };
-
   const submitRecording = (rec: Recording) =>
-    send({ type: "voice", file: rec.blob, filename: `note.${rec.mimeType.includes("mp4") ? "m4a" : "webm"}` });
+    send({ audio: { blob: rec.blob, filename: `note.${rec.mimeType.includes("mp4") ? "m4a" : "webm"}` }, text, images });
 
   const reset = () => {
-    setJobId(null);
     setText("");
-    setFile(null);
-    setDone(null);
+    setImages([]);
     setAgentResult(null);
-    note.reset();
+    capture.reset();
+    categoriesMut.reset();
     answers.reset();
-    upload.reset();
   };
+
+  const addImages = (files: FileList | null) => {
+    if (!files) return;
+    setImages((cur) => [...cur, ...Array.from(files).filter((f) => f.type.startsWith("image/"))].slice(0, MAX_IMAGES));
+  };
+
+  const canSubmit = !blocked && !busy && (text.trim().length > 0 || images.length > 0);
 
   return (
     <>
-      <PageHeader title="Capture" description="Record or type what happened on site. You confirm every field before anything is saved." />
+      <PageHeader title="Capture" description="Record, photograph or type what happened. The AI suggests a category; you choose the final one before anything is saved." />
+
+      {prompts.data && prompts.data.length > 0 && (
+        <Card className="mb-4 border-amber-300 bg-amber-50/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Megaphone className="size-4" aria-hidden /> Evidence requested
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2 text-sm">
+              {prompts.data.map((p) => (
+                <li key={p.id}>
+                  <span className="font-medium">{p.title}</span>
+                  {p.incident_id && (
+                    <>
+                      {" "}
+                      for{" "}
+                      <Link className="underline" href={`/incidents/${p.incident_id}`}>
+                        {p.incident_title ?? "the incident"}
+                      </Link>
+                    </>
+                  )}
+                  {p.rationale && <p className="text-xs text-muted-foreground">{p.rationale}</p>}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>New site note</CardTitle>
+            <CardTitle>New site report</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <MicButton onSubmit={submitRecording} disabled={!!blocked || upload.isPending} disabledReason={blocked} />
+            <MicButton onSubmit={submitRecording} disabled={!!blocked || busy} disabledReason={blocked} />
 
             <div className="flex flex-wrap justify-center gap-2">
               <Button variant={typing ? "secondary" : "outline"} size="touch" onClick={() => setTyping((t) => !t)} aria-expanded={typing}>
                 <Keyboard aria-hidden /> Type instead
               </Button>
               <Button variant="outline" size="touch" asChild>
-                <label className={blocked ? "pointer-events-none opacity-50" : "cursor-pointer"}>
-                  <Paperclip aria-hidden /> Attach photo/file
+                <label className={blocked || images.length >= MAX_IMAGES ? "pointer-events-none opacity-50" : "cursor-pointer"}>
+                  <ImagePlus aria-hidden /> Add photos ({images.length}/{MAX_IMAGES})
                   <input
                     type="file"
-                    accept="image/*,application/pdf,audio/*"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
                     capture="environment"
                     className="sr-only"
-                    disabled={!!blocked}
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    disabled={!!blocked || images.length >= MAX_IMAGES}
+                    onChange={(e) => {
+                      addImages(e.target.files);
+                      e.target.value = "";
+                    }}
                   />
                 </label>
               </Button>
             </div>
-            {file && (
-              <p className="text-center text-sm">
-                Attached: <span className="font-medium">{file.name}</span>{" "}
-                <Button variant="link" size="sm" onClick={() => setFile(null)}>
-                  Remove
-                </Button>
-              </p>
+
+            {images.length > 0 && (
+              <ul className="flex flex-wrap gap-2" aria-label="Attached photos">
+                {images.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={URL.createObjectURL(f)} alt={f.name} className="size-20 rounded-md border object-cover" onLoad={(e) => URL.revokeObjectURL(e.currentTarget.src)} />
+                    <button
+                      type="button"
+                      className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border bg-background shadow"
+                      aria-label={`Remove ${f.name}`}
+                      onClick={() => setImages((cur) => cur.filter((_, n) => n !== i))}
+                    >
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
 
-            {typing && (
+            {(typing || text) && (
               <form
                 className="flex flex-col gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!text.trim()) return;
-                  if (file) return send({ type: "voice", text, file, filename: file.name });
-                  setLastText(text);
-                  note.mutate(text);
+                  if (canSubmit) send({ text, images });
                 }}
               >
                 <Label htmlFor="note-text">Site note</Label>
@@ -131,76 +192,47 @@ export default function CapturePage() {
                     </Button>
                   ))}
                 </div>
-                <Button type="submit" size="touch" disabled={!!blocked || !text.trim() || upload.isPending || note.isPending} className="self-end">
-                  <Send aria-hidden /> Submit note
+                <Button type="submit" size="touch" disabled={!canSubmit} className="self-end">
+                  <Send aria-hidden /> Submit report
                 </Button>
               </form>
             )}
-            {!typing && file && (
-              <Button size="touch" onClick={() => send({ type: "photo", file, filename: file.name })} disabled={!!blocked || upload.isPending}>
-                <Send aria-hidden /> Submit attachment
+            {!typing && !text && images.length > 0 && (
+              <Button size="touch" onClick={() => send({ images })} disabled={!canSubmit}>
+                <Send aria-hidden /> Submit {images.length === 1 ? "photo" : "photos"}
               </Button>
             )}
           </CardContent>
         </Card>
 
         <Card aria-live="polite">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle>Review</CardTitle>
-            {job.data && <JobStatusBadge status={job.data.status} />}
           </CardHeader>
           <CardContent>
-            {agentActive ? (
-              note.isPending ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-muted-foreground">Reading your note and extracting fields… this can take up to a minute.</p>
-                  <LoadingSkeleton rows={3} />
-                </div>
-              ) : note.isError ? (
-                <ErrorState error={note.error} onRetry={() => note.mutate(lastText)} />
-              ) : agentResult ? (
-                <div className="flex flex-col gap-3">
-                  {answers.isError && <ErrorState error={answers.error} />}
-                  <AgentReview result={agentResult} pending={answers.isPending} onAnswer={(a) => answers.mutate(a)} onReset={reset} />
-                </div>
-              ) : null
-            ) : done ? (
-              <EmptyState
-                icon={<CheckCircle2 className="text-emerald-600" />}
-                title="Captured"
-                description={done}
-                action={
-                  <Button size="touch" onClick={reset}>
-                    Capture another
-                  </Button>
-                }
-              />
-            ) : upload.isError ? (
-              <ErrorState error={upload.error} onRetry={() => lastInput && send(lastInput)} />
-            ) : !jobId ? (
-              <EmptyState title="Nothing submitted yet" description="Record or type a note. Proposed fields appear here for you to check." />
-            ) : job.isError ? (
-              <ErrorState error={job.error} onRetry={() => void job.refetch()} />
-            ) : job.data?.status === "failed" ? (
+            {capture.isPending ? (
               <div className="flex flex-col gap-2">
-                <ErrorState error={new Error(job.data.error ?? "Processing failed")} />
-                <Button size="touch" variant="outline" onClick={() => lastInput && send(lastInput)}>
-                  <RefreshCw aria-hidden /> Retry processing
-                </Button>
-              </div>
-            ) : !indexedSource ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm text-muted-foreground">Transcribing and extracting fields…</p>
+                <p className="text-sm text-muted-foreground">Listening, looking and classifying… this can take up to a minute.</p>
                 <LoadingSkeleton rows={3} />
               </div>
-            ) : proposals.isPending ? (
-              <LoadingSkeleton rows={4} />
-            ) : proposals.isError ? (
-              <ErrorState error={proposals.error} onRetry={() => void proposals.refetch()} />
-            ) : proposals.data.length === 0 ? (
-              <EmptyState title="No fields proposed" description="Nothing could be extracted. Save it as a diary note or add more detail." />
+            ) : capture.isError ? (
+              <ErrorState error={capture.error} onRetry={lastInput ? () => capture.mutate(lastInput) : undefined} />
+            ) : agentResult ? (
+              <div className="flex flex-col gap-3">
+                {categoriesMut.isError && <ErrorState error={categoriesMut.error} />}
+                {answers.isError && <ErrorState error={answers.error} />}
+                <AgentReview
+                  result={agentResult}
+                  categories={categories.data}
+                  pending={busy}
+                  onConfirmCategories={(decisions, added) => categoriesMut.mutate({ decisions, added })}
+                  onAnswer={(a) => answers.mutate(a)}
+                  onReset={reset}
+                />
+                {agentResult.status === "needs_category" && categories.isError && <ErrorState error={categories.error} onRetry={() => void categories.refetch()} />}
+              </div>
             ) : (
-              <ReviewForm key={proposals.data[0].source_id + jobId} proposal={proposals.data[0]} onDone={setDone} />
+              <EmptyState title="Nothing submitted yet" description="Record, photograph or type a report. The events it contains appear here with a suggested category to confirm." />
             )}
           </CardContent>
         </Card>

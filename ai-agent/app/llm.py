@@ -1,5 +1,6 @@
 """One narrow LLM interface. Add a provider by adding an adapter and a branch in get_llm()."""
 
+import base64
 import json
 import re
 from typing import Protocol
@@ -15,7 +16,7 @@ class LLMError(RuntimeError):
 class LLMClient(Protocol):
     model: str
 
-    def generate_json(self, system: str, user: str) -> dict: ...
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict: ...
 
 
 def parse_json(raw: str) -> dict:
@@ -45,11 +46,17 @@ class ClaudeClient:
         self._client = anthropic.Anthropic(max_retries=4)  # the SDK retries 408/409/429/5xx with backoff
         self.model, self.effort, self.max_tokens = model, effort, max_tokens
 
-    def generate_json(self, system: str, user: str) -> dict:
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict:
+        """`images` (optional): [{"mime": "image/jpeg", "data": bytes}], sent before the text for vision."""
         anthropic = self._anthropic
+        content = user
+        if images:
+            content = [*({"type": "image", "source": {"type": "base64", "media_type": i["mime"],
+                                                       "data": base64.b64encode(i["data"]).decode()}} for i in images),
+                       {"type": "text", "text": user}]
         request = dict(
             model=self.model, max_tokens=self.max_tokens, system=system,
-            messages=[{"role": "user", "content": user}],
+            messages=[{"role": "user", "content": content}],
             # If a safety classifier declines the request, let the API re-run it on a fallback model.
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         )
@@ -91,7 +98,7 @@ class FakeLLM:
         self.responses = list(responses)
         self.calls = []
 
-    def generate_json(self, system: str, user: str) -> dict:
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict:
         self.calls.append((system, user))
         if not self.responses:
             raise LLMError("FakeLLM has no more scripted responses")
