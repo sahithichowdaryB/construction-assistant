@@ -8,6 +8,7 @@ import { SiteActivity } from "@/components/site-activity";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
 import { NoticeDownloads } from "@/components/notice-downloads";
+import { RecapStrip } from "@/components/recap/recap-strip";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Input } from "@/components/ui/input";
@@ -389,6 +390,7 @@ export default function ManagerPage() {
           />
         }
       />
+      {!inboxNotice && <RecapStrip />}
       {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
       {!!openShortfalls?.length && notices.isSuccess && (
         <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
