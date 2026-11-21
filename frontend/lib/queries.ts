@@ -1,8 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { useApp } from "@/components/providers/app-context";
 import * as api from "@/lib/api";
+import { toIsoWithOffset } from "@/lib/time";
 import type { Alert, Export, Gap, NoticeType } from "@/lib/types";
 
 /** Query keys always start with the project id; time-scoped reads include as_of. */
@@ -23,6 +25,10 @@ export const keys = {
   evidence: (pid: string, passageId: string, asOf: string) => ["sm", pid, "evidence", passageId, asOf] as const,
   job: (pid: string, id: string) => ["sm", pid, "job", id] as const,
   proposals: (pid: string, sid: string) => ["sm", pid, "proposals", sid] as const,
+  readings: (pid: string, sid: string, asOf: string) => ["sm", pid, "readings", sid, asOf] as const,
+  search: (pid: string, q: string, asOf: string) => ["sm", pid, "search", q, asOf] as const,
+  actionItems: (pid: string, asOf: string) => ["sm", pid, "action-items", asOf] as const,
+  documentJob: (pid: string, id: string) => ["sm", pid, "document-job", id] as const,
   drafts: (pid: string, asOf: string) => ["sm", pid, "drafts", asOf] as const,
   draft: (pid: string, id: string, asOf: string) => ["sm", pid, "draft", id, asOf] as const,
   health: () => ["sm", "health"] as const,
@@ -104,17 +110,30 @@ export function useSources() {
   return useQuery({ queryKey: keys.sources(projectId, asOf), queryFn: () => api.getSources(projectId, asOf) });
 }
 
+const RUNNING = new Set(["queued", "running"]);
+
+/** True while the backend is still parsing or summarising this source. */
+export const isProcessing = (s: { parse_status?: string | null; summary_status?: string | null } | undefined) =>
+  !!s && (RUNNING.has(s.parse_status ?? "") || RUNNING.has(s.summary_status ?? ""));
+
 export function useSource(sid: string) {
   const { projectId, asOf } = useApp();
-  return useQuery({ queryKey: keys.source(projectId, sid, asOf), queryFn: () => api.getSource(projectId, sid, asOf) });
+  return useQuery({
+    queryKey: keys.source(projectId, sid, asOf),
+    queryFn: () => api.getSource(projectId, sid, asOf),
+    // Keep checking while a parse or summary job is running, so new results appear on their own.
+    refetchInterval: (q) => (isProcessing(q.state.data) ? 3000 : false),
+  });
 }
 
-export function useSourceSummary(sid: string, enabled = true) {
+export function useSourceSummary(sid: string, enabled = true, pending = false) {
   const { projectId, asOf } = useApp();
   return useQuery({
     queryKey: keys.summary(projectId, sid, asOf),
     queryFn: () => api.getSourceSummary(projectId, sid, asOf),
     enabled,
+    retry: (count, error) => !(error instanceof api.ApiError && error.status === 404) && count < 2,
+    refetchInterval: pending ? 3000 : false,
   });
 }
 
@@ -139,6 +158,67 @@ export function useJob(jobId: string | null) {
       return s === "indexed" || s === "failed" ? false : 500;
     },
   });
+}
+
+/** Polls a document ingestion job (parse or summary) until it reaches a terminal state. */
+export function useDocumentJob(jobId: string | null) {
+  const { projectId } = useApp();
+  return useQuery({
+    queryKey: keys.documentJob(projectId, jobId ?? ""),
+    queryFn: () => api.getDocumentJob(projectId, jobId!),
+    enabled: !!jobId,
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      return s === "indexed" || s === "failed" ? false : 1000;
+    },
+  });
+}
+
+export function useReportReadings(sid: string, enabled = true) {
+  const { projectId, asOf } = useApp();
+  return useQuery({
+    queryKey: keys.readings(projectId, sid, asOf),
+    queryFn: () => api.getReportReadings(projectId, sid, asOf),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSourceStorage(sid: string, enabled = true) {
+  const { projectId, asOf } = useApp();
+  return useQuery({
+    queryKey: [...keys.source(projectId, sid, asOf), "storage"],
+    queryFn: () => api.getSourceStorage(projectId, sid, asOf),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSourcePreview(sid: string, enabled = true) {
+  const { projectId, asOf } = useApp();
+  return useQuery({
+    queryKey: [...keys.source(projectId, sid, asOf), "preview"],
+    queryFn: () => api.getSourcePreview(projectId, sid, asOf),
+    enabled,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useSearch(q: string) {
+  const { projectId, asOf } = useApp();
+  const query = q.trim();
+  return useQuery({
+    queryKey: keys.search(projectId, query, asOf),
+    queryFn: () => api.searchEvidence(projectId, query, asOf),
+    enabled: query.length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+export function useActionItems() {
+  const { projectId, asOf } = useApp();
+  return useQuery({ queryKey: keys.actionItems(projectId, asOf), queryFn: () => api.getActionItems(projectId, asOf) });
 }
 
 export function useProposals(sid: string | null) {
@@ -174,6 +254,47 @@ export function useUpload() {
     mutationFn: (input: api.UploadInput) => api.uploadSource(projectId, input, asOf),
     onSuccess: invalidate,
   });
+}
+
+export function useUploadDocument() {
+  const { projectId, asOf, setAsOf } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (input: { type: Parameters<typeof api.uploadDocument>[1]["type"]; file: File }) =>
+      api.uploadDocument(projectId, input, asOf),
+    onSuccess: (job) => {
+      // Uploads are stamped with the real time; move the clock forward so the new document is visible.
+      const received = job.available_at ? Date.parse(job.available_at) : NaN;
+      if (received > Date.parse(asOf)) setAsOf(toIsoWithOffset(new Date(Math.ceil(received / 1000) * 1000)));
+      return invalidate();
+    },
+  });
+}
+
+export function useRegenerateSummary() {
+  const { projectId } = useApp();
+  return useMutation({ mutationFn: (sid: string) => api.regenerateSummary(projectId, sid) });
+}
+
+export function useCompleteAction() {
+  const { projectId } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: ({ id, completed }: { id: string; completed: boolean }) => api.setActionItemCompleted(projectId, id, completed),
+    onSuccess: invalidate,
+  });
+}
+
+/** Refreshes project data once a polled job finishes (new passages, summary or source status). */
+export function useInvalidateOnJobDone(status: string | undefined) {
+  const qc = useQueryClient();
+  const { projectId } = useApp();
+  const seen = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (status === seen.current) return;
+    seen.current = status;
+    if (status === "indexed" || status === "failed") void qc.invalidateQueries({ queryKey: keys.all(projectId) });
+  }, [status, qc, projectId]);
 }
 
 export function useConfirmProposal() {

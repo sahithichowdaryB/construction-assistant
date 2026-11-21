@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
-const SAFE_SEGMENT = /^[A-Za-z0-9._~-]+$/;
+// ":" is allowed for passage ids such as "R10:EXC-B" (GET /projects/{pid}/evidence/{passage_id}).
+const SAFE_SEGMENT = /^[A-Za-z0-9._~:-]+$/;
 const FILE_ROUTE = /^projects\/([^/]+)\/sources\/([^/]+)\/file$/;
 
 async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PATCH") {
@@ -41,7 +42,10 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       headers,
       body: method === "GET" ? undefined : await req.arrayBuffer(),
       cache: "no-store",
-      signal: AbortSignal.timeout(method === "POST" ? 120_000 : 15_000), // POST may run the LLM
+      // POST may run the LLM (reasoning, uploads); reranked search and PATCH are slower than plain reads.
+      signal: AbortSignal.timeout(
+        method === "POST" ? 120_000 : method === "PATCH" || joined.endsWith("/search") ? 60_000 : 15_000,
+      ),
     });
   } catch {
     return Response.json(
@@ -54,6 +58,12 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
   for (const h of ["content-type", "content-disposition", "content-length", "etag", "last-modified"]) {
     const v = upstream.headers.get(h);
     if (v) out.set(h, v);
+  }
+  if (fileMatch && !req.nextUrl.searchParams.has("download")) {
+    // Viewing, not downloading: browsers save text/csv instead of showing it, so show it as text.
+    if (out.get("content-type")?.startsWith("text/csv")) out.set("content-type", "text/plain; charset=utf-8");
+    out.delete("content-disposition");
+    out.delete("content-length");
   }
   out.set("x-sitemate-source", "api");
   return new Response(upstream.body, { status: upstream.status, headers: out });

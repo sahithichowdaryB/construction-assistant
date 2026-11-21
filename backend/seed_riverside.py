@@ -16,6 +16,7 @@ from pypdf import PdfReader
 from sqlalchemy import text
 
 from database import engine_for
+from documents.parsers import schedule_excerpt, schedule_successors
 
 ROOT = Path(__file__).resolve().parents[1] / "data/riverside-demo"
 REGISTERS = ROOT / "uploads/registers"
@@ -117,6 +118,7 @@ def collect_rows():
     activities = csv_rows("schedule.csv")
     first = date.fromisoformat(min(a["planned_start"] for a in activities))
     last = date.fromisoformat(max(a["planned_end"] for a in activities))
+    successors = schedule_successors(activities)
     for a in activities:
         code = a["activity_id"]
         add("activities", code=code, name=a["activity"], unit=a["unit"], zone=a["zone"],
@@ -124,8 +126,7 @@ def collect_rows():
         for predecessor in filter(None, a["predecessors"].split("|")):
             add("activity_dependencies", predecessor=predecessor, successor=code)
         add("source_passages", source_id="SCH", locator=code, page=None,
-            excerpt=f"{code}, {a['activity']}, {a['planned_start']} to {a['planned_end']}, "
-                    f"{a['planned_qty_per_day']} {a['unit']} per scheduled shift")
+            excerpt=schedule_excerpt(a, successors.get(code, ())))
         for offset in range((last - first).days + 1):
             day = (first + timedelta(days=offset)).isoformat()
             active = a["planned_start"] <= day <= a["planned_end"]
@@ -160,8 +161,11 @@ def collect_rows():
             add("observations", activity_code="EXC-B", work_date=path.stem, quantity=int(match[1]),
                 basis="estimated", source_id="D10", locator="handover")
     token = os.environ["RIVERSIDE_DEMO_TOKEN"]
-    if len(token) < 32:
-        raise ValueError("Set a random RIVERSIDE_DEMO_TOKEN of at least 32 characters")
+    # At least 32 characters, and a pasted line ending in "...=postgresql://..." must not become
+    # everyone's password.
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
+        raise ValueError("Set a random RIVERSIDE_DEMO_TOKEN of 32-128 letters, digits, '-' or '_' "
+                         f"(got {len(token)} characters); check backend/.env for a broken line")
     add("project_members", member_id="riverside-demo", token_hash=hashlib.sha256(token.encode()).hexdigest(),
         role="manager")
     return tables

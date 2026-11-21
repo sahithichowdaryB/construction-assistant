@@ -1,1 +1,12 @@
+# Evidence files are hashed and cited byte-for-byte: never convert line endings.
+data/** -text
 data/riverside-demo/uploads/diary/*.pdf binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.wav binary
+*.mp3 binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.zip binary
