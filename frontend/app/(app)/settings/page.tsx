@@ -4,6 +4,7 @@ import { CircleCheck, CircleX, Database, LogOut, RefreshCw, UserRound } from "lu
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIdentity } from "@/components/account-menu";
+import { CostRatesCard } from "@/components/cost-rates-card";
 import { ErrorState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,7 +79,12 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Project details, your account, and system status." />
+      <PageHeader title="Settings" description="Project details, cost rates, your account, and system status." />
+      {AUTH_REQUIRED && (
+        <div className="mb-4">
+          <CostRatesCard />
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>

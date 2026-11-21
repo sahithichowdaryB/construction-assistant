@@ -1,4 +1,5 @@
-"""Clear the three-screen demo so it can run again: field notes (FN-...), delay notices and reviews.
+"""Clear the demo so it can run again: field notes (FN-...), notices, emails and letters written
+with SiteMate, and their reviews. Cost rates and accounts stay.
 
     python reset_demo_workflow.py
 

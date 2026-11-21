@@ -130,9 +130,9 @@ One login, three users, three screens, all on the Zone B excavator breakdown (Ri
 
 | Role (`project_members.role`) | Screen | Routes | Tables written |
 |---|---|---|---|
-| `contributor` (foreman) | `/foreman`: record a note, check the facts, confirm | `POST /projects/{pid}/field-notes`, `POST â€¦/field-notes/{id}/confirm` | `sources`, `source_passages`, `capture_facts`, `fact_evidence` |
-| `manager` (site manager) | `/manager`: 65 of 100 mÂ³ on EXC-B, then draft the delay notice | `POST /projects/{pid}/drafts`, `POST â€¦/drafts/{id}/versions` | `drafts`, `draft_versions` (reads `alerts`, `plan_targets`, `observations`) |
-| `approver` | `/approver`: notice text, missing contract clause, Approve or Request changes | `POST â€¦/drafts/{id}/versions/{v}/review` | `reviews` |
+| `contributor` (foreman) | `/foreman`: record a note, check the facts, confirm | `POST /projects/{pid}/field-notes`, `POST …/field-notes/{id}/confirm` | `sources`, `source_passages`, `capture_facts`, `fact_evidence` |
+| `manager` (site manager) | `/manager`: 65 of 100 m³ on EXC-B, then draft the delay notice | `POST /projects/{pid}/drafts`, `POST …/drafts/{id}/versions` | `drafts`, `draft_versions` (reads `alerts`, `plan_targets`, `observations`) |
+| `approver` | `/approver`: notice text, missing contract clause, Approve or Request changes | `POST …/drafts/{id}/versions/{v}/review` | `reviews` |
 
 **Accounts.** Users are Supabase Auth accounts (`auth.users`). `project_members.auth_user_id` links an
 account to a project role. `POST /auth/login` checks the password inside the database
@@ -153,7 +153,7 @@ password (10+ characters, letters and numbers) and signs out every session of th
 
 **Rules.** Field-note facts are `proposed` until the foreman confirms them. A value the note does not state
 (the machine ID) is filled from the equipment register and marked `inferred`. The notice quotes only
-confirmed notes, cites every statement, and shows `[MISSING: â€¦]` for contract details the project record
+confirmed notes, cites every statement, and shows `[MISSING: …]` for contract details the project record
 lacks. An approver cannot approve while anything is missing; the manager fills it in as a new version.
 
 ```powershell
@@ -163,38 +163,71 @@ lacks. An approver cannot approve while anything is missing; the manager fills i
 .venv/Scripts/python.exe reset_demo_workflow.py   # remove demo notes, notices and reviews to run it again
 ```
 
+## Write with SiteMate (emails and letters from a description)
+
+The site manager describes a situation ("Excavator broke down at 10, three workers stopped, GroundWorks hasn't sent
+the backup plan"), picks what is needed (email, delay notice, additional cost notice, notice of concern, defect notice)
+and optionally the recipient, the day and what to stress. `correspondence.py` then:
+
+1. **Understands** the text with Claude, choosing activity, machines and contractor only from the database lists and
+   taking times and numbers only from the manager's words (checked afterwards).
+2. **Gathers** read-only, as of the clock: plan and signed quantities, follow-on work, equipment register, the incident
+   and its reports, confirmed field notes, open or overdue `action_items`, related documents (documents search).
+3. **Calculates in code** the working hours lost (within the working day from Settings), idle worker-hours, output lost
+   and, for cost notices, cost lines from `cost_rates`. A missing rate stays `[MISSING: …]`; example rates block approval.
+4. **Writes** with Claude from numbered facts only; every fact paragraph cites its records.
+5. **Checks**: a paragraph without a valid fact, or a sentence with a number not in the facts, costs or the request,
+   is removed and listed under "Removed by the check".
+6. **Saves** a private draft (`drafts` with `request`, `recipient`, `analysis`; `draft_versions` v1) and logs the run in
+   `agent_runs`. The manager edits or regenerates ("make it firmer"), then sends it for approval; the approver uses the
+   usual review queue. Approved versions download as PDF or Word, emails also as `.eml` (opens unsent in Outlook).
+
+| Route (under `/projects/{pid}`) | Who | Purpose |
+|---|---|---|
+| `GET /correspondence/options` | manager | Letter types, recipients (client, contractors, internal) and rate status |
+| `POST /correspondence?as_of=` | manager | Run the agent and create the draft |
+| `GET /correspondence`, `GET /correspondence/{id}` | manager (approver: one) | Drafts with the analysis ("What I found") |
+| `POST /correspondence/{id}/regenerate` | manager | New version from the latest records, optional instruction |
+| `POST /correspondence/{id}/submit` | manager | Send to the approver's queue |
+| `GET`/`PUT /cost-rates`, `POST /cost-rates/examples` | manager edits | Rate table and working day; example values for demos |
+| `GET /drafts/{id}/versions/{v}/export?format=pdf\|docx\|eml` | manager, approver | Approved versions only |
+
+```powershell
+.venv/Scripts/python.exe correspondence_schema.py   # idempotent DDL (same as migration 0009_correspondence)
+```
+
 ## Legacy: the previous Node.js capture agent (superseded, not used any more)
 
 `src/` is a Node.js service that turns a recorded voice note into reviewed project memory.
 It is a LangGraph pipeline over four LangChain tools in `src/agent/tools/`:
 
 ```
-audio â”€Whisperâ”€â–¶ transcript â”€fact_extraction (Claude fills JSON)â”€â–¶ events
-  â”€database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)â”€â–¶ matches
-  â”€relationship_matching (dependencies, contractors, shared equipment, open alerts)â”€â–¶ relationships
-  â”€question_generation (Claude + sitemate.business_rules)â”€â–¶ validated facts / missing fields / questions
-  â”€[pause: ask manager â”€â–¶ answers â”€â–¶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
-  â”€â–¶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
+audio ─Whisper─▶ transcript ─fact_extraction (Claude fills JSON)─▶ events
+  ─database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)─▶ matches
+  ─relationship_matching (dependencies, contractors, shared equipment, open alerts)─▶ relationships
+  ─question_generation (Claude + sitemate.business_rules)─▶ validated facts / missing fields / questions
+  ─[pause: ask manager ─▶ answers ─▶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
+  ─▶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
 ```
 
 Facts are stored with `review_status='proposed'`; a person confirms them later. Each manager answer is
 stored as its own passage (`answer:<question id>`) so every fact cites where it came from.
 
-## Event pipeline: capture â†’ event â†’ incident â†’ alert â†’ action
+## Event pipeline: capture → event → incident → alert → action
 
 ```
 capture (voice | photos | text)
-  â†’ perceive (Whisper, Claude vision)            Python  ai-agent/app/capture/pipeline.py, served by FastAPI (capture.py)
-  â†’ classify: split into events, SUGGEST a category + type + rationale
-  â†’ â¸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
-  â†’ search DB â†’ relationships â†’ required-field questions (per category)
-  â†’ â¸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
-  â†’ persist in ONE transaction: passages, events, then
+  → perceive (Whisper, Claude vision)            Python  ai-agent/app/capture/pipeline.py, served by FastAPI (capture.py)
+  → classify: split into events, SUGGEST a category + type + rationale
+  → ⏸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
+  → search DB → relationships → required-field questions (per category)
+  → ⏸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
+  → persist in ONE transaction: passages, events, then
       correlation under an advisory lock (auto-link / LLM adjudicate / new incident),
       severity (rule matrix + bounded LLM nudge), alert + revision, facts, debounced agent job
-  â‡’ worker (Python, backend/worker.py) claims agent_jobs:
-      reasoning  â†’ analyze_incident (root cause)  â†’ plan_actions (recommended actions, guardrailed)
-  â†’ manager approves / edits / enacts actions on the Alerts page
+  ⇒ worker (Python, backend/worker.py) claims agent_jobs:
+      reasoning  → analyze_incident (root cause)  → plan_actions (recommended actions, guardrailed)
+  → manager approves / edits / enacts actions on the Alerts page
 ```
 
 Categories and event types live in `sitemate.event_categories` / `event_types` (seeded from `rules/event_taxonomy.json`;
@@ -219,21 +252,21 @@ longer needed or started, and can be deleted. The model is `CAPTURE_LLM_MODEL`, 
 
 Capture endpoints on FastAPI, port 8000 (bearer token of a `contributor`, `manager` or `approver` member):
 
-- `POST /projects/{pid}/captures` â€” multipart: `audio` (one file), `images` (up to 5, JPEG/PNG/WebP/GIF, 5 MB each),
+- `POST /projects/{pid}/captures` — multipart: `audio` (one file), `images` (up to 5, JPEG/PNG/WebP/GIF, 5 MB each),
   `transcript`, optional `recorded_at`. Returns `202 needs_category` with `thread_id` and one suggestion per event.
-- `POST /projects/{pid}/captures/{thread}/categories` â€” `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
+- `POST /projects/{pid}/captures/{thread}/categories` — `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
   Events you do not mention keep the AI's suggestion; `keep:false` means "not an event".
-- `POST /projects/{pid}/captures/{thread}/review` â€” `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
+- `POST /projects/{pid}/captures/{thread}/review` — `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
   Only the person who recorded the note may review it; `discard` deletes the capture and its files; facts are saved as `confirmed` by that person.
 - `GET /projects/{pid}/captures` (this member's saved notes) and `GET /projects/{pid}/captures/{source}/audio` (their recording, Range requests supported).
-- `POST /projects/{pid}/captures/{thread}/answers` â€” `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
+- `POST /projects/{pid}/captures/{thread}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
   The final `201 saved` response includes `incident_links` (new incident or which one it joined, report/reporter counts, severity).
-- `GET /projects/{pid}/event-categories` â€” categories with their types.
+- `GET /projects/{pid}/event-categories` — categories with their types.
 
 FastAPI (`main.py` + `ops.py`): `GET /incidents` (severity, status, report/reporter counts), `GET /incidents/{id}/events`,
 `PATCH /incidents/{id}`, `POST /incidents/{id}/merge`, `POST /incidents/{id}/events/{eid}/unlink`,
 `GET /alerts?status&kind`, `GET /alerts/{id}`, `POST /alerts/{id}/{ack|assign|dismiss|resolve|reopen}`,
-`GET /alerts/{id}/actions`, `POST /alerts/{id}/actions/{aid}/{approve|reject|complete}`, `PATCH â€¦/actions/{aid}`,
+`GET /alerts/{id}/actions`, `POST /alerts/{id}/actions/{aid}/{approve|reject|complete}`, `PATCH …/actions/{aid}`,
 `GET /capture-prompts`. Manager actions need a `manager` or `approver` token and `OPS_DATABASE_URL`.
 
 Notes: audio still needs `OPENAI_API_KEY` or `WHISPER_BASE_URL`; photos and audio are stored on local disk

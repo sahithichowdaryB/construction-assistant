@@ -147,7 +147,7 @@ function NoticeReview({ notice }: { notice: NoticeDraft }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 id="review-title" className="text-base font-semibold">
-            {noticeLabel(notice)} · {notice.activity_name ?? notice.activity_code}
+            {noticeLabel(notice)} · {notice.title ?? notice.activity_name ?? notice.activity_code}
           </h2>
           <p className="text-sm text-muted-foreground">
             Version {latest.version} of {notice.versions.length} · drafted {fmtDateTime(latest.as_of)}
@@ -272,7 +272,7 @@ export default function ApproverPage() {
                   n.id === selected.id && "border-foreground/40 ring-1 ring-foreground/20",
                 )}
               >
-                <span className="text-sm font-semibold">{n.activity_name ?? n.activity_code}</span>
+                <span className="line-clamp-2 text-sm font-semibold">{n.title ?? n.activity_name ?? n.activity_code}</span>
                 <span className="text-xs text-muted-foreground">
                   {noticeLabel(n)} · v{n.latest.version} · {fmtDateTime(n.latest.as_of)}
                 </span>

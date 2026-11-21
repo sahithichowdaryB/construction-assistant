@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, Siren, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,6 +25,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   site_manager: [
     { href: ROLE_HOME.site_manager, label: "Shortfalls & notices", Icon: Gauge },
+    { href: "/manager/write", label: "Write with SiteMate", Icon: PenLine },
     { href: "/capture", label: "Record a site note", Icon: Mic },
     { href: "/documents", label: "Documents", Icon: Files },
     { href: "/incidents", label: "Incident insights", Icon: Siren },
@@ -32,8 +33,15 @@ const NAV: Record<Role, NavItem[]> = {
   approver: [{ href: ROLE_HOME.approver, label: "Review queue", Icon: BadgeCheck }],
 };
 
-function isActive(pathname: string, href: string) {
+function matches(pathname: string, href: string) {
   return pathname === href || (href !== ROLE_HOME.foreman && pathname.startsWith(href + "/"));
+}
+
+/** Active when it is the most specific nav entry for the page (/manager/write beats /manager). */
+function isActive(pathname: string, href: string) {
+  if (!matches(pathname, href)) return false;
+  const all = Object.values(NAV).flat().map((i) => i.href);
+  return !all.some((other) => other !== href && other.startsWith(href + "/") && matches(pathname, other));
 }
 
 function Logo({ compact = false }: { compact?: boolean }) {

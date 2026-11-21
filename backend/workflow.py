@@ -31,6 +31,9 @@ from deps import check_cutoff, check_member, connection, require_roles
 router = APIRouter(prefix="/projects/{project_id}", tags=["workflow"])
 CUTOFF = "coalesce(CAST(:cutoff AS timestamptz), 'infinity')"
 NOTICE = "delay_notice"
+NOTICE_LABEL = {"delay_notice": "Delay notice", "incident_notice": "Site incident notice", "email": "Email",
+                "additional_cost": "Additional cost notice", "notice_of_concern": "Notice of concern",
+                "defect_notice": "Defect notice"}
 MISSING = re.compile(r"\[MISSING: ([^\]]+)\]")
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
                 "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
@@ -680,7 +683,8 @@ def incident_notice_preview(project_id: str, incident_id: str, as_of: datetime |
 def _draft_view(conn, project_id, draft_id, as_of):
     draft = conn.execute(text("""
         SELECT d.id, d.notice_type, d.alert_id, d.incident_id, coalesce(a.activity_code,i.activity_code) AS activity_code,
-               coalesce(i.title,act.name) AS activity_name
+               coalesce(i.title,act.name) AS activity_name,
+               d.request IS NOT NULL AS written_with_agent, d.submitted_at, d.analysis->>'subject' AS subject
         FROM sitemate.drafts d LEFT JOIN sitemate.alerts a ON (a.project_id, a.id) = (d.project_id, d.alert_id)
         LEFT JOIN sitemate.incidents i ON (i.project_id,i.id)=(d.project_id,d.incident_id)
         LEFT JOIN sitemate.activities act ON (act.project_id, act.code) = (a.project_id, a.activity_code)
@@ -710,9 +714,15 @@ def _draft_view(conn, project_id, draft_id, as_of):
                       "missing_fields": v["missing_fields"], "review": review})
     latest = items[-1]
     status = latest["review"]["decision"] if latest["review"] else "awaiting_review"
+    # Drafts written with SiteMate stay with the manager until they are sent for approval.
+    if draft["written_with_agent"] and draft["submitted_at"] is None:
+        status = "draft"
     return {"id": str(draft["id"]), "notice_type": draft["notice_type"], "alert_id": str(draft["alert_id"]) if draft["alert_id"] else None,
             "incident_id": str(draft["incident_id"]) if draft["incident_id"] else None,
             "activity_code": draft["activity_code"], "activity_name": draft["activity_name"],
+            "kind_label": NOTICE_LABEL.get(draft["notice_type"], draft["notice_type"].replace("_", " ").capitalize()),
+            "title": draft["subject"] or draft["activity_name"] or draft["activity_code"],
+            "written_with_agent": draft["written_with_agent"],
             "status": status, "latest": latest, "versions": items}
 
 
@@ -759,12 +769,15 @@ def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
         return _draft_view(conn, project_id, str(draft_id), None)
 
 
-@router.get("/drafts", dependencies=[Depends(require_roles("manager", "approver"))])
-def list_drafts(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+@router.get("/drafts")
+def list_drafts(project_id: str, as_of: datetime | None = None, member=Depends(require_roles("manager", "approver")),
+                conn=Depends(connection)):
     check_cutoff(as_of)
     ids = conn.execute(text("SELECT id FROM sitemate.drafts WHERE project_id = :p"), {"p": project_id}).scalars().all()
     views = [v for v in (_draft_view(conn, project_id, str(i), as_of) for i in ids) if v]
-    order = {"awaiting_review": 0, "changes_requested": 1, "approved": 2}
+    if member["role"] == "approver":  # drafts the manager has not sent yet are not in the review queue
+        views = [v for v in views if v["status"] != "draft"]
+    order = {"draft": 0, "awaiting_review": 1, "changes_requested": 2, "approved": 3}
     return sorted(views, key=lambda v: (order[v["status"]], -v["latest"]["as_of"].timestamp()))
 
 
@@ -784,17 +797,27 @@ def _uuid(value):
 
 
 @router.get("/drafts/{draft_id}/versions/{version}/export", dependencies=[Depends(require_roles("manager", "approver"))])
-def download_notice(project_id: str, draft_id: str, version: int, format: Literal["pdf", "docx"],
+def download_notice(project_id: str, draft_id: str, version: int, format: Literal["pdf", "docx", "eml"],
                     conn=Depends(connection)):
     row = conn.execute(text("""
-        SELECT v.body, r.decision FROM sitemate.draft_versions v
-        LEFT JOIN sitemate.reviews r USING (project_id, draft_id, version)
+        SELECT v.body, r.decision, r.decided_at, d.notice_type, p.sender FROM sitemate.draft_versions v
+        JOIN sitemate.drafts d ON (d.project_id, d.id) = (v.project_id, v.draft_id)
+        JOIN sitemate.projects p ON p.id = v.project_id
+        LEFT JOIN sitemate.reviews r ON (r.project_id, r.draft_id, r.version) = (v.project_id, v.draft_id, v.version)
         WHERE v.project_id=:p AND v.draft_id=CAST(:d AS uuid) AND v.version=:v
     """), {"p": project_id, "d": _uuid(draft_id), "v": version}).mappings().one_or_none()
     if row is None:
         raise HTTPException(404, "Notice version not found")
     if row["decision"] != "approved":
         raise HTTPException(409, "Approve this version before downloading it")
+    if format == "eml":
+        from correspondence import email_file
+
+        data = email_file(row["body"], row["sender"], row["decided_at"])
+        return Response(data, media_type="message/rfc822", headers={
+            "Content-Disposition": f'attachment; filename="email-{draft_id}-v{version}.eml"',
+            "Cache-Control": "private, no-store",
+        })
     if format == "pdf":
         data, mime = pdf_letter(row["body"]), "application/pdf"
     else:
@@ -854,6 +877,8 @@ def review_draft(project_id: str, draft_id: str, version: int, body: ReviewIn, a
         if view is None:
             raise HTTPException(404, "Notice not found")
         latest = view["latest"]
+        if view["status"] == "draft":
+            raise HTTPException(409, "The site manager has not sent this draft for approval yet")
         if version != latest["version"]:
             raise HTTPException(409, f"Version {version} is not the latest (v{latest['version']}). Reload the notice.")
         if latest["review"]:

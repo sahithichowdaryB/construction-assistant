@@ -51,7 +51,10 @@ export const draftSchema = z.object({
   incident_id: z.string().nullable().optional(),
   activity_code: z.string().nullable(),
   activity_name: z.string().nullable(),
-  status: z.enum(["awaiting_review", "changes_requested", "approved"]),
+  kind_label: z.string().optional(),
+  title: z.string().nullable().optional(),
+  written_with_agent: z.boolean().optional(),
+  status: z.enum(["draft", "awaiting_review", "changes_requested", "approved"]),
   latest: versionSchema,
   versions: z.array(versionSchema),
 });
@@ -74,7 +77,7 @@ const dayActivitySchema = z.object({
   equipment: z.array(z.object({ id: z.string(), description: z.string() })),
   notes: z.object({ total: z.number(), confirmed: z.number() }),
   alert_id: z.string().nullable(),
-  notice: z.object({ id: z.string(), status: z.enum(["awaiting_review", "changes_requested", "approved"]) }).nullable(),
+  notice: z.object({ id: z.string(), status: z.enum(["draft", "awaiting_review", "changes_requested", "approved"]) }).nullable(),
 });
 
 export const siteDaySchema = z.object({
@@ -116,7 +119,8 @@ const incidentPreviewSchema = z.object({
   body: z.string(), evidence_refs: z.array(refSchema), existing_id: z.string().nullable(), as_of: z.string(),
 });
 
-export const noticeLabel = (draft: NoticeDraft) => draft.notice_type === "incident_notice" ? "Site incident notice" : "Delay notice";
+export const noticeLabel = (draft: NoticeDraft) =>
+  draft.kind_label ?? (draft.notice_type === "incident_notice" ? "Site incident notice" : "Delay notice");
 
 export function useDayRecords(date: string) {
   const { base, projectId, asOf } = useBase();
@@ -264,12 +268,14 @@ export function useReviewNotice() {
 }
 
 export const STATUS_LABEL: Record<DraftStatus, string> = {
+  draft: "Draft (not sent)",
   awaiting_review: "Awaiting review",
   changes_requested: "Changes requested",
   approved: "Approved",
 };
 
 export const STATUS_TONE: Record<DraftStatus, string> = {
+  draft: "bg-muted text-foreground ring-border",
   awaiting_review: "bg-amber-50 text-amber-900 ring-amber-200",
   changes_requested: "bg-red-50 text-red-800 ring-red-200",
   approved: "bg-emerald-50 text-emerald-800 ring-emerald-200",

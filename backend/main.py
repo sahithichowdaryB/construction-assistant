@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from auth_routes import router as auth_router
 from database import engine_for
 from workflow import router as workflow_router
+from correspondence import router as correspondence_router
 from deps import check_cutoff, check_member, connection, current_member
 from documents import storage
 from documents.routes import mime_for, router as documents_router
@@ -28,6 +29,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http
 app.include_router(documents_router)
 app.include_router(auth_router)
 app.include_router(workflow_router)
+app.include_router(correspondence_router)
 
 
 def check_manager(member=Depends(current_member)):
