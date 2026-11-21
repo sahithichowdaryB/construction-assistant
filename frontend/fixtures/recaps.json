@@ -1,0 +1,1048 @@
+[
+ {
+  "work_date": "2026-11-08",
+  "available_at": "2026-11-09T06:00:00+01:00",
+  "mood": "on_plan",
+  "mood_label": "On plan",
+  "short_label": "Good day",
+  "cover": "excavation",
+  "inputs": {
+   "voice": 0,
+   "photo": 0,
+   "document": 1,
+   "report": 1
+  },
+  "cards": [
+   {
+    "id": "8-o",
+    "chapter": "overview",
+    "title": "A full day on plan",
+    "kicker": "Sunday 8 Nov",
+    "tone": "good",
+    "cover": "excavation",
+    "stats": [
+     {
+      "value": "100",
+      "unit": "/ 100 m³",
+      "label": "Zone B excavation",
+      "tone": "good"
+     },
+     {
+      "value": "4",
+      "unit": "/ 4",
+      "label": "Columns L1",
+      "tone": "good"
+     },
+     {
+      "value": "40",
+      "unit": "/ 40 m²",
+      "label": "Formwork L1",
+      "tone": "good"
+     }
+    ],
+    "strip": [
+     {
+      "from": "07:00",
+      "to": "17:00",
+      "state": "working"
+     }
+    ],
+    "strip_label": "Zone B",
+    "refs": [
+     {
+      "source_id": "R8",
+      "locator": "EXC-B",
+      "passage_id": "R8:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "R8",
+      "locator": "COL-L1",
+      "passage_id": "R8:COL-L1",
+      "page": 1
+     },
+     {
+      "source_id": "R8",
+      "locator": "FORM-L1",
+      "passage_id": "R8:FORM-L1",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "8-w",
+    "chapter": "wins",
+    "title": "Zone B hit its full 100 m³",
+    "kicker": "Excavation",
+    "tone": "good",
+    "cover": "excavation",
+    "stats": [
+     {
+      "value": "100",
+      "unit": "m³",
+      "label": "of 100 planned",
+      "tone": "good"
+     }
+    ],
+    "refs": [
+     {
+      "source_id": "R8",
+      "locator": "EXC-B",
+      "passage_id": "R8:EXC-B",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "8-p",
+    "chapter": "problems",
+    "title": "5 m³ of Foundations A moved to Monday",
+    "kicker": "Foundations Zone A",
+    "tone": "warn",
+    "cover": "concrete",
+    "stats": [
+     {
+      "value": "20",
+      "unit": "/ 25 m³",
+      "label": "Placed",
+      "tone": "warn"
+     }
+    ],
+    "quote": {
+     "text": "Supplier and foreman counted 5 m³ of today's booking for Monday.",
+     "who": "Daily report R8"
+    },
+    "refs": [
+     {
+      "source_id": "R8",
+      "locator": "FND-A",
+      "passage_id": "R8:FND-A",
+      "page": 1
+     },
+     {
+      "source_id": "R8",
+      "locator": "reconciliation",
+      "passage_id": "R8:reconciliation"
+     }
+    ]
+   },
+   {
+    "id": "8-d",
+    "chapter": "decisions",
+    "title": "Backup excavator plan still outstanding",
+    "kicker": "Minutes M08",
+    "tone": "warn",
+    "cover": "meeting",
+    "quote": {
+     "text": "The backup excavator plan requested yesterday remains outstanding.",
+     "who": "Plant and access briefing, 8 Nov"
+    },
+    "refs": [
+     {
+      "source_id": "M08",
+      "locator": "actions",
+      "passage_id": "M08:actions"
+     },
+     {
+      "source_id": "M07",
+      "locator": "actions",
+      "passage_id": "M07:actions"
+     }
+    ]
+   },
+   {
+    "id": "8-t",
+    "chapter": "today",
+    "title": "Carried into Monday",
+    "tone": "neutral",
+    "done": [
+     "Pick up the 5 m³ Foundations A balance",
+     "GroundWorks owes the backup excavator plan by 10 Nov 12:00"
+    ],
+    "refs": [
+     {
+      "source_id": "R8",
+      "locator": "reconciliation",
+      "passage_id": "R8:reconciliation"
+     },
+     {
+      "source_id": "M07",
+      "locator": "actions",
+      "passage_id": "M07:actions"
+     }
+    ],
+    "action": {
+     "label": "Open action items",
+     "href": "/actions"
+    }
+   }
+  ]
+ },
+ {
+  "work_date": "2026-11-09",
+  "available_at": "2026-11-10T06:00:00+01:00",
+  "mood": "minor",
+  "mood_label": "Minor issues",
+  "short_label": "8 m³ short",
+  "cover": "formwork",
+  "inputs": {
+   "voice": 0,
+   "photo": 0,
+   "document": 1,
+   "report": 1
+  },
+  "cards": [
+   {
+    "id": "9-o",
+    "chapter": "overview",
+    "title": "Zone B 8 m³ short, Zone A caught up",
+    "kicker": "Monday 9 Nov",
+    "tone": "warn",
+    "cover": "excavation",
+    "stats": [
+     {
+      "value": "92",
+      "unit": "/ 100 m³",
+      "label": "Zone B excavation",
+      "tone": "warn"
+     },
+     {
+      "value": "30",
+      "unit": "/ 25 m³",
+      "label": "Foundations A",
+      "tone": "good"
+     },
+     {
+      "value": "32",
+      "unit": "/ 40 m²",
+      "label": "Formwork L1",
+      "tone": "warn"
+     }
+    ],
+    "strip": [
+     {
+      "from": "07:00",
+      "to": "17:00",
+      "state": "working"
+     }
+    ],
+    "strip_label": "Zone B",
+    "refs": [
+     {
+      "source_id": "R9",
+      "locator": "EXC-B",
+      "passage_id": "R9:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "R9",
+      "locator": "FND-A",
+      "passage_id": "R9:FND-A",
+      "page": 1
+     },
+     {
+      "source_id": "R9",
+      "locator": "FORM-L1",
+      "passage_id": "R9:FORM-L1",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "9-w",
+    "chapter": "wins",
+    "title": "Foundations Zone A caught up",
+    "kicker": "Recovered yesterday's 5 m³",
+    "tone": "good",
+    "cover": "concrete",
+    "stats": [
+     {
+      "value": "30",
+      "unit": "m³",
+      "label": "of 25 planned",
+      "tone": "good"
+     }
+    ],
+    "refs": [
+     {
+      "source_id": "R9",
+      "locator": "FND-A",
+      "passage_id": "R9:FND-A",
+      "page": 1
+     },
+     {
+      "source_id": "R9",
+      "locator": "incidents",
+      "passage_id": "R9:incidents"
+     }
+    ]
+   },
+   {
+    "id": "9-p",
+    "chapter": "problems",
+    "title": "Formwork crew stopped early",
+    "kicker": "West wing",
+    "tone": "warn",
+    "cover": "formwork",
+    "stats": [
+     {
+      "value": "32",
+      "unit": "/ 40 m²",
+      "label": "Formwork L1",
+      "tone": "warn"
+     }
+    ],
+    "quote": {
+     "text": "West wing formwork crew stopped early to clear access for deliveries.",
+     "who": "Daily report R9"
+    },
+    "refs": [
+     {
+      "source_id": "R9",
+      "locator": "FORM-L1",
+      "passage_id": "R9:FORM-L1",
+      "page": 1
+     },
+     {
+      "source_id": "R9",
+      "locator": "incidents",
+      "passage_id": "R9:incidents"
+     }
+    ]
+   },
+   {
+    "id": "9-d",
+    "chapter": "decisions",
+    "title": "Client asks if the 12 Nov handover still stands",
+    "kicker": "Email E02",
+    "at": "2026-11-09T14:30:00+01:00",
+    "tone": "info",
+    "cover": "meeting",
+    "quote": {
+     "text": "Please confirm whether the planned handover to the foundations crew on 12 November still stands.",
+     "who": "Client · email E02"
+    },
+    "refs": [
+     {
+      "source_id": "E02",
+      "locator": "body",
+      "passage_id": "E02:body"
+     }
+    ]
+   },
+   {
+    "id": "9-t",
+    "chapter": "today",
+    "title": "Carried into Tuesday",
+    "tone": "neutral",
+    "done": [
+     "GroundWorks backup excavator plan due today at 12:00",
+     "Answer the client about the 12 Nov handover",
+     "Zone B has 8 m³ to recover"
+    ],
+    "refs": [
+     {
+      "source_id": "M07",
+      "locator": "actions",
+      "passage_id": "M07:actions"
+     },
+     {
+      "source_id": "E02",
+      "locator": "body",
+      "passage_id": "E02:body"
+     },
+     {
+      "source_id": "R9",
+      "locator": "EXC-B",
+      "passage_id": "R9:EXC-B",
+      "page": 1
+     }
+    ],
+    "action": {
+     "label": "Go to Home",
+     "href": "/today"
+    }
+   }
+  ]
+ },
+ {
+  "work_date": "2026-11-10",
+  "available_at": "2026-11-11T06:00:00+01:00",
+  "mood": "disrupted",
+  "mood_label": "Disrupted",
+  "short_label": "EX-02 stop",
+  "cover": "breakdown",
+  "inputs": {
+   "voice": 4,
+   "photo": 1,
+   "document": 1,
+   "report": 1
+  },
+  "cards": [
+   {
+    "id": "10-o",
+    "chapter": "overview",
+    "title": "EX-02 broke down and Zone B fell short",
+    "kicker": "Tuesday 10 Nov",
+    "tone": "bad",
+    "cover": "breakdown",
+    "stats": [
+     {
+      "value": "65",
+      "unit": "/ 100 m³",
+      "label": "Zone B excavation",
+      "tone": "bad"
+     },
+     {
+      "value": "3",
+      "label": "Workers stopped",
+      "tone": "bad"
+     },
+     {
+      "value": "40",
+      "unit": "/ 40 m³",
+      "label": "Ground slab",
+      "tone": "good"
+     }
+    ],
+    "strip": [
+     {
+      "from": "07:00",
+      "to": "10:00",
+      "state": "working"
+     },
+     {
+      "from": "10:00",
+      "to": "17:00",
+      "state": "stopped",
+      "label": "EX-02 down"
+     }
+    ],
+    "strip_label": "Zone B",
+    "refs": [
+     {
+      "source_id": "R10",
+      "locator": "EXC-B",
+      "passage_id": "R10:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "R10",
+      "locator": "incidents",
+      "passage_id": "R10:incidents"
+     },
+     {
+      "source_id": "R10",
+      "locator": "SLAB",
+      "passage_id": "R10:SLAB",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "10-w",
+    "chapter": "wins",
+    "title": "Ground slab poured in full",
+    "kicker": "Slab and formwork on plan",
+    "tone": "good",
+    "cover": "concrete",
+    "stats": [
+     {
+      "value": "40",
+      "unit": "/ 40 m³",
+      "label": "Ground slab",
+      "tone": "good"
+     },
+     {
+      "value": "48",
+      "unit": "/ 40 m²",
+      "label": "Formwork L1",
+      "tone": "good"
+     }
+    ],
+    "refs": [
+     {
+      "source_id": "R10",
+      "locator": "SLAB",
+      "passage_id": "R10:SLAB",
+      "page": 1
+     },
+     {
+      "source_id": "R10",
+      "locator": "FORM-L1",
+      "passage_id": "R10:FORM-L1",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "10-p1",
+    "chapter": "problems",
+    "title": "EX-02 hydraulic hose burst",
+    "kicker": "Zone B",
+    "at": "2026-11-10T10:00:00+01:00",
+    "tone": "bad",
+    "cover": "breakdown",
+    "stats": [
+     {
+      "value": "3",
+      "label": "Workers stopped",
+      "tone": "bad"
+     },
+     {
+      "value": "Noon",
+      "label": "Mechanic's forecast, 11 Nov",
+      "tone": "warn"
+     }
+    ],
+    "quote": {
+     "text": "The excavator broke down at ten. Hydraulic hose burst. Three workers can't continue digging in Zone B.",
+     "who": "Foreman · voice note V01"
+    },
+    "refs": [
+     {
+      "source_id": "V01",
+      "locator": "transcript",
+      "passage_id": "V01:transcript"
+     },
+     {
+      "source_id": "P1",
+      "locator": "image",
+      "passage_id": "P1:image"
+     },
+     {
+      "source_id": "V02",
+      "locator": "transcript",
+      "passage_id": "V02:transcript"
+     }
+    ],
+    "action": {
+     "label": "Open incident",
+     "href": "/incidents/INC-1"
+    }
+   },
+   {
+    "id": "10-p2",
+    "chapter": "problems",
+    "title": "Zone B tally corrected to 65 m³",
+    "kicker": "Figures checked",
+    "at": "2026-11-10T17:30:00+01:00",
+    "tone": "warn",
+    "cover": "excavation",
+    "stats": [
+     {
+      "value": "70",
+      "unit": "m³",
+      "label": "Diary estimate",
+      "tone": "warn"
+     },
+     {
+      "value": "65",
+      "unit": "m³",
+      "label": "Signed tally",
+      "tone": "neutral"
+     }
+    ],
+    "quote": {
+     "text": "The earlier 70 m³ diary estimate included an unconfirmed 5 m³ entry.",
+     "who": "Daily report R10"
+    },
+    "refs": [
+     {
+      "source_id": "D10",
+      "locator": "handover",
+      "passage_id": "D10:handover"
+     },
+     {
+      "source_id": "R10",
+      "locator": "reconciliation",
+      "passage_id": "R10:reconciliation"
+     }
+    ]
+   },
+   {
+    "id": "10-d1",
+    "chapter": "decisions",
+    "title": "Backup excavator plan was due at 12:00",
+    "kicker": "Agreed in M07 · GroundWorks",
+    "at": "2026-11-10T12:00:00+01:00",
+    "tone": "warn",
+    "cover": "meeting",
+    "quote": {
+     "text": "GroundWorks will provide Sam with a backup excavator plan by 10 November at 12:00.",
+     "who": "Minutes M07"
+    },
+    "refs": [
+     {
+      "source_id": "M07",
+      "locator": "actions",
+      "passage_id": "M07:actions"
+     },
+     {
+      "source_id": "M08",
+      "locator": "actions",
+      "passage_id": "M08:actions"
+     }
+    ],
+    "action": {
+     "label": "Open action items",
+     "href": "/actions"
+    }
+   },
+   {
+    "id": "10-d2",
+    "chapter": "decisions",
+    "title": "Notice drafted on the Zone B handover",
+    "kicker": "Ready for review",
+    "at": "2026-11-10T17:30:00+01:00",
+    "tone": "info",
+    "cover": "meeting",
+    "quote": {
+     "text": "Please confirm whether the planned handover to the foundations crew on 12 November still stands.",
+     "who": "Client · email E02 (9 Nov)"
+    },
+    "refs": [
+     {
+      "source_id": "E02",
+      "locator": "body",
+      "passage_id": "E02:body"
+     },
+     {
+      "source_id": "R10",
+      "locator": "reconciliation",
+      "passage_id": "R10:reconciliation"
+     }
+    ],
+    "action": {
+     "label": "Review the draft",
+     "href": "/drafts/DRF-1"
+    }
+   },
+   {
+    "id": "10-t",
+    "chapter": "today",
+    "title": "Carried into Wednesday",
+    "tone": "neutral",
+    "done": [
+     "Review the notice draft",
+     "Reply to the client on the 12 Nov handover",
+     "Chase GroundWorks for the backup excavator plan",
+     "EX-02 repair forecast: noon"
+    ],
+    "refs": [
+     {
+      "source_id": "R10",
+      "locator": "reconciliation",
+      "passage_id": "R10:reconciliation"
+     },
+     {
+      "source_id": "V02",
+      "locator": "transcript",
+      "passage_id": "V02:transcript"
+     }
+    ],
+    "action": {
+     "label": "Go to Home",
+     "href": "/today"
+    }
+   }
+  ]
+ },
+ {
+  "work_date": "2026-11-11",
+  "available_at": "2026-11-12T07:30:00+01:00",
+  "mood": "minor",
+  "mood_label": "Recovering",
+  "short_label": "EX-02 back",
+  "cover": "steel",
+  "inputs": {
+   "voice": 2,
+   "photo": 0,
+   "document": 1,
+   "report": 1
+  },
+  "cards": [
+   {
+    "id": "11-o",
+    "chapter": "overview",
+    "title": "EX-02 back at 11:30, Zone B at 80 m³",
+    "kicker": "Wednesday 11 Nov",
+    "tone": "warn",
+    "cover": "excavation",
+    "stats": [
+     {
+      "value": "80",
+      "unit": "/ 100 m³",
+      "label": "Zone B excavation",
+      "tone": "warn"
+     },
+     {
+      "value": "4",
+      "unit": "/ 5 t",
+      "label": "Rebar L1",
+      "tone": "warn"
+     }
+    ],
+    "strip": [
+     {
+      "from": "07:00",
+      "to": "11:30",
+      "state": "stopped",
+      "label": "Waiting for repair"
+     },
+     {
+      "from": "11:30",
+      "to": "17:00",
+      "state": "working"
+     }
+    ],
+    "strip_label": "Zone B",
+    "refs": [
+     {
+      "source_id": "R11",
+      "locator": "EXC-B",
+      "passage_id": "R11:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "R11",
+      "locator": "REBAR-L1",
+      "passage_id": "R11:REBAR-L1",
+      "page": 1
+     },
+     {
+      "source_id": "R11",
+      "locator": "incidents",
+      "passage_id": "R11:incidents"
+     }
+    ]
+   },
+   {
+    "id": "11-w",
+    "chapter": "wins",
+    "title": "EX-02 released, crew back digging",
+    "kicker": "Zone B",
+    "at": "2026-11-11T11:30:00+01:00",
+    "tone": "good",
+    "cover": "excavation",
+    "quote": {
+     "text": "The mechanic released EX-02 at eleven thirty. The crew is back digging in Zone B.",
+     "who": "Foreman · voice note V05"
+    },
+    "refs": [
+     {
+      "source_id": "V05",
+      "locator": "transcript",
+      "passage_id": "V05:transcript"
+     },
+     {
+      "source_id": "R11",
+      "locator": "incidents",
+      "passage_id": "R11:incidents"
+     }
+    ]
+   },
+   {
+    "id": "11-p1",
+    "chapter": "problems",
+    "title": "1 t of west wing rebar comes tomorrow",
+    "kicker": "SteelFix",
+    "tone": "warn",
+    "cover": "steel",
+    "stats": [
+     {
+      "value": "4",
+      "unit": "/ 5 t",
+      "label": "Delivered and fixed",
+      "tone": "warn"
+     }
+    ],
+    "quote": {
+     "text": "Four tonnes on the docket today. The remaining tonne is due tomorrow.",
+     "who": "Voice note V06"
+    },
+    "refs": [
+     {
+      "source_id": "V06",
+      "locator": "transcript",
+      "passage_id": "V06:transcript"
+     },
+     {
+      "source_id": "E03",
+      "locator": "body",
+      "passage_id": "E03:body"
+     },
+     {
+      "source_id": "R11",
+      "locator": "REBAR-L1",
+      "passage_id": "R11:REBAR-L1",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "11-p2",
+    "chapter": "problems",
+    "title": "Shift report came in late",
+    "kicker": "Daily report R11",
+    "tone": "warn",
+    "cover": "meeting",
+    "quote": {
+     "text": "EX-02 released at 11:30. GroundWorks recorded 80 m³ for the shift.",
+     "who": "Daily report R11 (received 12 Nov 07:15)"
+    },
+    "refs": [
+     {
+      "source_id": "R11",
+      "locator": "incidents",
+      "passage_id": "R11:incidents"
+     }
+    ]
+   },
+   {
+    "id": "11-t",
+    "chapter": "today",
+    "title": "Carried into Thursday",
+    "tone": "neutral",
+    "done": [
+     "Zone B: finish the last 20 m³",
+     "Hand Zone B to the foundations crew",
+     "Check the 1 t rebar balance arrives"
+    ],
+    "refs": [
+     {
+      "source_id": "R11",
+      "locator": "EXC-B",
+      "passage_id": "R11:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "E03",
+      "locator": "body",
+      "passage_id": "E03:body"
+     }
+    ],
+    "action": {
+     "label": "Go to Home",
+     "href": "/today"
+    }
+   }
+  ]
+ },
+ {
+  "work_date": "2026-11-12",
+  "available_at": "2026-11-13T06:00:00+01:00",
+  "mood": "minor",
+  "mood_label": "Minor issues",
+  "short_label": "Zone B done",
+  "cover": "concrete",
+  "inputs": {
+   "voice": 4,
+   "photo": 2,
+   "document": 1,
+   "report": 1
+  },
+  "cards": [
+   {
+    "id": "12-o",
+    "chapter": "overview",
+    "title": "Zone B finished, foundations started",
+    "kicker": "Thursday 12 Nov",
+    "tone": "good",
+    "cover": "concrete",
+    "stats": [
+     {
+      "value": "63",
+      "unit": "m³",
+      "label": "Zone B dug to finish",
+      "tone": "good"
+     },
+     {
+      "value": "20",
+      "unit": "/ 30 m³",
+      "label": "Foundations B",
+      "tone": "warn"
+     },
+     {
+      "value": "6",
+      "unit": "/ 5 t",
+      "label": "Rebar L1",
+      "tone": "good"
+     }
+    ],
+    "strip": [
+     {
+      "from": "07:00",
+      "to": "11:50",
+      "state": "working",
+      "label": "Excavation"
+     },
+     {
+      "from": "11:50",
+      "to": "17:00",
+      "state": "working",
+      "label": "Foundations"
+     }
+    ],
+    "strip_label": "Zone B",
+    "refs": [
+     {
+      "source_id": "R12",
+      "locator": "EXC-B",
+      "passage_id": "R12:EXC-B",
+      "page": 1
+     },
+     {
+      "source_id": "R12",
+      "locator": "FND-B",
+      "passage_id": "R12:FND-B",
+      "page": 1
+     },
+     {
+      "source_id": "R12",
+      "locator": "REBAR-L1",
+      "passage_id": "R12:REBAR-L1",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "12-w1",
+    "chapter": "wins",
+    "title": "Zone B excavation finished at 11:50",
+    "kicker": "Handover done",
+    "at": "2026-11-12T11:50:00+01:00",
+    "tone": "good",
+    "cover": "excavation",
+    "quote": {
+     "text": "Zone B excavation finished at eleven fifty. Foundations crew started after the handover.",
+     "who": "Voice note V09"
+    },
+    "refs": [
+     {
+      "source_id": "V09",
+      "locator": "transcript",
+      "passage_id": "V09:transcript"
+     },
+     {
+      "source_id": "R12",
+      "locator": "incidents",
+      "passage_id": "R12:incidents"
+     }
+    ]
+   },
+   {
+    "id": "12-w2",
+    "chapter": "wins",
+    "title": "First 20 m³ in Foundations Zone B",
+    "kicker": "Foundations",
+    "tone": "good",
+    "cover": "concrete",
+    "stats": [
+     {
+      "value": "20",
+      "unit": "/ 30 m³",
+      "label": "Placed",
+      "tone": "warn"
+     }
+    ],
+    "quote": {
+     "text": "We placed twenty cubic metres in Foundations Zone B today.",
+     "who": "Voice note V10"
+    },
+    "refs": [
+     {
+      "source_id": "V10",
+      "locator": "transcript",
+      "passage_id": "V10:transcript"
+     },
+     {
+      "source_id": "R12",
+      "locator": "FND-B",
+      "passage_id": "R12:FND-B",
+      "page": 1
+     }
+    ]
+   },
+   {
+    "id": "12-p1",
+    "chapter": "problems",
+    "title": "Crack at the Zone A slab edge",
+    "kicker": "Width not measured yet",
+    "at": "2026-11-12T09:00:00+01:00",
+    "tone": "bad",
+    "cover": "crack",
+    "quote": {
+     "text": "There is a crack at the edge of the Zone A slab. I haven't measured the width yet.",
+     "who": "Voice note V07"
+    },
+    "refs": [
+     {
+      "source_id": "V07",
+      "locator": "transcript",
+      "passage_id": "V07:transcript"
+     },
+     {
+      "source_id": "P2"
+     },
+     {
+      "source_id": "R12",
+      "locator": "reconciliation",
+      "passage_id": "R12:reconciliation"
+     }
+    ]
+   },
+   {
+    "id": "12-p2",
+    "chapter": "problems",
+    "title": "Concrete delivery late, docket missing",
+    "kicker": "Supplier",
+    "at": "2026-11-12T09:20:00+01:00",
+    "tone": "warn",
+    "cover": "rain",
+    "quote": {
+     "text": "Concrete delivery late. I haven't got the docket in front of me.",
+     "who": "Voice note V08"
+    },
+    "refs": [
+     {
+      "source_id": "V08",
+      "locator": "transcript",
+      "passage_id": "V08:transcript"
+     },
+     {
+      "source_id": "P3"
+     }
+    ]
+   },
+   {
+    "id": "12-t",
+    "chapter": "today",
+    "title": "Carried into Friday",
+    "tone": "neutral",
+    "done": [
+     "Get the Zone A crack measured and assessed",
+     "Find the late delivery docket",
+     "Foundations Zone B: 10 m³ to catch up"
+    ],
+    "refs": [
+     {
+      "source_id": "R12",
+      "locator": "reconciliation",
+      "passage_id": "R12:reconciliation"
+     },
+     {
+      "source_id": "R12",
+      "locator": "FND-B",
+      "passage_id": "R12:FND-B",
+      "page": 1
+     }
+    ],
+    "action": {
+     "label": "Go to Home",
+     "href": "/today"
+    }
+   }
+  ]
+ }
+]

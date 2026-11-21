@@ -38,6 +38,7 @@ import type {
   CapturePrompt,
   IncidentEventLink,
   AskAnswer,
+  DayRecap,
   Draft,
   DraftSummary,
   Export,
@@ -434,6 +435,12 @@ export async function confirmProposal(pid: string, sid: string, input: ConfirmIn
 export async function askSiteMate(pid: string, question: string, asOf: string): Promise<AskAnswer> {
   void pid;
   return fixture("ask", () => fx.fxAsk(question, asOf));
+}
+
+// ---------- recaps ----------
+export async function getRecaps(pid: string, asOf: string): Promise<DayRecap[]> {
+  void pid;
+  return fixture("recaps", () => fx.fxRecaps(asOf));
 }
 
 // ---------- drafts ----------

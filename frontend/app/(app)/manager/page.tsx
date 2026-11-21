@@ -8,6 +8,7 @@ import { DayNav } from "@/components/day-nav";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
 import { NoticeDownloads } from "@/components/notice-downloads";
+import { RecapStrip } from "@/components/recap/recap-strip";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Input } from "@/components/ui/input";
@@ -391,6 +392,7 @@ export default function ManagerPage() {
           />
         }
       />
+      {!inboxNotice && <RecapStrip />}
       {!inboxNotice && <section className="mb-5 rounded-2xl border bg-card p-4" aria-label="Site diary for selected day">
         <h2 className="mb-2 font-semibold">Site diary · {fmtLocalDate(date)}</h2>
         {records.isPending ? <LoadingSkeleton rows={2} /> : records.isError ? <ErrorState error={records.error} onRetry={() => void records.refetch()} />

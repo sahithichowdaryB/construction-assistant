@@ -52,6 +52,8 @@ export const ENDPOINTS = {
   alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: false },
   dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: false },
   drafts: { route: "GET /projects/{pid}/drafts?as_of", implemented: false },
+  // Daily recap stories: one per work day, generated next morning from every input of that day.
+  recaps: { route: "GET /projects/{pid}/recaps?as_of (available_at <= as_of)", implemented: false },
 } as const;
 
 export type EndpointKey = keyof typeof ENDPOINTS;

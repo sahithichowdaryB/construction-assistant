@@ -17,6 +17,7 @@ import passagesJson from "@/fixtures/passages.json";
 import progressJson from "@/fixtures/progress.json";
 import projectJson from "@/fixtures/project.json";
 import proposalsJson from "@/fixtures/proposals.json";
+import recapsJson from "@/fixtures/recaps.json";
 import sourcesJson from "@/fixtures/sources.json";
 import summariesJson from "@/fixtures/summaries.json";
 import { isAvailable, localDateOf } from "@/lib/time";
@@ -39,6 +40,7 @@ import type {
   ProgressObservation,
   Project,
   Proposal,
+  DayRecap,
   ReportReadings,
   Role,
   SearchResponse,
@@ -429,6 +431,14 @@ export function fxAsk(question: string, asOf: string): AskAnswer {
   return rule
     ? { question, answer: rule.answer, citations: rule.citations, as_of: asOf }
     : { question, answer: ask.fallback, citations: [], as_of: asOf };
+}
+
+// ---------- recaps ----------
+const recaps = recapsJson as DayRecap[];
+
+/** Recaps published by the as-of clock, newest work day first. */
+export function fxRecaps(asOf: string): DayRecap[] {
+  return recaps.filter((r) => isAvailable(r.available_at, asOf)).sort((a, b) => b.work_date.localeCompare(a.work_date));
 }
 
 // ---------- drafts ----------
