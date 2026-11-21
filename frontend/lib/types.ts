@@ -699,3 +699,53 @@ export interface CapturePrompt {
   incident_title: string | null;
   decided_at: IsoInstant | null;
 }
+
+// ---------- daily recaps (story format) ----------
+export type RecapMood = "on_plan" | "minor" | "disrupted" | "weather";
+export type RecapChapter = "overview" | "wins" | "problems" | "decisions" | "today";
+export type RecapTone = "good" | "warn" | "bad" | "info" | "neutral";
+export type RecapCover = "excavation" | "breakdown" | "steel" | "concrete" | "rain" | "formwork" | "meeting" | "crack";
+
+export interface RecapStat {
+  value: string;
+  unit?: string | null;
+  label: string;
+  tone?: RecapTone;
+}
+
+export interface RecapStripSegment {
+  from: string; // "07:00"
+  to: string;
+  state: "working" | "stopped" | "rain" | "idle";
+  label?: string | null;
+}
+
+export interface RecapCard {
+  id: string;
+  chapter: RecapChapter;
+  title: string;
+  kicker?: string | null;
+  at?: IsoInstant | null;
+  tone: RecapTone;
+  cover?: RecapCover | null;
+  stats?: RecapStat[];
+  quote?: { text: string; who: string } | null;
+  strip?: RecapStripSegment[] | null;
+  strip_label?: string | null;
+  done?: string[];
+  refs: EvidenceRef[];
+  action?: { label: string; href: string } | null;
+}
+
+export interface DayRecap {
+  work_date: string; // project-local YYYY-MM-DD
+  available_at: IsoInstant;
+  /** The current day, still in progress: rebuilt on every read ("Today so far"). */
+  live?: boolean;
+  mood: RecapMood;
+  mood_label: string;
+  short_label: string;
+  cover: RecapCover;
+  inputs: { voice: number; photo: number; document: number; report: number };
+  cards: RecapCard[];
+}

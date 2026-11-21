@@ -22,7 +22,7 @@ from database import writer_engine
 from deps import check_cutoff, check_member, connection, require_roles
 
 from . import baseline as bl
-from . import daily, overall
+from . import daily, overall, plans
 from .metrics import DISCLAIMER
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["performance"])
@@ -47,6 +47,56 @@ def _uuid(value: str) -> str:
     if not re.fullmatch(r"[0-9a-fA-F-]{36}", value or ""):
         raise HTTPException(404, "Not found")
     return value
+
+
+# ------------------------------------------------------------------ reference plans (mock_data PDFs)
+
+@router.get("/plans", dependencies=[Depends(check_member)])
+def list_plan_files(project_id: str):
+    return {"plans": plans.list_plans()}
+
+
+@router.post("/plans", status_code=201)
+def upload_plan(project_id: str, file: UploadFile = File(...), member=Depends(require_roles("manager"))):
+    """Add a PDF plan to the list. It is summarised the first time it is opened."""
+    if Path(file.filename or "").suffix.lower() != ".pdf":
+        raise HTTPException(422, "Plans must be PDF files")
+    data = file.file.read(MAX_UPLOAD + 1)
+    if not data.startswith(b"%PDF") or len(data) > MAX_UPLOAD:
+        raise HTTPException(422, "Not a PDF, or larger than 25 MB")
+    path = plans.save_upload(file.filename, data)
+    return next(p for p in plans.list_plans() if p["filename"] == path.name)
+
+
+@router.get("/plans/{plan_id}/page/{page}.png", dependencies=[Depends(check_member)])
+def plan_page(project_id: str, plan_id: str, page: int):
+    path = plans.find_plan(plan_id)
+    png = plans.render_page(path, page) if path else None
+    if png is None:
+        raise HTTPException(404, "Page not found")
+    return Response(png, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.get("/plans/{plan_id}/file", dependencies=[Depends(check_member)])
+def plan_file(project_id: str, plan_id: str):
+    path = plans.find_plan(plan_id)
+    if path is None:
+        raise HTTPException(404, "Plan not found")
+    return Response(path.read_bytes(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{path.name}"'})
+
+
+@router.get("/plans/{plan_id}/summary", dependencies=[Depends(check_member)])
+def plan_summary(project_id: str, plan_id: str, refresh: bool = False):
+    """Agent summary of one plan. Reads the PDF with the model the first time, then serves the cached copy."""
+    from documents.llm import ModelUnavailable
+    path = plans.find_plan(plan_id) if plan_id != "all" else None
+    if path is None and plan_id != "all":
+        raise HTTPException(404, "Plan not found")
+    try:
+        return plans.summarise_all(refresh=refresh) if plan_id == "all" else plans.summarise(path, refresh=refresh)
+    except (ModelUnavailable, ValueError) as exc:
+        raise HTTPException(503, f"The summary could not be written right now: {exc}") from None
 
 
 # ------------------------------------------------------------------ baselines

@@ -31,6 +31,7 @@ export const keys = {
   actionItems: (pid: string, asOf: string) => ["sm", pid, "action-items", asOf] as const,
   documentJob: (pid: string, id: string) => ["sm", pid, "document-job", id] as const,
   drafts: (pid: string, asOf: string) => ["sm", pid, "drafts", asOf] as const,
+  recaps: (pid: string, asOf: string) => ["sm", pid, "recaps", asOf] as const,
   draft: (pid: string, id: string, asOf: string) => ["sm", pid, "draft", id, asOf] as const,
   health: () => ["sm", "health"] as const,
   categories: (pid: string) => ["sm", pid, "event-categories"] as const,
@@ -252,6 +253,11 @@ export function useProposals(sid: string | null) {
 export function useDrafts() {
   const { projectId, asOf } = useApp();
   return useQuery({ queryKey: keys.drafts(projectId, asOf), queryFn: () => api.getDrafts(projectId, asOf) });
+}
+
+export function useRecaps() {
+  const { projectId, asOf } = useApp();
+  return useQuery({ queryKey: keys.recaps(projectId, asOf), queryFn: () => api.getRecaps(projectId, asOf) });
 }
 
 export function useDraft(id: string) {

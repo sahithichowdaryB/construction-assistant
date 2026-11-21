@@ -469,3 +469,38 @@ export const capturePromptsSchema = z.array(z.object({
 }));
 
 export const okSchema = z.object({}).passthrough();
+
+// ---------- daily recaps ----------
+const recapTone = z.enum(["good", "warn", "bad", "info", "neutral"]);
+const recapCover = z.enum(["excavation", "breakdown", "steel", "concrete", "rain", "formwork", "meeting", "crack"]);
+const recapCardSchema = z.object({
+  id: z.string(),
+  chapter: z.enum(["overview", "wins", "problems", "decisions", "today"]),
+  title: z.string(),
+  kicker: z.string().nullish(),
+  at: z.string().nullish(),
+  tone: recapTone,
+  cover: recapCover.nullish(),
+  stats: z.array(z.object({ value: z.string(), unit: z.string().nullish(), label: z.string(), tone: recapTone.optional() })).optional(),
+  quote: z.object({ text: z.string(), who: z.string() }).nullish(),
+  strip: z
+    .array(z.object({ from: z.string(), to: z.string(), state: z.enum(["working", "stopped", "rain", "idle"]), label: z.string().nullish() }))
+    .nullish(),
+  strip_label: z.string().nullish(),
+  done: z.array(z.string()).optional(),
+  refs: z.array(evidenceRef),
+  action: z.object({ label: z.string(), href: z.string() }).nullish(),
+});
+export const recapsSchema = z.array(
+  z.object({
+    work_date: z.string(),
+    available_at: z.string(),
+    live: z.boolean().optional(),
+    mood: z.enum(["on_plan", "minor", "disrupted", "weather"]),
+    mood_label: z.string(),
+    short_label: z.string(),
+    cover: recapCover,
+    inputs: z.object({ voice: z.number(), photo: z.number(), document: z.number(), report: z.number() }),
+    cards: z.array(recapCardSchema),
+  }),
+);

@@ -24,6 +24,7 @@ import {
   readingsSchema,
   searchSchema,
   sourceDetailSchema,
+  recapsSchema,
   sourcesSchema,
   storageSchema,
   summarySchema,
@@ -38,6 +39,7 @@ import type {
   CapturePrompt,
   IncidentEventLink,
   AskAnswer,
+  DayRecap,
   Draft,
   DraftSummary,
   Export,
@@ -434,6 +436,13 @@ export async function confirmProposal(pid: string, sid: string, input: ConfirmIn
 export async function askSiteMate(pid: string, question: string, asOf: string): Promise<AskAnswer> {
   void pid;
   return fixture("ask", () => fx.fxAsk(question, asOf));
+}
+
+// ---------- recaps ----------
+export async function getRecaps(pid: string, asOf: string): Promise<DayRecap[]> {
+  // There are no demo recaps: without the backend there are no action items to build them from.
+  if (servedFromFixtures("recaps")) return fixture("recaps", () => []);
+  return http(`${projectPath(pid)}/recaps${qs({ as_of: asOf })}`, recapsSchema) as Promise<DayRecap[]>;
 }
 
 // ---------- drafts ----------
