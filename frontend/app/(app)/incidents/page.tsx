@@ -11,7 +11,7 @@ import { TimelineStages } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { INCIDENT_TYPE_LABEL } from "@/lib/format";
 import { useCategoryLabel, useIncidents } from "@/lib/queries";
-import { fmtDateTime } from "@/lib/time";
+import { fmtDateTime, localDateOf } from "@/lib/time";
 import type { Incident } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,14 +30,22 @@ const matches = (i: Incident, f: Filter) => (f === "all" ? true : f === "resolve
 export default function IncidentsPage() {
   const { asOf } = useApp();
   const [filter, setFilter] = useState<Filter>("all");
-  const [upToAsOf, setUpToAsOf] = useState(false);
+  const [scope, setScope] = useState("all");
+  const upToAsOf = scope !== "all";
   const incidents = useIncidents({ upToAsOf });
   const categoryLabel = useCategoryLabel();
 
+  const day = localDateOf(asOf);
+  const visible = useMemo(() => {
+    const all = incidents.data ?? [];
+    if (scope !== "day") return all;
+    return all.filter((i) => [i.occurred_at, i.reported_at, ...i.timeline.map((e) => e.at)]
+      .some((instant) => instant && localDateOf(instant) === day));
+  }, [incidents.data, scope, day]);
   const counts = useMemo(() => {
-    const list = incidents.data ?? [];
+    const list = visible;
     return Object.fromEntries(FILTERS.map((f) => [f.value, list.filter((i) => matches(i, f.value)).length])) as Record<Filter, number>;
-  }, [incidents.data]);
+  }, [visible]);
 
   return (
     <>
@@ -60,8 +68,12 @@ export default function IncidentsPage() {
           ))}
         </div>
         <label className="flex min-h-11 items-center gap-2 text-sm md:ml-auto md:min-h-0">
-          <input type="checkbox" className="size-4" checked={upToAsOf} onChange={(e) => setUpToAsOf(e.target.checked)} />
-          Only show what was reported by the time I&apos;m viewing
+          Show
+          <select className="rounded-md border p-2" value={scope} onChange={(e) => setScope(e.target.value)}>
+            <option value="all">All dates</option>
+            <option value="day">Activity on {day}</option>
+            <option value="cutoff">Reported by the selected time</option>
+          </select>
         </label>
       </div>
 
@@ -72,18 +84,18 @@ export default function IncidentsPage() {
           <EmptyState
             icon={<Siren />}
             title={upToAsOf ? "Nothing reported by this time" : "No incidents reported"}
-            description={upToAsOf ? "Untick the time filter to see every incident." : "Incidents reported from Site notes appear here."}
+            description={upToAsOf ? "Choose All dates to see every incident." : "Incidents reported from Site notes appear here."}
           />
         }
       >
-        {(list) => {
-          const shown = list.filter((i) => matches(i, filter));
+        {() => {
+          const shown = visible.filter((i) => matches(i, filter));
           if (!shown.length)
             return (
               <EmptyState
-                title={filter === "open" ? "No open incidents" : "No resolved incidents"}
+                title={scope === "day" ? "No matching incidents on this day" : filter === "open" ? "No open incidents" : "No resolved incidents"}
                 action={
-                  <Button variant="outline" size="touch" onClick={() => setFilter("all")}>
+                  <Button variant="outline" size="touch" onClick={() => { setFilter("all"); setScope("all"); }}>
                     Show all incidents
                   </Button>
                 }

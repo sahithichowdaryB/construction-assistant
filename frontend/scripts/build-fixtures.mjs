@@ -24,7 +24,7 @@ function csv(name) {
 }
 
 const write = (name, data) => writeFileSync(join(out, name), JSON.stringify(data, null, 2) + "\n");
-const offset = "+01:00"; // Vienna is on CET for the whole demo window
+const offset = "+01:00"; // Munich is on CET for the whole demo window
 
 // ---------- project ----------
 const split = (s) => {

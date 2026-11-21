@@ -191,6 +191,7 @@ export interface RecordingIncident {
 }
 
 export interface SavedRecording {
+  photos?: { id: string; description: string | null }[];
   id: string;
   recorded_at: string;
   has_audio: boolean;

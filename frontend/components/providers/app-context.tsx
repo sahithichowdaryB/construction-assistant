@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DEFAULT_AS_OF, toIsoWithOffset } from "@/lib/time";
+import { AUTH_REQUIRED } from "@/lib/session";
 import { PROJECT_ID } from "@/lib/endpoints";
 import type { EvidenceRef, Role } from "@/lib/types";
 
@@ -21,11 +22,13 @@ interface AppContextValue {
   /** ISO instant with UTC offset; every query is scoped to it */
   asOf: string;
   setAsOf: (iso: string) => void;
+  goLive: () => void;
   role: Role;
   setRole: (role: Role) => void;
   /** Evidence sheet opened by CitationChip */
   evidence: EvidenceRef | null;
-  openEvidence: (ref: EvidenceRef) => void;
+  evidenceAsOf: string | null;
+  openEvidence: (ref: EvidenceRef, asOf?: string) => void;
   closeEvidence: () => void;
   askOpen: boolean;
   setAskOpen: (open: boolean) => void;
@@ -34,9 +37,20 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppContextProvider({ children }: { children: ReactNode }) {
-  const [asOf, setAsOf] = useState(DEFAULT_AS_OF);
+  const [asOf, setClock] = useState(DEFAULT_AS_OF);
+  const [live, setLive] = useState(false);
+  const setAsOf = useCallback((iso: string) => { setLive(false); setClock(iso); }, []);
+  const goLive = useCallback(() => { setClock(toIsoWithOffset(new Date())); setLive(true); }, []);
+  useEffect(() => {
+    if (!live) return;
+    const tick = () => setClock(toIsoWithOffset(new Date()));
+    const timer = window.setInterval(tick, 60_000);
+    window.addEventListener("focus", tick);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", tick); };
+  }, [live]);
   const [role, setRoleState] = useState<Role>("site_manager");
   const [evidence, setEvidence] = useState<EvidenceRef | null>(null);
+  const [evidenceAsOf, setEvidenceAsOf] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
 
   // Read the stored role after mount so server and client render the same first frame.
@@ -49,8 +63,10 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     const asOfParam = params.get("as_of");
     if (asOfParam && /[+-]\d{2}:\d{2}$|Z$/.test(asOfParam) && !Number.isNaN(Date.parse(asOfParam))) {
       setAsOf(toIsoWithOffset(new Date(asOfParam)));
+    } else if (AUTH_REQUIRED) {
+      goLive();
     }
-  }, []);
+  }, [goLive, setAsOf]);
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
@@ -66,15 +82,17 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       projectId: PROJECT_ID,
       asOf,
       setAsOf,
+      goLive,
       role,
       setRole,
       evidence,
-      openEvidence: setEvidence,
+      evidenceAsOf,
+      openEvidence: (ref, at) => { setEvidence(ref); setEvidenceAsOf(at ?? null); },
       closeEvidence: () => setEvidence(null),
       askOpen,
       setAskOpen,
     }),
-    [asOf, role, setRole, evidence, askOpen],
+    [asOf, setAsOf, goLive, role, setRole, evidence, evidenceAsOf, askOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -84,4 +102,10 @@ export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp must be used inside AppContextProvider");
   return ctx;
+}
+
+/** Resolve a saved notice's citations at the instant used to prepare that version. */
+export function EvidenceAt({ at, children }: { at: string; children: ReactNode }) {
+  const app = useApp();
+  return <AppContext.Provider value={{ ...app, asOf: at, openEvidence: (ref) => app.openEvidence(ref, at) }}>{children}</AppContext.Provider>;
 }

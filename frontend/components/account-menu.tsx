@@ -34,7 +34,8 @@ export function useIdentity() {
   return {
     name: membership?.display_name ?? session.data?.user.name ?? ROLE_PERSON[role],
     email: session.data?.user.email ?? null,
-    roleLabel: ROLE_LABEL[role],
+    memberRole: roleOf(membership),
+    roleLabel: ROLE_LABEL[roleOf(membership) ?? role],
     signedIn: !!session.data,
   };
 }

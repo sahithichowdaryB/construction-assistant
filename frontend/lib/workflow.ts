@@ -47,7 +47,8 @@ const versionSchema = z.object({
 export const draftSchema = z.object({
   id: z.string(),
   notice_type: z.string(),
-  alert_id: z.string(),
+  alert_id: z.string().nullable(),
+  incident_id: z.string().nullable().optional(),
   activity_code: z.string().nullable(),
   activity_name: z.string().nullable(),
   status: z.enum(["awaiting_review", "changes_requested", "approved"]),
@@ -108,6 +109,31 @@ export type FieldNote = z.infer<typeof fieldNoteSchema>;
 export type NoticeDraft = z.infer<typeof draftSchema>;
 export type DraftStatus = NoticeDraft["status"];
 
+const dayRecordsSchema = z.array(z.object({
+  id: z.string(), title: z.string(), kind: z.string(), at: z.string(), source_id: z.string(), incident_id: z.string().nullable(),
+}));
+const incidentPreviewSchema = z.object({
+  body: z.string(), evidence_refs: z.array(refSchema), existing_id: z.string().nullable(), as_of: z.string(),
+});
+
+export const noticeLabel = (draft: NoticeDraft) => draft.notice_type === "incident_notice" ? "Site incident notice" : "Delay notice";
+
+export function useDayRecords(date: string) {
+  const { base, projectId, asOf } = useBase();
+  return useQuery({
+    queryKey: ["sm", projectId, "day-records", date, asOf],
+    queryFn: () => call(`${base}/day-records?date=${date}&as_of=${encodeURIComponent(asOf)}`, dayRecordsSchema),
+  });
+}
+
+export function useIncidentPreview(id: string, at: string | null) {
+  const { base, projectId } = useBase();
+  return useQuery({
+    queryKey: ["sm", projectId, "incident-notice-preview", id, at], enabled: !!at,
+    queryFn: () => call(`${base}/incidents/${encodeURIComponent(id)}/notice-preview?as_of=${encodeURIComponent(at!)}`, incidentPreviewSchema),
+  });
+}
+
 async function call<S extends z.ZodTypeAny>(path: string, schema: S, init?: RequestInit): Promise<z.infer<S>> {
   let res: Response;
   try {
@@ -145,7 +171,6 @@ export function useSiteDay(date: string | null) {
     queryKey: ["sm", projectId, "site-day", date, asOf],
     queryFn: () =>
       call(`${base}/site-day?as_of=${encodeURIComponent(asOf)}${date ? `&date=${date}` : ""}`, siteDaySchema),
-    placeholderData: (prev) => prev,
   });
 }
 
@@ -162,11 +187,13 @@ export function useRelated(code: string | null, date: string | null) {
 
 // ---------- foreman
 
-export function useFieldNotes() {
+export function useFieldNotes(mine = false) {
   const { base, q, asOf, projectId } = useBase();
   return useQuery({
-    queryKey: ["sm", projectId, "field-notes", asOf],
-    queryFn: () => call(`${base}/field-notes${q}`, z.array(fieldNoteSchema)),
+    queryKey: ["sm", projectId, "field-notes", mine ? "mine" : asOf],
+    refetchInterval: mine ? 15_000 : false,
+    refetchOnMount: mine ? "always" : true,
+    queryFn: () => call(`${base}/field-notes${mine ? "?mine=true" : q}`, z.array(fieldNoteSchema)),
   });
 }
 
@@ -193,10 +220,12 @@ export function useConfirmNote() {
 // ---------- notices
 
 export function useNotices() {
-  const { base, q, asOf, projectId } = useBase();
+  const { base, projectId } = useBase();
   return useQuery({
-    queryKey: ["sm", projectId, "notices", asOf],
-    queryFn: () => call(`${base}/drafts${q}`, z.array(draftSchema)),
+    queryKey: ["sm", projectId, "notices", "latest"],
+    queryFn: () => call(`${base}/drafts`, z.array(draftSchema)),
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -205,6 +234,9 @@ function useNoticeMutation<T>(fn: (base: string, q: string, input: T) => Promise
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: T) => fn(base, q, input),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) return qc.invalidateQueries({ queryKey: ["sm", projectId, "notices"] });
+    },
     // Notices change the day view (notice status) and alerts (a shortfall may be recorded as one).
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sm", projectId] }),
   });
@@ -212,27 +244,27 @@ function useNoticeMutation<T>(fn: (base: string, q: string, input: T) => Promise
 
 export function useDraftNotice() {
   return useNoticeMutation(
-    (base, q, input: { alert_id?: string | null; activity_code?: string; work_date?: string }) =>
-      call(`${base}/drafts${q}`, draftSchema, json(input)),
+    (base, q, { previewAt, ...input }: { incident_id?: string; previewAt?: string; alert_id?: string | null; activity_code?: string; work_date?: string }) =>
+      call(`${base}/drafts${previewAt ? "?as_of=" + encodeURIComponent(previewAt) : q}`, draftSchema, json(input)),
   );
 }
 
 export function useReviseNotice() {
   return useNoticeMutation(
-    (base, q, input: { draftId: string; contract_reference?: string; contract_clause?: string }) =>
-      call(`${base}/drafts/${input.draftId}/versions${q}`, draftSchema, json(input)),
+    (base, _q, input: { draftId: string; expected_version: number; contract_reference?: string; contract_clause?: string; body?: string }) =>
+      call(`${base}/drafts/${input.draftId}/versions`, draftSchema, json(input)),
   );
 }
 
 export function useReviewNotice() {
   return useNoticeMutation(
-    (base, q, input: { draftId: string; version: number; decision: "approved" | "changes_requested"; reason?: string }) =>
-      call(`${base}/drafts/${input.draftId}/versions/${input.version}/review${q}`, draftSchema, json(input)),
+    (base, _q, input: { draftId: string; version: number; decision: "approved" | "changes_requested"; reason?: string }) =>
+      call(`${base}/drafts/${input.draftId}/versions/${input.version}/review`, draftSchema, json(input)),
   );
 }
 
 export const STATUS_LABEL: Record<DraftStatus, string> = {
-  awaiting_review: "Awaiting approval",
+  awaiting_review: "Awaiting review",
   changes_requested: "Changes requested",
   approved: "Approved",
 };

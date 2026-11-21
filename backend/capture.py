@@ -5,8 +5,6 @@ insert rights the read-only API role deliberately lacks."""
 
 from functools import lru_cache
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -147,22 +145,44 @@ AUDIO_TYPES = {".webm": "audio/webm", ".m4a": "audio/mp4", ".mp4": "audio/mp4", 
 # A member sees their own saved notes. Older voice notes saved before authorship was recorded (author is null) stay visible.
 VISIBLE = """((c.id IS NOT NULL AND c.status = 'saved' AND s.author = :me)
               OR (c.id IS NULL AND s.kind = 'voice_note' AND (s.author = :me OR s.author IS NULL)))"""
+AUDIO_JOIN = """LEFT JOIN LATERAL (
+    SELECT storage_key, mime FROM sitemate.capture_attachments
+    WHERE project_id = s.project_id AND source_id = s.id AND kind = 'audio'
+    ORDER BY storage_key LIMIT 1
+) audio ON TRUE"""
+AUDIO_KEY = """COALESCE(audio.storage_key, CASE WHEN c.id IS NULL AND s.kind = 'voice_note'
+               THEN NULLIF(s.path, 'inline:transcript') END)"""
+
+
+def recording_file(storage, key):
+    if not key:
+        return None
+    try:
+        file = storage.path(key)
+        return file if file.is_file() else None
+    except (ValueError, OSError):
+        return None
 
 
 @router.get("/projects/{project_id}/captures")
 def list_recordings(project_id: str, member=Depends(current_member), conn=Depends(connection)):
     """This member's saved notes, newest first: transcript, answers, facts and the incidents they raised."""
     rows = [dict(r) for r in conn.execute(text(f"""
-        SELECT s.id, s.path, s.available_at, s.author, s.author_role,
-               EXISTS (SELECT 1 FROM sitemate.capture_attachments a
-                       WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio')
-                 OR (c.id IS NULL AND s.path <> 'inline:transcript') AS has_audio
+        SELECT s.id, s.available_at, s.author, s.author_role, {AUDIO_KEY} AS audio_key
         FROM sitemate.sources s LEFT JOIN sitemate.captures c ON (c.project_id, c.source_id) = (s.project_id, s.id)
+        {AUDIO_JOIN}
         WHERE s.project_id = :p AND {VISIBLE} ORDER BY s.available_at DESC LIMIT 50"""),
                             {"p": project_id, "me": member["member_id"]}).mappings()]
     if not rows:
         return {"recordings": []}
     ids = [r["id"] for r in rows]
+    photos = conn.execute(text("""
+        SELECT a.source_id, a.id::text AS id, sp.excerpt AS description
+        FROM sitemate.capture_attachments a
+        LEFT JOIN sitemate.source_passages sp ON (sp.project_id, sp.source_id, sp.locator) =
+            (a.project_id, a.source_id, a.passage_locator)
+        WHERE a.project_id = :p AND a.source_id = ANY(CAST(:ids AS text[])) AND a.kind = 'image'
+        ORDER BY a.source_id, a.passage_locator, a.id"""), {"p": project_id, "ids": ids}).mappings().all()
     passages = [dict(r) for r in conn.execute(text("""
         SELECT source_id, locator, excerpt FROM sitemate.source_passages
         WHERE project_id = :p AND source_id = ANY(CAST(:ids AS text[]))
@@ -186,12 +206,15 @@ def list_recordings(project_id: str, member=Depends(current_member), conn=Depend
         FROM sitemate.incidents WHERE project_id = :p AND id = ANY(CAST(:ids AS uuid[]))"""),
                                                 {"p": project_id, "ids": incident_ids}).mappings())} if incident_ids else {}
     out = []
+    storage = audio_storage()
     for r in rows:
         own = [x for x in passages if x["source_id"] == r["id"]]
         mine = [f for f in facts if f["source_id"] == r["id"]]
         out.append({
-            "id": r["id"], "recorded_at": r["available_at"], "has_audio": bool(r["has_audio"]), "author": r["author"],
+            "id": r["id"], "recorded_at": r["available_at"], "has_audio": recording_file(storage, r["audio_key"]) is not None,
+            "author": r["author"],
             "author_role": r["author_role"],
+            "photos": [{"id": p["id"], "description": p["description"]} for p in photos if p["source_id"] == r["id"]],
             "transcript": next((x["excerpt"] for x in own if x["locator"] == "transcript"), None),
             "answers": [x["excerpt"] for x in own if x["locator"].startswith("answer:")],
             "facts": [{"field_name": f["field_name"], "value": f["value"], "basis": f["basis"], "review_status": f["review_status"],
@@ -207,21 +230,13 @@ def list_recordings(project_id: str, member=Depends(current_member), conn=Depend
 def recording_audio(project_id: str, source_id: str, member=Depends(current_member), conn=Depends(connection)):
     """The stored recording of one of this member's notes. FileResponse serves Range requests, so seeking works."""
     row = conn.execute(text(f"""
-        SELECT s.path, s.kind, (SELECT a.storage_key FROM sitemate.capture_attachments a
-                                WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio' LIMIT 1) AS key,
-               (SELECT a.mime FROM sitemate.capture_attachments a
-                WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio' LIMIT 1) AS mime
+        SELECT {AUDIO_KEY} AS key, audio.mime
         FROM sitemate.sources s LEFT JOIN sitemate.captures c ON (c.project_id, c.source_id) = (s.project_id, s.id)
+        {AUDIO_JOIN}
         WHERE s.project_id = :p AND s.id = :s AND {VISIBLE}"""),
                        {"p": project_id, "s": source_id, "me": member["member_id"]}).mappings().one_or_none()
-    key = row and (row["key"] or (row["path"] if row["kind"] == "voice_note" and row["path"] != "inline:transcript" else None))
-    if not key:
+    file = recording_file(audio_storage(), row["key"] if row else None)
+    if file is None:
         raise HTTPException(404, "No recording for this note")
-    try:
-        file = audio_storage().path(key)
-    except ValueError:
-        raise HTTPException(404, "No recording for this note") from None
-    if not file.is_file():
-        raise HTTPException(404, "Recording file is missing")
-    return FileResponse(file, media_type=(row["mime"] or AUDIO_TYPES.get(Path(key).suffix.lower()) or "application/octet-stream"),
+    return FileResponse(file, media_type=(row["mime"] or AUDIO_TYPES.get(file.suffix.lower()) or "application/octet-stream"),
                         headers={"Cache-Control": "private, max-age=300"})

@@ -15,14 +15,17 @@ Every read is filtered by as_of (the replay clock); writes are stamped with it.
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import date as calendar_date, datetime, time, timedelta, timezone
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import writer_engine
+from documents.notice_export import pdf_letter, word_letter
 from deps import check_cutoff, check_member, connection, require_roles
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["workflow"])
@@ -160,7 +163,7 @@ def _note_view(conn, project_id, source):
         FROM sitemate.capture_facts WHERE project_id = :p AND source_id = :s ORDER BY field_name
     """), {"p": project_id, "s": source["id"]}).mappings().all()
     meta = source["meta"] or {}
-    tz = ZoneInfo(meta.get("timezone") or "Europe/Vienna")
+    tz = ZoneInfo(meta.get("timezone") or "Europe/Berlin")
     out = []
     for f in facts:
         value = f["value"]
@@ -272,11 +275,13 @@ def record_note(project_id: str, body: NoteIn, as_of: datetime | None = None,
         return _note_view(conn, project_id, row)
 
 
-@router.get("/field-notes", dependencies=[Depends(check_member)])
-def list_notes(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+@router.get("/field-notes")
+def list_notes(project_id: str, as_of: datetime | None = None, mine: bool = False,
+               member=Depends(check_member), conn=Depends(connection)):
     check_cutoff(as_of)
-    rows = conn.execute(text(NOTE_SELECT + f" AND s.available_at <= {CUTOFF} ORDER BY s.available_at DESC LIMIT 50"),
-                        {"p": project_id, "cutoff": as_of}).mappings().all()
+    owner_filter = " AND s.meta->>'recorded_by' = :member" if mine or member["role"] == "contributor" else ""
+    rows = conn.execute(text(NOTE_SELECT + owner_filter + f" AND s.available_at <= {CUTOFF} ORDER BY s.available_at DESC LIMIT 50"),
+                        {"p": project_id, "cutoff": as_of, "member": member["member_id"]}).mappings().all()
     return [_note_view(conn, project_id, r) for r in rows]
 
 
@@ -431,6 +436,7 @@ def related_records(project_id: str, activity_code: str, date: str, as_of: datet
 # ------------------------------------------------------------------ site manager: delay notice
 
 class DraftIn(BaseModel):
+    incident_id: str | None = None
     # Either an existing alert, or an activity and day whose shortfall is checked (and recorded as an alert).
     alert_id: str | None = None
     activity_code: str | None = Field(None, max_length=40)
@@ -477,7 +483,13 @@ def _ensure_alert(conn, project_id, code, day, as_of):
     return str(alert_id)
 
 
+def _lock_notice(conn, notice_key):
+    """Serialize decisions and edits without granting UPDATE on immutable records."""
+    conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": str(notice_key)})
+
+
 class RevisionIn(BaseModel):
+    expected_version: int | None = Field(None, ge=1)
     contract_reference: str | None = Field(None, max_length=200)
     contract_clause: str | None = Field(None, max_length=200)
     body: str | None = Field(None, max_length=20000)
@@ -590,10 +602,87 @@ def _missing(body):
     return sorted(set(MISSING.findall(body)))
 
 
+@router.get("/day-records", dependencies=[Depends(require_roles("manager"))])
+def day_records(project_id: str, date: calendar_date, as_of: datetime | None = None, conn=Depends(connection)):
+    check_cutoff(as_of)
+    tz = ZoneInfo(_project(conn, project_id)["timezone"])
+    start = datetime.combine(date, time.min, tz)
+    return conn.execute(text(f"""
+        SELECT e.id::text AS id, e.summary AS title, e.event_type AS kind,
+               CASE WHEN e.occurred_at >= :start AND e.occurred_at < :end AND e.occurred_at <= {CUTOFF} THEN e.occurred_at
+                    ELSE e.recorded_at END AS at, e.source_id, ie.incident_id::text AS incident_id
+        FROM sitemate.events e
+        JOIN sitemate.captures c ON (c.project_id,c.id)=(e.project_id,e.capture_id) AND c.status='saved'
+        LEFT JOIN sitemate.incident_events ie ON (ie.project_id,ie.event_id)=(e.project_id,e.id)
+            AND ie.linked_at <= {CUTOFF} AND (ie.unlinked_at IS NULL OR ie.unlinked_at > {CUTOFF})
+        WHERE e.project_id=:p AND e.recorded_at <= {CUTOFF} AND (
+            (e.occurred_at >= :start AND e.occurred_at < :end AND e.occurred_at <= {CUTOFF})
+            OR (e.recorded_at >= :start AND e.recorded_at < :end))
+        UNION ALL
+        SELECT s.id, coalesce(sp.excerpt,s.title,s.id), s.kind, s.available_at, s.id, NULL
+        FROM sitemate.sources s
+        LEFT JOIN sitemate.source_passages sp ON (sp.project_id,sp.source_id,sp.locator)=(s.project_id,s.id,'transcript')
+        WHERE s.project_id=:p AND s.available_at >= :start AND s.available_at < :end AND s.available_at <= {CUTOFF}
+          AND NOT EXISTS (SELECT 1 FROM sitemate.captures c WHERE (c.project_id,c.source_id)=(s.project_id,s.id))
+        ORDER BY at DESC, id"""), {"p": project_id, "start": start, "end": start + timedelta(days=1), "cutoff": as_of}).mappings().all()
+
+
+@router.get("/incidents/{incident_id}/notice-preview", dependencies=[Depends(require_roles("manager"))])
+def incident_notice_preview(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    when = stamp(as_of)
+    params = {"p": project_id, "i": _uuid(incident_id), "at": when}
+    incident = conn.execute(text("""
+        SELECT i.title, i.occurred_at, p.name AS project, p.timezone,
+               (SELECT d.id::text FROM sitemate.drafts d WHERE d.project_id=i.project_id AND d.incident_id=i.id
+                AND d.notice_type='incident_notice' LIMIT 1) AS existing_id
+        FROM sitemate.incidents i JOIN sitemate.projects p ON p.id=i.project_id
+        WHERE i.project_id=:p AND i.id=CAST(:i AS uuid) AND i.occurred_at <= :at"""), params).mappings().one_or_none()
+    if not incident:
+        raise HTTPException(404, "This incident is unavailable at the selected time.")
+    events = conn.execute(text("""
+        SELECT e.summary, e.source_id, e.locator, e.occurred_at,
+               ARRAY(SELECT sp.locator FROM sitemate.source_passages sp
+                     WHERE (sp.project_id,sp.source_id)=(e.project_id,e.source_id)
+                       AND sp.locator LIKE 'image:%' ORDER BY sp.locator) AS photo_locators
+        FROM sitemate.incident_events ie JOIN sitemate.events e ON (e.project_id,e.id)=(ie.project_id,ie.event_id)
+        WHERE ie.project_id=:p AND ie.incident_id=CAST(:i AS uuid) AND ie.linked_at <= :at
+          AND (ie.unlinked_at IS NULL OR ie.unlinked_at > :at) AND e.recorded_at <= :at
+        ORDER BY e.recorded_at, e.event_index"""), params).mappings().all()
+    facts = conn.execute(text("""
+        SELECT cf.field_name, cf.value, fe.source_id, fe.locator
+        FROM sitemate.capture_facts cf JOIN sitemate.fact_evidence fe ON (fe.project_id,fe.fact_id)=(cf.project_id,cf.id)
+        JOIN sitemate.sources s ON (s.project_id,s.id)=(fe.project_id,fe.source_id)
+        WHERE cf.project_id=:p AND cf.incident_id=CAST(:i AS uuid) AND cf.review_status='confirmed'
+          AND cf.effective_at<=:at AND s.available_at<=:at
+          AND NOT EXISTS (SELECT 1 FROM sitemate.capture_facts newer WHERE newer.project_id=cf.project_id
+                          AND newer.supersedes_id=cf.id AND newer.effective_at<=:at)
+        ORDER BY cf.field_name, fe.source_id, fe.locator"""), params).mappings().all()
+    if not events and not facts:
+        raise HTTPException(422, "No supporting report is available for this incident at the selected time.")
+    tz = ZoneInfo(incident["timezone"])
+    lines = [f"Site incident notice · {incident['project']}", f"Subject: {incident['title']}",
+             f"Recorded incident time: {incident['occurred_at'].astimezone(tz):%d %b %Y, %H:%M %Z}"]
+    sources = []
+    for event in events:
+        # Older multi-photo reports assigned image:1 to every event. Cite the report's photo set together.
+        locators = event["photo_locators"] if event["locator"].startswith("image:") else []
+        citations = [ref(event["source_id"], loc) for loc in (locators or [event["locator"]])]
+        sources.extend(citations)
+        lines.append(f"Site report: {event['summary']} {_tag(citations)}")
+    for fact in facts:
+        sources.append(fact)
+        lines.append(f"{fact['field_name'].replace('_', ' ').capitalize()}: {fact['value']} {_tag([fact])}")
+    lines.extend(["Contract reference: [MISSING: contract reference]", "Contract clause: [MISSING: contract clause]"])
+    refs = [ref(s, loc) for s, loc in dict.fromkeys((r["source_id"], r["locator"]) for r in sources)]
+    return {"body": "\n\n".join(lines), "evidence_refs": refs, "existing_id": incident["existing_id"], "as_of": when}
+
+
 def _draft_view(conn, project_id, draft_id, as_of):
     draft = conn.execute(text("""
-        SELECT d.id, d.notice_type, d.alert_id, a.activity_code, act.name AS activity_name
+        SELECT d.id, d.notice_type, d.alert_id, d.incident_id, coalesce(a.activity_code,i.activity_code) AS activity_code,
+               coalesce(i.title,act.name) AS activity_name
         FROM sitemate.drafts d LEFT JOIN sitemate.alerts a ON (a.project_id, a.id) = (d.project_id, d.alert_id)
+        LEFT JOIN sitemate.incidents i ON (i.project_id,i.id)=(d.project_id,d.incident_id)
         LEFT JOIN sitemate.activities act ON (act.project_id, act.code) = (a.project_id, a.activity_code)
         WHERE d.project_id = :p AND d.id = CAST(:d AS uuid)
     """), {"p": project_id, "d": draft_id}).mappings().one_or_none()
@@ -621,7 +710,8 @@ def _draft_view(conn, project_id, draft_id, as_of):
                       "missing_fields": v["missing_fields"], "review": review})
     latest = items[-1]
     status = latest["review"]["decision"] if latest["review"] else "awaiting_review"
-    return {"id": str(draft["id"]), "notice_type": draft["notice_type"], "alert_id": str(draft["alert_id"]),
+    return {"id": str(draft["id"]), "notice_type": draft["notice_type"], "alert_id": str(draft["alert_id"]) if draft["alert_id"] else None,
+            "incident_id": str(draft["incident_id"]) if draft["incident_id"] else None,
             "activity_code": draft["activity_code"], "activity_name": draft["activity_name"],
             "status": status, "latest": latest, "versions": items}
 
@@ -632,6 +722,19 @@ def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
     """Draft a delay notice for a shortfall alert. One notice per alert: a second call returns it."""
     when = stamp(as_of)
     with writer_engine().begin() as conn:
+        if body.incident_id:
+            incident_id = _uuid(body.incident_id)
+            _lock_notice(conn, incident_id)
+            preview = incident_notice_preview(project_id, incident_id, when, conn)
+            if preview["existing_id"]:
+                return _draft_view(conn, project_id, preview["existing_id"], None)
+            draft_id = conn.scalar(text("""INSERT INTO sitemate.drafts(project_id,notice_type,incident_id)
+                VALUES (:p,'incident_notice',CAST(:i AS uuid)) RETURNING id"""), {"p": project_id, "i": incident_id})
+            conn.execute(text("""INSERT INTO sitemate.draft_versions(project_id,draft_id,version,as_of,body,evidence_refs,missing_fields)
+                VALUES (:p,:d,1,:at,:b,CAST(:refs AS jsonb),CAST(:missing AS jsonb))"""),
+                         {"p": project_id, "d": draft_id, "at": when, "b": preview["body"],
+                          "refs": json.dumps(preview["evidence_refs"]), "missing": json.dumps(_missing(preview["body"]))})
+            return _draft_view(conn, project_id, str(draft_id), None)
         alert_id = body.alert_id
         if not alert_id:
             if not (body.activity_code and body.work_date):
@@ -639,6 +742,7 @@ def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
             alert_id = _ensure_alert(conn, project_id, body.activity_code,
                                      datetime.fromisoformat(body.work_date).date(), when)
         alert = _alert(conn, project_id, alert_id, when)
+        _lock_notice(conn, alert["id"])
         existing = conn.scalar(text("SELECT id FROM sitemate.drafts WHERE project_id=:p AND alert_id=:a AND notice_type=:t"),
                                {"p": project_id, "a": alert["id"], "t": NOTICE})
         if existing:
@@ -655,7 +759,7 @@ def create_draft(project_id: str, body: DraftIn, as_of: datetime | None = None,
         return _draft_view(conn, project_id, str(draft_id), None)
 
 
-@router.get("/drafts", dependencies=[Depends(check_member)])
+@router.get("/drafts", dependencies=[Depends(require_roles("manager", "approver"))])
 def list_drafts(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     check_cutoff(as_of)
     ids = conn.execute(text("SELECT id FROM sitemate.drafts WHERE project_id = :p"), {"p": project_id}).scalars().all()
@@ -664,7 +768,7 @@ def list_drafts(project_id: str, as_of: datetime | None = None, conn=Depends(con
     return sorted(views, key=lambda v: (order[v["status"]], -v["latest"]["as_of"].timestamp()))
 
 
-@router.get("/drafts/{draft_id}", dependencies=[Depends(check_member)])
+@router.get("/drafts/{draft_id}", dependencies=[Depends(require_roles("manager", "approver"))])
 def get_draft(project_id: str, draft_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     check_cutoff(as_of)
     view = _draft_view(conn, project_id, _uuid(draft_id), as_of)
@@ -679,18 +783,43 @@ def _uuid(value):
     return value
 
 
+@router.get("/drafts/{draft_id}/versions/{version}/export", dependencies=[Depends(require_roles("manager", "approver"))])
+def download_notice(project_id: str, draft_id: str, version: int, format: Literal["pdf", "docx"],
+                    conn=Depends(connection)):
+    row = conn.execute(text("""
+        SELECT v.body, r.decision FROM sitemate.draft_versions v
+        LEFT JOIN sitemate.reviews r USING (project_id, draft_id, version)
+        WHERE v.project_id=:p AND v.draft_id=CAST(:d AS uuid) AND v.version=:v
+    """), {"p": project_id, "d": _uuid(draft_id), "v": version}).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(404, "Notice version not found")
+    if row["decision"] != "approved":
+        raise HTTPException(409, "Approve this version before downloading it")
+    if format == "pdf":
+        data, mime = pdf_letter(row["body"]), "application/pdf"
+    else:
+        data, mime = word_letter(row["body"]), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return Response(data, media_type=mime, headers={
+        "Content-Disposition": f'attachment; filename="notice-{draft_id}-v{version}.{format}"',
+        "Cache-Control": "private, no-store",
+    })
+
+
 @router.post("/drafts/{draft_id}/versions", status_code=201)
 def revise_draft(project_id: str, draft_id: str, body: RevisionIn, as_of: datetime | None = None,
                  member=Depends(require_roles("manager"))):
     """New version with the contract details filled in (or an edited text)."""
     when = stamp(as_of)
     with writer_engine().begin() as conn:
+        _lock_notice(conn, draft_id)
         view = _draft_view(conn, project_id, _uuid(draft_id), None)
         if view is None:
             raise HTTPException(404, "Notice not found")
         if view["status"] == "approved":
             raise HTTPException(409, "This notice is already approved")
         latest = view["latest"]
+        if body.expected_version is not None and body.expected_version != latest["version"]:
+            raise HTTPException(409, "A newer version is available. Review it before revising.")
         new_body = body.body if body.body else latest["body"]
         for label, value in (("contract reference", body.contract_reference), ("contract clause", body.contract_clause)):
             if value and value.strip():
@@ -720,6 +849,7 @@ def review_draft(project_id: str, draft_id: str, version: int, body: ReviewIn, a
                  member=Depends(require_roles("approver"))):
     when = stamp(as_of)
     with writer_engine().begin() as conn:
+        _lock_notice(conn, draft_id)
         view = _draft_view(conn, project_id, _uuid(draft_id), None)
         if view is None:
             raise HTTPException(404, "Notice not found")

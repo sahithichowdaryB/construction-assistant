@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_REQUIRED, HOME_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { AUTH_REQUIRED, HOME_COOKIE, ROLE_HOME, SESSION_COOKIE } from "@/lib/session";
 
 /**
  * Pages need a signed-in session when the app runs against the live API. The cookie's presence is
@@ -19,9 +19,28 @@ export function middleware(req: NextRequest) {
     url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
     return NextResponse.redirect(url);
   }
-  if (signedIn && (pathname === "/" || isAuthPage)) {
+  if (signedIn) {
     const home = req.cookies.get(HOME_COOKIE)?.value;
-    if (home && home.startsWith("/") && !home.startsWith("//")) return NextResponse.redirect(new URL(home, req.url));
+    const roleHomes: string[] = Object.values(ROLE_HOME);
+    const workspace = roleHomes.find((route) => pathname === route || pathname.startsWith(route + "/"));
+    const oldNotices = pathname === "/drafts" || pathname.startsWith("/drafts/");
+    const sharedHub = ["/today", "/alerts", "/incidents", "/schedule", "/documents", "/actions", "/search", "/settings"].includes(pathname);
+    const outsideWorkspace = home !== ROLE_HOME.site_manager && (sharedHub || (pathname === "/capture" && home === ROLE_HOME.approver));
+    if (home && roleHomes.includes(home) && (pathname === "/" || isAuthPage || oldNotices || outsideWorkspace || (workspace && workspace !== home))) {
+      const url = req.nextUrl.clone();
+      url.pathname = home;
+      if (oldNotices && home !== ROLE_HOME.foreman) {
+        const incident = req.nextUrl.searchParams.get("incident");
+        if (home === ROLE_HOME.site_manager && pathname === "/drafts/new" && incident) {
+          url.pathname = `/incidents/${encodeURIComponent(incident)}`;
+          url.searchParams.set("noticeAt", req.nextUrl.searchParams.get("as_of") || new Date().toISOString());
+        } else if (/^\/drafts\/[\da-f-]{36}$/i.test(pathname)) {
+          url.searchParams.set("notice", pathname.slice("/drafts/".length));
+        }
+      }
+      url.searchParams.delete("next");
+      return NextResponse.redirect(url);
+    }
   }
   return NextResponse.next();
 }

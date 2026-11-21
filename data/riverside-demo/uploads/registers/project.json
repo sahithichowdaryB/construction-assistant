@@ -1,7 +1,7 @@
 {
   "id": "RIV",
   "name": "Riverside Office Block",
-  "timezone": "Europe/Vienna",
+  "timezone": "Europe/Berlin",
   "calendar": "Daily shifts including Sunday 8 November for this fictional programme. Each date in the baseline task range is a working day.",
   "sender": "Sam Reed, Site Manager, Riverside Build JV",
   "sender_address": "12 Riverside Yard, Demo City",

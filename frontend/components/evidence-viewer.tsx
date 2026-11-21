@@ -3,7 +3,7 @@
 import { AlertTriangle, Download, ExternalLink, FileQuestion, FileText, Paperclip, Quote } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef } from "react";
-import { useApp } from "@/components/providers/app-context";
+import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -450,7 +450,7 @@ export function EvidenceViewer({ refData }: { refData: EvidenceRef }) {
 
 /** Global sheet bound to the CitationChip context. */
 export function EvidenceSheet() {
-  const { evidence, closeEvidence } = useApp();
+  const { evidence, evidenceAsOf, asOf, closeEvidence } = useApp();
   return (
     <Sheet open={!!evidence} onOpenChange={(o) => !o && closeEvidence()}>
       <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
@@ -458,7 +458,7 @@ export function EvidenceSheet() {
           <SheetTitle>Evidence</SheetTitle>
           <SheetDescription>{evidence ? refLabel(evidence) : ""}</SheetDescription>
         </SheetHeader>
-        <div className="px-4 pb-6">{evidence && <EvidenceViewer refData={evidence} />}</div>
+        <div className="px-4 pb-6">{evidence && <EvidenceAt at={evidenceAsOf ?? asOf}><EvidenceViewer refData={evidence} /></EvidenceAt>}</div>
       </SheetContent>
     </Sheet>
   );

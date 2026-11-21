@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AS_OF_PRESETS, fmtDateTime, fmtShort, isoToLocalInput, localToIso, PROJECT_TZ, toIsoWithOffset, zoneAbbrev } from "@/lib/time";
+import { AS_OF_PRESETS, fmtDateTime, fmtShort, isoToLocalInput, localToIso, zoneAbbrev } from "@/lib/time";
 
-/** Global replay clock. Every query is scoped to this instant; times shown in Europe/Vienna. */
+/** Global replay clock. Site evidence is scoped to this instant; times shown in Europe/Berlin. */
 export function AsOfControl() {
-  const { asOf, setAsOf } = useApp();
+  const { asOf, setAsOf, goLive } = useApp();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(isoToLocalInput(asOf));
 
@@ -43,11 +43,11 @@ export function AsOfControl() {
         <DialogHeader>
           <DialogTitle>Look back in time</DialogTitle>
           <DialogDescription>
-            See the project as it stood at a chosen moment: only information recorded by then is shown. Times are in {PROJECT_TZ}. Incidents list every record unless you filter them.
+            Choose a time to view site reports and quantities. Times are shown in Munich local time.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Button variant="secondary" size="touch" onClick={() => apply(toIsoWithOffset(new Date()))}>
+          <Button variant="secondary" size="touch" onClick={() => { goLive(); setOpen(false); }}>
             Now (live)
           </Button>
           {AS_OF_PRESETS.map((p) => {

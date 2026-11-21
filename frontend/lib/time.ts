@@ -1,8 +1,8 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
-export const PROJECT_TZ = "Europe/Vienna";
+export const PROJECT_TZ = "Europe/Berlin";
 
-/** Default demo clock: Tuesday 10 November 2026, 10:15 in Vienna. */
+/** Default demo clock: Tuesday 10 November 2026, 10:15 in Munich. */
 export const DEFAULT_AS_OF = toIsoWithOffset(fromZonedTime("2026-11-10T10:15:00", PROJECT_TZ));
 
 export const AS_OF_PRESETS: { label: string; local: string }[] = [

@@ -1,18 +1,19 @@
 "use client";
 
-import { CheckCircle2, ClipboardPen, Clock, HardHat, Info, RotateCcw, Truck } from "lucide-react";
+import { CheckCircle2, ClipboardPen, Clock, Info, RotateCcw, Truck } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
-import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
+import { ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { fmtQty } from "@/lib/format";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime, fmtLocalDate, localDateOf } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { useConfirmNote, useFieldNotes, useRecordNote, useSiteDay, type DayActivity, type FieldNote } from "@/lib/workflow";
+import { useConfirmNote, useRecordNote, useSiteDay, type DayActivity, type FieldNote } from "@/lib/workflow";
 
 function Steps({ step }: { step: 1 | 2 | 3 }) {
   const items = ["Record the note", "Check the facts", "Confirmed"];
@@ -133,14 +134,11 @@ export default function ForemanPage() {
   const [activity, setActivity] = useState<string | null>(null);
   const record = useRecordNote();
   const confirm = useConfirmNote();
-  const notes = useFieldNotes();
-  const note = confirm.data ?? record.data ?? null;
-  const step: 1 | 2 | 3 = !note ? 1 : note.status === "confirmed" ? 3 : 2;
+  const note = record.data ?? null;
+  const [lastReported, setLastReported] = useState<string | null>(null);
+  const step = note ? 2 : 1;
   const planned = day.data?.activities ?? [];
   const picked = planned.find((a) => a.code === activity);
-  const affected = note?.facts.find((f) => f.field === "activity_code")?.value as string | undefined;
-  const affectedName = planned.find((a) => a.code === affected)?.name ?? affected;
-  const todaysNotes = (notes.data ?? []).filter((n) => localDateOf(n.recorded_at) === today);
 
   const reset = () => {
     record.reset();
@@ -149,6 +147,11 @@ export default function ForemanPage() {
     setActivity(null);
   };
   const mention = (words: string) => setText((t) => (t.trim() ? `${t.trim()} ${words}` : words));
+  const finish = (reported: FieldNote) => {
+    if (reported.status !== "confirmed") return;
+    setLastReported(reported.source_id);
+    reset();
+  };
 
   return (
     <>
@@ -157,14 +160,19 @@ export default function ForemanPage() {
         description={`${fmtLocalDate(today)} on site. Say what happened in your own words; SiteMate pulls out the facts and you confirm them.`}
       />
       <Steps step={step} />
+      {lastReported && <p role="status" className="mb-4 text-sm">Report {lastReported} confirmed. <Link className="underline" href="/foreman/reports">View My reports</Link></p>}
+      <Link href="/capture" className="mb-4 inline-block text-sm font-medium underline">Record a voice note or attach a photo</Link>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid items-start gap-5 max-w-3xl">
         <section className="rounded-2xl border bg-card p-5 shadow-xs" aria-labelledby="note-title">
           {step === 1 && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (text.trim()) record.mutate({ text: text.trim(), activity_code: activity });
+                if (text.trim()) {
+                  setLastReported(null);
+                  record.mutate({ text: text.trim(), activity_code: activity }, { onSuccess: finish });
+                }
               }}
               className="flex flex-col gap-5"
             >
@@ -231,7 +239,7 @@ export default function ForemanPage() {
           {note && (
             <div className="flex flex-col gap-4">
               <div>
-                <h2 className="text-base font-semibold">{step === 3 ? "Confirmed" : "Check what SiteMate understood"}</h2>
+                <h2 className="text-base font-semibold">Check what SiteMate understood</h2>
                 <p className="text-sm text-muted-foreground">
                   Note {note.source_id} · {fmtDateTime(note.recorded_at)} · {note.author}
                 </p>
@@ -247,65 +255,21 @@ export default function ForemanPage() {
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <GatedButton reason={denyReason(role, "confirm_capture")} size="touch" disabled={confirm.isPending} onClick={() => confirm.mutate(note.source_id)}>
+                    <GatedButton reason={denyReason(role, "confirm_capture")} size="touch" disabled={confirm.isPending} onClick={() => confirm.mutate(note.source_id, { onSuccess: finish })}>
                       <CheckCircle2 aria-hidden /> {confirm.isPending ? "Confirming…" : "Confirm"}
                     </GatedButton>
-                    <Button variant="outline" size="touch" onClick={reset}>
+                    <Button variant="outline" size="touch" disabled={confirm.isPending} onClick={reset}>
                       <RotateCcw aria-hidden /> Start again
                     </Button>
                   </div>
                   {confirm.isError && <ErrorState error={confirm.error} />}
                 </>
               )}
-              {step === 3 && (
-                <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  <p className="flex items-center gap-2 font-semibold">
-                    <CheckCircle2 className="size-5" aria-hidden /> Saved to the project record
-                  </p>
-                  <p>
-                    {affectedName
-                      ? `The site manager now sees it on ${affectedName} for ${fmtLocalDate(today)}, and it is quoted in any delay notice for that work.`
-                      : "The site manager now sees it in the day's notes."}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={reset} className="self-start bg-background">
-                    Report something else
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </section>
 
-        <section className="rounded-2xl border bg-card p-5 shadow-xs" aria-labelledby="recent-title">
-          <h2 id="recent-title" className="mb-3 flex items-center gap-2 text-base font-semibold">
-            <HardHat className="size-4 text-muted-foreground" aria-hidden /> Notes on {fmtLocalDate(today)}
-          </h2>
-          {notes.isPending ? (
-            <LoadingSkeleton rows={2} />
-          ) : notes.isError ? (
-            <ErrorState error={notes.error} onRetry={() => void notes.refetch()} />
-          ) : todaysNotes.length ? (
-            <ul className="flex flex-col gap-2">
-              {todaysNotes.map((n) => {
-                const code = n.facts.find((f) => f.field === "activity_code")?.value as string | undefined;
-                return (
-                  <li key={n.source_id} className="rounded-xl border p-3 text-sm">
-                    <p className="line-clamp-3">“{n.text}”</p>
-                    <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className={cn("rounded-full px-2 py-0.5 font-medium", n.status === "confirmed" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900")}>
-                        {n.status === "confirmed" ? "Confirmed" : "Waiting for confirmation"}
-                      </span>
-                      {code && <span className="rounded bg-muted px-1.5 py-0.5 font-mono">{code}</span>}
-                      {fmtDateTime(n.recorded_at)} · {n.author}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <EmptyState title="No notes for this day" description="Notes recorded on this day appear here." />
-          )}
-        </section>
+
       </div>
     </>
   );

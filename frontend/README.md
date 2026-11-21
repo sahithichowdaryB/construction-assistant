@@ -24,6 +24,18 @@ npm run dev                    # http://localhost:3000
 | `npm run typecheck` | `tsc --noEmit` |
 | `node scripts/build-fixtures.mjs` | Regenerates the register-derived fixtures from `../data/riverside-demo` |
 
+## Android demo over USB
+
+Start the usual Next.js and FastAPI servers on the laptop. Connect an Android phone with USB debugging enabled and accept the phone's debugging prompt. From `frontend`, run:
+
+```powershell
+npx cap sync android
+& "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe" reverse tcp:3000 tcp:3000
+npx cap open android
+```
+
+In Android Studio, select the connected phone and click **Run**. Use JDK 21 for Gradle. The debug app opens the laptop's SiteMate site through the USB connection. Repeat the port mapping after reconnecting the phone. Next.js picks up web changes while it runs.
+
 ## Environment variables
 
 | Variable | Where it is used | Default |
@@ -86,7 +98,7 @@ Riverside incident id is a UUID from the database. To browse the dummy agent cas
 ## The as-of clock
 
 The header control "Showing …" (`components/as-of-control.tsx`) replays the demo. Incidents are the exception: the list and detail show every incident unless the user ticks "Only show what was reported by the time I'm viewing". Every query sends `as_of` as an ISO
-instant with a UTC offset, and all times are displayed in Europe/Vienna. Presets: 10 Nov 07:00, 10 Nov 10:15 (default),
+instant with a UTC offset, and all times are displayed in Europe/Berlin. Presets: 10 Nov 07:00, 10 Nov 10:15 (default),
 10 Nov 17:30, 11 Nov 17:30 and 12 Nov 07:15. For demos you can deep-link with `?as_of=2026-11-10T17:30:00%2B01:00` and
 `?role=approver`.
 

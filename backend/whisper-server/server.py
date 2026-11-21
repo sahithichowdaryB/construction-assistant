@@ -5,8 +5,6 @@ Run:  .venv/bin/python server.py      (listens on 127.0.0.1:8001)
 """
 
 import os
-import tempfile
-from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, File, Form, UploadFile
@@ -26,12 +24,8 @@ def health():
 
 @app.post("/v1/audio/transcriptions")
 def transcribe(file: UploadFile = File(...), model_name: str | None = Form(None, alias="model"), language: str | None = Form(None)):
-    suffix = Path(file.filename or "audio.webm").suffix or ".webm"
-    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
-        tmp.write(file.file.read())
-        tmp.flush()
-        segments, _info = model.transcribe(tmp.name, language=language or ("en" if MODEL.endswith(".en") else None), vad_filter=True)
-        text = " ".join(segment.text.strip() for segment in segments).strip()
+    segments, _info = model.transcribe(file.file, language=language or ("en" if MODEL.endswith(".en") else None), vad_filter=True)
+    text = " ".join(segment.text.strip() for segment in segments).strip()
     return {"text": text}
 
 

@@ -1,0 +1,46 @@
+{
+  "name": "SiteMate AI",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "36cb97e4-53d2-4535-9f32-9503ee335eb2",
+      "name": "Ask SiteMate",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "0b734c43-dd9f-4397-8a60-f1b5bedf1ab0",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sitemate-ai",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "a5c329c9-248a-487b-ac9b-ed5f44d4de22",
+      "name": "Answer question",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [260, 0],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.question }}",
+        "batching": {}
+      }
+    },
+    {
+      "id": "47cf9823-97e0-4587-b190-8ca596744064",
+      "name": "Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [260, 200],
+      "parameters": { "options": {} }
+    }
+  ],
+  "connections": {
+    "Ask SiteMate": { "main": [[{ "node": "Answer question", "type": "main", "index": 0 }]] },
+    "Chat Model": { "ai_languageModel": [[{ "node": "Answer question", "type": "ai_languageModel", "index": 0 }]] }
+  }
+}

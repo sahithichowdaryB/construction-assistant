@@ -45,6 +45,7 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
   const raf = useRef<number | null>(null);
   const audioCtx = useRef<AudioContext | null>(null);
   const discard = useRef(false);
+  const mounted = useRef(false);
 
   const cleanup = useCallback(() => {
     if (timer.current) window.clearInterval(timer.current);
@@ -58,10 +59,15 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     if (typeof window !== "undefined" && (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia)) {
       setState("unsupported");
     }
-    return cleanup;
+    return () => {
+      mounted.current = false;
+      if (recorder.current) recorder.current.onstop = null;
+      cleanup();
+    };
   }, [cleanup]);
 
   useEffect(() => () => {
@@ -72,6 +78,10 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
     setState("requesting");
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) {
+        media.getTracks().forEach((track) => track.stop());
+        return;
+      }
       stream.current = media;
       const mimeType = pickMimeType();
       const rec = new MediaRecorder(media, mimeType ? { mimeType } : undefined);

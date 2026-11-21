@@ -152,6 +152,9 @@ def test_recordings_list_and_audio_playback(client, tmp_path):
     assert r.status_code == 200 and r.content == b"RIFFfakeaudio" and r.headers["content-type"].startswith("audio/webm")
     r = client.get(audio, headers={**AUTH, "Range": "bytes=0-3"})
     assert r.status_code == 206 and r.content == b"RIFF"
+    service.audio.path(f"{PID}/{mine[0]['id']}.webm").unlink()
+    assert client.get(url, headers=AUTH).json()["recordings"][0]["has_audio"] is False
+    assert client.get(audio, headers=AUTH).status_code == 404
     assert client.get(f"{url}/CAP-NOPE/audio", headers=AUTH).status_code == 404
 
 

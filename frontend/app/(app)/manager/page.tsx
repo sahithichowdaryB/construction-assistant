@@ -1,16 +1,20 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, CircleDashed, FilePen, Hammer, MessageSquareWarning, Search, Send, Truck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CitationChip } from "@/components/citation-chip";
 import { DayNav } from "@/components/day-nav";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
-import { useApp } from "@/components/providers/app-context";
+import { NoticeDownloads } from "@/components/notice-downloads";
+import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { fmtQty, SOURCE_TYPE_LABEL } from "@/lib/format";
+import { useAlerts } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime, fmtLocalDate, localDateOf } from "@/lib/time";
 import type { SourceType } from "@/lib/types";
@@ -19,6 +23,8 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
   useDraftNotice,
+  useDayRecords,
+  noticeLabel,
   useFieldNotes,
   useNotices,
   useRelated,
@@ -152,6 +158,8 @@ function ForemanNotes({ code, date }: { code: string; date: string }) {
       </h2>
       {notes.isPending ? (
         <LoadingSkeleton rows={1} />
+      ) : notes.isError ? (
+        <ErrorState error={notes.error} onRetry={() => void notes.refetch()} />
       ) : mine.length ? (
         <ul className="flex flex-col gap-2">
           {mine.map((n) => (
@@ -212,20 +220,30 @@ function ReviseForm({ notice }: { notice: NoticeDraft }) {
   const revise = useReviseNotice();
   const [values, setValues] = useState<Record<string, string>>({});
   const missing = notice.latest.missing_fields.filter((f) => f === "contract reference" || f === "contract clause");
-  if (!missing.length) return null;
+  const [body, setBody] = useState(notice.latest.body);
+  const needsRevision = notice.status === "changes_requested";
+  if (!missing.length && !needsRevision) return null;
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         revise.mutate({
           draftId: notice.id,
+          expected_version: notice.latest.version,
+          body: body !== notice.latest.body ? body : undefined,
           contract_reference: values["contract reference"] || undefined,
           contract_clause: values["contract clause"] || undefined,
         });
       }}
       className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4"
     >
-      <p className="text-sm font-semibold">Fill in the missing details</p>
+      {needsRevision && (
+        <label className="grid gap-2 text-sm font-medium">
+          Revise notice
+          <Textarea rows={8} value={body} onChange={(event) => setBody(event.target.value)} />
+        </label>
+      )}
+      {missing.length > 0 && <p className="text-sm font-semibold">Fill in the missing details</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {missing.map((field) => (
           <div key={field} className="flex flex-col gap-1.5">
@@ -240,7 +258,7 @@ function ReviseForm({ notice }: { notice: NoticeDraft }) {
         type="submit"
         reason={denyReason(role, "edit_draft")}
         size="sm"
-        disabled={!Object.values(values).some((v) => v.trim()) || revise.isPending}
+        disabled={(body === notice.latest.body && !Object.values(values).some((v) => v.trim())) || revise.isPending}
         className="self-start"
       >
         <Send aria-hidden /> {revise.isPending ? "Saving…" : `Submit version ${notice.latest.version + 1} for approval`}
@@ -256,7 +274,7 @@ function NoticePanel({ notice }: { notice: NoticeDraft }) {
     <section className="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-xs" aria-labelledby="notice-title">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="notice-title" className="flex items-center gap-2 text-base font-semibold">
-          <FilePen className="size-4 text-muted-foreground" aria-hidden /> Delay notice · version {notice.latest.version}
+          <FilePen className="size-4 text-muted-foreground" aria-hidden /> {noticeLabel(notice)} · version {notice.latest.version}
         </h2>
         <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset", STATUS_TONE[notice.status])}>{STATUS_LABEL[notice.status]}</span>
       </div>
@@ -279,8 +297,11 @@ function NoticePanel({ notice }: { notice: NoticeDraft }) {
           With the approver. It cannot be approved until these are filled in: {notice.latest.missing_fields.join(", ")}.
         </p>
       )}
-      <NoticeText body={notice.latest.body} />
-      {notice.status !== "approved" && <ReviseForm notice={notice} />}
+      <EvidenceAt at={notice.latest.as_of}>
+        <NoticeText body={notice.latest.body} />
+      </EvidenceAt>
+      <NoticeDownloads notice={notice} />
+      {notice.status !== "approved" && <ReviseForm key={notice.latest.version} notice={notice} />}
     </section>
   );
 }
@@ -294,6 +315,7 @@ function NoticeArea({ a, date }: { a: DayActivity; date: string }) {
     (draft.data && draft.data.activity_code === a.code ? draft.data : undefined);
 
   if (notices.isPending) return <LoadingSkeleton variant="cards" rows={1} />;
+  if (notices.isError) return <ErrorState error={notices.error} onRetry={() => void notices.refetch()} />;
   if (notice) return <NoticePanel notice={notice} />;
   if (a.status !== "behind") {
     return (
@@ -318,7 +340,7 @@ function NoticeArea({ a, date }: { a: DayActivity; date: string }) {
         disabled={draft.isPending}
         onClick={() => draft.mutate(a.alert_id ? { alert_id: a.alert_id } : { activity_code: a.code, work_date: date })}
       >
-        <FilePen aria-hidden /> {draft.isPending ? "Drafting…" : "Draft delay notice"}
+        <FilePen aria-hidden /> {draft.isPending ? "Drafting…" : "Draft & send for review"}
       </GatedButton>
       {draft.isError && <ErrorState error={draft.error} />}
     </section>
@@ -328,18 +350,30 @@ function NoticeArea({ a, date }: { a: DayActivity; date: string }) {
 export default function ManagerPage() {
   const { asOf } = useApp();
   const clockDate = localDateOf(asOf);
-  const [pickedDate, setPickedDate] = useState<string | null>(null);
-  const date = pickedDate && pickedDate <= clockDate ? pickedDate : clockDate;
+  const notices = useNotices();
+  const alerts = useAlerts();
+  const openShortfalls = alerts.data?.filter((alert) => alert.kind === "shortfall" && alert.activity_code &&
+    !["dismissed", "resolved"].includes(alert.status ?? "open") && !notices.data?.some((notice) => notice.alert_id === alert.id));
+  const [inboxId, setInboxId] = useState<string | null>(null);
+  useEffect(() => { setInboxId(new URLSearchParams(window.location.search).get("notice")); }, []);
+  const inboxNotice = notices.data?.find((notice) => notice.id === inboxId);
+  const [dayChoice, setDayChoice] = useState<{ date: string; clockDay: string } | null>(null);
+  const setPickedDate = (date: string | null) => setDayChoice(date ? { date, clockDay: clockDate } : null);
+  const date = dayChoice?.clockDay === clockDate && dayChoice.date <= clockDate ? dayChoice.date : clockDate;
   const day = useSiteDay(date);
+  const records = useDayRecords(date);
   const [pickedCode, setPickedCode] = useState<string | null>(null);
-  const rows = day.data?.activities ?? [];
+  const rows = (day.data?.activities ?? []).map((activity) => {
+    const notice = activity.alert_id && notices.data?.find((item) => item.alert_id === activity.alert_id);
+    return notice ? { ...activity, notice: { id: notice.id, status: notice.status } } : activity;
+  });
   const selected = rows.find((r) => r.code === pickedCode) ?? rows[0];
   const behind = rows.filter((r) => r.status === "behind").length;
 
   return (
     <>
       <PageHeader
-        title="Shortfall & delay notice"
+        title="Shortfalls & notices"
         description={
           day.data
             ? `${rows.length} activities planned · ${behind} behind by more than ${day.data.threshold}% · figures known at ${fmtDateTime(asOf)}`
@@ -349,16 +383,60 @@ export default function ManagerPage() {
           <DayNav
             date={date}
             clockDate={clockDate}
-            first={day.data?.first_day ?? null}
-            last={day.data?.last_day ?? null}
             onChange={(d) => {
+              setInboxId(null);
               setPickedDate(d);
               setPickedCode(null);
             }}
           />
         }
       />
-      {day.isPending ? (
+      {!inboxNotice && <section className="mb-5 rounded-2xl border bg-card p-4" aria-label="Site diary for selected day">
+        <h2 className="mb-2 font-semibold">Site diary · {fmtLocalDate(date)}</h2>
+        {records.isPending ? <LoadingSkeleton rows={2} /> : records.isError ? <ErrorState error={records.error} onRetry={() => void records.refetch()} />
+          : records.data.length ? <ul className="divide-y">{records.data.map((r) =>
+            <li key={r.id} className="py-2 text-sm [overflow-wrap:anywhere]">
+              <p className="text-xs text-muted-foreground">{fmtDateTime(r.at)} · {r.kind.replaceAll("_", " ")} · {r.source_id}</p>
+              {r.incident_id ? <Link className="underline" href={`/incidents/${r.incident_id}`}>{r.title}</Link> : r.title}
+            </li>)}</ul> : <p className="text-sm text-muted-foreground">No site records for this day at the selected time.</p>}
+      </section>}
+      {!!openShortfalls?.length && notices.isSuccess && (
+        <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
+          <h2 className="text-sm font-semibold">Shortfalls without a notice</h2>
+          <div className="flex flex-wrap gap-2">
+            {openShortfalls.map((alert) => (
+              <button key={alert.id} type="button" className="rounded-xl border bg-card px-3 py-2 text-sm hover:bg-muted"
+                onClick={() => {
+                  setInboxId(null);
+                  setPickedDate(localDateOf(alert.checkpoint_at));
+                  setPickedCode(alert.activity_code);
+                }}>
+                {alert.activity_code} · {fmtLocalDate(localDateOf(alert.checkpoint_at))} · {alert.calculation?.shortfall_pct}% short
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {!!notices.data?.length && (
+        <section className="mb-5 grid gap-2" aria-label="Project notices">
+          <h2 className="text-sm font-semibold">Project notices</h2>
+          <div className="flex flex-wrap gap-2">
+            {notices.data.map((notice) => (
+              <button type="button" key={notice.id} aria-pressed={inboxId === notice.id}
+                className="rounded-xl border bg-card px-3 py-2 text-sm hover:bg-muted"
+                onClick={() => setInboxId(inboxId === notice.id ? null : notice.id)}>
+                {notice.activity_name} · {STATUS_LABEL[notice.status]}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {inboxNotice ? (
+        <div className="grid gap-3">
+          <button type="button" className="justify-self-start text-sm underline" onClick={() => setInboxId(null)}>Back to shortfalls</button>
+          <NoticePanel key={inboxNotice.id} notice={inboxNotice} />
+        </div>
+      ) : day.isPending ? (
         <LoadingSkeleton variant="cards" rows={2} />
       ) : day.isError ? (
         <ErrorState error={day.error} onRetry={() => void day.refetch()} />

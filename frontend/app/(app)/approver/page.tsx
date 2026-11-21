@@ -1,11 +1,12 @@
 "use client";
 
 import { BadgeCheck, CheckCircle2, FileWarning, GitCompareArrows, History, MessageSquareWarning, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
-import { useApp } from "@/components/providers/app-context";
+import { NoticeDownloads } from "@/components/notice-downloads";
+import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +14,7 @@ import { useEvidence } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { STATUS_LABEL, STATUS_TONE, useNotices, useReviewNotice, type DraftStatus, type NoticeDraft } from "@/lib/workflow";
+import { STATUS_LABEL, STATUS_TONE, noticeLabel, useNotices, useReviewNotice, type DraftStatus, type NoticeDraft } from "@/lib/workflow";
 
 type Filter = "all" | DraftStatus;
 const FILTERS: Filter[] = ["awaiting_review", "changes_requested", "approved", "all"];
@@ -118,7 +119,7 @@ function Decision({ notice }: { notice: NoticeDraft }) {
             <GatedButton type="submit" reason={denyReason(role, "request_changes")} size="touch" disabled={!reason.trim() || review.isPending}>
               {review.isPending ? "Sending…" : "Send back to site manager"}
             </GatedButton>
-            <Button type="button" variant="ghost" size="touch" onClick={() => setAsking(false)}>
+            <Button type="button" variant="ghost" size="touch" disabled={review.isPending} onClick={() => { setAsking(false); setReason(""); review.reset(); }}>
               Cancel
             </Button>
           </div>
@@ -146,7 +147,7 @@ function NoticeReview({ notice }: { notice: NoticeDraft }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 id="review-title" className="text-base font-semibold">
-            Delay notice · {notice.activity_name ?? notice.activity_code}
+            {noticeLabel(notice)} · {notice.activity_name ?? notice.activity_code}
           </h2>
           <p className="text-sm text-muted-foreground">
             Version {latest.version} of {notice.versions.length} · drafted {fmtDateTime(latest.as_of)}
@@ -171,6 +172,7 @@ function NoticeReview({ notice }: { notice: NoticeDraft }) {
 
       <Changes notice={notice} />
       <NoticeText body={latest.body} />
+      <NoticeDownloads notice={notice} />
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Check the evidence ({latest.evidence_refs.length})</p>
@@ -211,8 +213,9 @@ function NoticeReview({ notice }: { notice: NoticeDraft }) {
 
 export default function ApproverPage() {
   const notices = useNotices();
-  const [filter, setFilter] = useState<Filter>("awaiting_review");
+  const [filter, setFilter] = useState<Filter>("all");
   const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => { setPicked(new URLSearchParams(window.location.search).get("notice")); }, []);
   const all = notices.data ?? [];
   const count = (f: Filter) => (f === "all" ? all.length : all.filter((n) => n.status === f).length);
   const list = filter === "all" ? all : all.filter((n) => n.status === filter);
@@ -222,8 +225,8 @@ export default function ApproverPage() {
   return (
     <>
       <PageHeader
-        title="Approvals"
-        description={waiting ? `${waiting} notice${waiting === 1 ? "" : "s"} waiting for your decision.` : "No notice is waiting for your decision."}
+        title="Review queue"
+        description={notices.isSuccess ? (waiting ? `${waiting} notice${waiting === 1 ? "" : "s"} waiting for your decision.` : "No notice is waiting for your decision.") : undefined}
       />
       <div role="group" aria-label="Filter notices" className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {FILTERS.map((f) => (
@@ -253,7 +256,7 @@ export default function ApproverPage() {
         <EmptyState
           icon={<FileWarning />}
           title={filter === "awaiting_review" ? "Nothing waiting for you" : `No notices: ${FILTER_LABEL[filter].toLowerCase()}`}
-          description="Notices the site manager drafts appear here once the project clock reaches them."
+          description="Notices appear here when the site manager sends them for review."
         />
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.4fr)]">
@@ -271,7 +274,7 @@ export default function ApproverPage() {
               >
                 <span className="text-sm font-semibold">{n.activity_name ?? n.activity_code}</span>
                 <span className="text-xs text-muted-foreground">
-                  Delay notice · v{n.latest.version} · {fmtDateTime(n.latest.as_of)}
+                  {noticeLabel(n)} · v{n.latest.version} · {fmtDateTime(n.latest.as_of)}
                 </span>
                 <span className="flex flex-wrap gap-1.5">
                   <span className={cn("w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset", STATUS_TONE[n.status])}>{STATUS_LABEL[n.status]}</span>
@@ -284,7 +287,7 @@ export default function ApproverPage() {
               </button>
             ))}
           </nav>
-          <NoticeReview key={selected.id} notice={selected} />
+          <EvidenceAt at={selected.latest.as_of}><NoticeReview key={selected.latest.version + selected.id} notice={selected} /></EvidenceAt>
         </div>
       )}
     </>

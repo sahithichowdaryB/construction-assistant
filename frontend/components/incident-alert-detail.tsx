@@ -2,7 +2,6 @@
 
 import { Check, ClipboardList, FilePen, Pencil, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AlertStatusBadge, IncidentStatusBadge, SeverityBadge } from "@/components/badges";
 import { CitationList } from "@/components/citation-chip";
@@ -16,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  useAlertDetail, useAlertTransition, useCategoryLabel, useCreateDraft, useDecideAction, useEditAction,
+  useAlertDetail, useAlertTransition, useCategoryLabel, useDecideAction, useEditAction,
 } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/time";
@@ -48,11 +47,9 @@ const ANALYSIS_LABEL = {
 } as const;
 
 function ActionRow({ alertId, incidentId, action }: { alertId: string; incidentId: string | null; action: RecommendedAction }) {
-  const { role } = useApp();
-  const router = useRouter();
+  const { role, asOf } = useApp();
   const decide = useDecideAction(alertId);
   const edit = useEditAction(alertId);
-  const draft = useCreateDraft();
   const gate = denyReason(role, "approve_action");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: action.title, rationale: action.rationale ?? "", owner_role: action.owner_role ?? "", priority: action.priority ?? "medium" });
@@ -86,12 +83,10 @@ function ActionRow({ alertId, incidentId, action }: { alertId: string; incidentI
             </GatedButton>
           )}
           {action.action_type === "draft_notice" && (action.status === "approved" || action.status === "in_progress") && (
-            <Button
-              size="sm"
-              disabled={draft.isPending}
-              onClick={() => draft.mutate({ type: "delay", alert_id: alertId, incident_id: incidentId }, { onSuccess: (d) => router.push(`/drafts/${d.id}`) })}
-            >
-              <FilePen aria-hidden /> Open draft
+            <Button size="sm" asChild>
+              <Link href={incidentId ? `/incidents/${incidentId}?noticeAt=${encodeURIComponent(asOf)}` : "/manager"}>
+                <FilePen aria-hidden /> Open draft
+              </Link>
             </Button>
           )}
           {action.status !== "proposed" && (
@@ -108,7 +103,6 @@ function ActionRow({ alertId, incidentId, action }: { alertId: string; incidentI
         </div>
       )}
       {decide.isError && <ErrorState error={decide.error} />}
-      {draft.isError && <ErrorState error={draft.error} />}
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent>
           <DialogHeader>

@@ -1,7 +1,7 @@
 {
   "id": "RIV",
   "name": "Riverside Office Block",
-  "timezone": "Europe/Vienna",
+  "timezone": "Europe/Berlin",
   "thresholds": {
     "deviation_pct": 15,
     "high_above_pct": 25

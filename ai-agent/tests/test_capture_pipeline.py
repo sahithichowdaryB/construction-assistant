@@ -35,7 +35,7 @@ class FakeLLM:
         self.calls = []
         self.fail = None
 
-    def generate_json(self, system, user, images=None):
+    def generate_json(self, system, user, images=None, *, schema=None):
         self.calls.append(system[:40])
         if self.fail:
             raise LLMError(self.fail)
@@ -61,9 +61,11 @@ class FakeLLM:
         near_miss = "plank" in text_.lower()
         category, etype = (("status_update", "repair_release") if fixed else ("environmental", "spill") if spill
                            else ("safety", "near_miss") if near_miss else ("equipment", "equipment_failure"))
+        details = [{"name": "zone", "value": "B" if near_miss else "A"}]
+        if lift or crane:
+            details.append({"name": "asset_key", "value": "LIFT-2" if lift else "crane:tower"})
         return {"suggested_category": category, "suggested_event_type": etype, "confidence": 0.82, "rationale": "test",
-                "alternatives": [], "summary": text_[:80], "evidence_quote": text_, "zone": "B" if near_miss else "A",
-                "asset_key": "LIFT-2" if lift else "crane:tower" if crane else None,
+                "alternatives": [], "summary": text_[:80], "evidence_quote": text_, "details": details,
                 "severity_flags": ["spill_to_drain"] if spill else []}
 
 

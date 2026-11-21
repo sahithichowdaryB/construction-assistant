@@ -3,6 +3,7 @@
 import { ArrowLeft, ArrowRight, FilePen } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { IncidentStatusBadge, SeverityBadge } from "@/components/badges";
 import { CitationList } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
@@ -19,11 +20,20 @@ import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL } from "@/lib/format";
 import { useCategoryLabel, useIncident, usePatchIncident } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/time";
+import { useDraftNotice, useIncidentPreview } from "@/lib/workflow";
+import { NoticeText } from "@/components/notice-text";
 
 export default function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const incidentId = decodeURIComponent(id);
-  const { role } = useApp();
+  const { role, asOf } = useApp();
+  const [previewAt, setPreviewAt] = useState<string | null>(null);
+  useEffect(() => {
+    const at = new URLSearchParams(window.location.search).get("noticeAt");
+    setPreviewAt(at && !Number.isNaN(Date.parse(at)) ? at : null);
+  }, [incidentId]);
+  const preview = useIncidentPreview(incidentId, previewAt);
+  const draft = useDraftNotice();
   const router = useRouter();
   const incident = useIncident(incidentId);
   const patch = usePatchIncident(incidentId);
@@ -79,13 +89,28 @@ export default function IncidentDetailPage() {
                 {i.status === "monitoring" ? "Confirm resolved" : "Mark resolved"}
               </GatedButton>
             )}
-            <GatedButton reason={noticeReason} size="touch" onClick={() => router.push(`/drafts/new?incident=${encodeURIComponent(i.id)}`)}>
+            <GatedButton reason={noticeReason} size="touch" onClick={() => setPreviewAt(asOf)}>
               <FilePen aria-hidden /> Create a notice
             </GatedButton>
           </div>
         }
       />
       {patch.isError && <ErrorState error={patch.error} />}
+      {previewAt && <section className="mb-4 grid gap-3 rounded-xl border bg-card p-4" aria-label="Incident notice preview">
+        <h2 className="font-semibold">Incident notice preview</h2>
+        {preview.isPending ? <LoadingSkeleton rows={3} /> : preview.isError ? <ErrorState error={preview.error} onRetry={() => void preview.refetch()} /> : <>
+          <NoticeText body={preview.data.body} />
+          <div className="flex flex-wrap gap-2">
+            {preview.data.existing_id ? <Button asChild><Link href={`/manager?notice=${preview.data.existing_id}`}>Open existing notice</Link></Button> :
+              <GatedButton reason={noticeReason} disabled={draft.isPending} onClick={() => draft.mutate(
+                { incident_id: i.id, previewAt: preview.data.as_of },
+                { onSuccess: (notice) => router.push(`/manager?notice=${notice.id}`) },
+              )}>{draft.isPending ? "Sending…" : "Send for approval"}</GatedButton>}
+            <Button variant="outline" disabled={draft.isPending} onClick={() => setPreviewAt(null)}>Close preview</Button>
+          </div>
+          {draft.isError && <ErrorState error={draft.error} />}
+        </>}
+      </section>}
       {i.merged_into_id && (
         <p className="mb-3 rounded-2xl bg-muted p-3 text-sm">
           This incident was merged into{" "}

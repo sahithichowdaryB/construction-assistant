@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Save, Send, Trash2, Undo2 } from "lucide-react";
+import { Save, Send, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { CategoryPicker } from "@/components/category-picker";
@@ -28,14 +28,14 @@ const hint = (field: string) => (field.includes("count") || field.includes("minu
 function DateTimeField({ id, value, onChange, disabled }: { id: string; value: string; onChange: (iso: string) => void; disabled?: boolean }) {
   const valid = value && !Number.isNaN(Date.parse(value));
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       <Input
         id={id}
         type="datetime-local"
         value={valid ? isoToLocalInput(value) : ""}
         onChange={(e) => onChange(e.target.value ? localToIso(`${e.target.value}:00`) : "")}
         disabled={disabled}
-        className="w-auto min-w-52"
+        className="w-full min-w-0 max-w-60"
         title={`Time in ${PROJECT_TZ}`}
       />
       <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange(toIsoWithOffset(new Date()))}>
@@ -145,15 +145,15 @@ function FactsReview({
       </div>
 
       {eventIndexes.map((ei) => (
-        <fieldset key={ei} className="flex flex-col gap-3 rounded-2xl bg-muted/50 p-4">
-          <legend className="px-1 text-sm font-semibold">{events[ei] ? `${label(events[ei].event_type)}: ${events[ei].summary}` : `Event ${ei + 1}`}</legend>
+        <fieldset key={ei} className="flex min-w-0 flex-col gap-3 rounded-2xl bg-muted/50 p-3 sm:p-4">
+          <legend className="max-w-full px-1 text-sm font-semibold [overflow-wrap:anywhere]">{events[ei] ? `${label(events[ei].event_type)}: ${events[ei].summary}` : `Event ${ei + 1}`}</legend>
           {facts
             .filter((f) => f.event_index === ei)
             .map((f) => {
               const gone = removed.has(f.index);
               return (
-                <div key={f.index} className="grid grid-cols-[7.5rem_1fr_auto] items-center gap-2 text-sm">
-                  <Label htmlFor={`fact-${f.index}`} className="font-normal text-muted-foreground">
+                <div key={f.index} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-sm sm:grid-cols-[6rem_minmax(0,1fr)_auto]">
+                  <Label htmlFor={`fact-${f.index}`} className="col-span-2 min-w-0 font-normal text-muted-foreground [overflow-wrap:anywhere] sm:col-span-1">
                     {label(f.field_name)}
                   </Label>
                   {isTimeField(f.field_name) ? (
@@ -193,7 +193,7 @@ function FactsReview({
           {gaps
             .filter((g) => g.event_index === ei)
             .map((g) => (
-              <div key={gapKey(g)} className="grid grid-cols-[7.5rem_1fr] items-center gap-2 rounded-xl bg-warning/10 p-3 text-sm">
+              <div key={gapKey(g)} className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-2 rounded-xl bg-warning/10 p-3 text-sm sm:grid-cols-[6rem_minmax(0,1fr)]">
                 <Label htmlFor={`gap-${gapKey(g)}`} className="font-medium text-warning">
                   {label(g.field_name)} <span className="text-xs">(missing)</span>
                 </Label>
@@ -230,6 +230,17 @@ function FactsReview({
 }
 
 /** Shows what the capture agent extracted, asks its follow-up questions, lets the speaker review, and confirms the save. */
+export function SavedNoteDetails({ result }: { result: Extract<AgentResult, { status: "saved" }> }) {
+  return (
+    <div className="mt-3 flex flex-col gap-3 text-sm">
+      <p>{result.source_id} · {result.events.length} events · {result.facts.length} facts</p>
+      <IncidentLinks links={result.incident_links ?? []} />
+      <Events events={result.events} />
+      {!!result.gaps.length && <p>Still missing: {result.gaps.map((g) => label(g.field_name)).join(", ")}</p>}
+    </div>
+  );
+}
+
 export function AgentReview({
   result,
   categories,
@@ -239,7 +250,7 @@ export function AgentReview({
   onReview,
   onReset,
 }: {
-  result: AgentResult;
+  result: Exclude<AgentResult, { status: "saved" }>;
   categories: EventCategory[] | undefined;
   pending: boolean;
   onConfirmCategories: (decisions: CategoryDecision[], added: AddedEvent[]) => void;
@@ -289,24 +300,6 @@ export function AgentReview({
 
   if (result.status === "needs_review") {
     return <FactsReview key={result.thread_id} events={result.events} facts={result.facts} gaps={result.gaps} pending={pending} onSubmit={onReview} />;
-  }
-
-  if (result.status === "saved") {
-    return (
-      <div className="flex flex-col gap-4">
-        <EmptyState
-          icon={<CheckCircle2 className="text-success" />}
-          title="Saved to the project"
-          description={`${result.events.length} event${result.events.length === 1 ? "" : "s"} and ${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} saved as ${result.source_id}. You can find it under Your recordings.`}
-          action={<Button size="touch" onClick={onReset}>Capture another</Button>}
-        />
-        <IncidentLinks links={result.incident_links ?? []} />
-        <Events events={result.events} />
-        {result.gaps.length > 0 && (
-          <p className="text-sm text-warning">Still missing: {result.gaps.map((g) => label(g.field_name)).join(", ")}</p>
-        )}
-      </div>
-    );
   }
 
   return (

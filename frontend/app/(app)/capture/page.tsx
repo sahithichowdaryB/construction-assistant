@@ -4,7 +4,7 @@ import { Camera, Keyboard, Megaphone, Mic, Send, ShieldCheck, Sparkles, X } from
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { AgentReview } from "@/components/agent-review";
+import { AgentReview, SavedNoteDetails } from "@/components/agent-review";
 import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
 import { RECORDINGS_KEY, RecordingsList } from "@/components/recordings-list";
@@ -27,6 +27,10 @@ import { useCapturePrompts, useEventCategories, useInvalidateProject } from "@/l
 import { denyReason } from "@/lib/roles";
 
 const MAX_IMAGES = 5;
+const PHOTO_TYPES: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+};
+const acceptedPhotoTypes = new Set(Object.values(PHOTO_TYPES));
 
 const DEMO_NOTES = [
   { id: "L1", label: "Lift broken", text: "The goods lift in core A is not working, it is stuck between floors." },
@@ -52,8 +56,20 @@ export default function CapturePage() {
   const [typing, setTyping] = useState(!VOICE_READY);
   const [text, setText] = useState("");
   const [images, setImages] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState("");
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
   const [lastInput, setLastInput] = useState<CaptureInput | null>(null);
+  const [micKey, setMicKey] = useState(0);
+  const [wasRecorded, setWasRecorded] = useState(false);
+
+  const clearComposer = () => {
+    setText("");
+    setImages([]);
+    setPhotoError("");
+    setTyping(!VOICE_READY);
+    setLastInput(null);
+    setMicKey((key) => key + 1);
+  };
 
   const showResult = (r: AgentResult) => {
     setAgentResult(r);
@@ -64,7 +80,14 @@ export default function CapturePage() {
   };
 
   // Voice, photos and typed text all go to the same pipeline: suggested categories -> questions -> your review -> saved.
-  const capture = useMutation({ mutationFn: (input: CaptureInput) => submitCapture(projectId, input), onSuccess: showResult });
+  const capture = useMutation({
+    mutationFn: (input: CaptureInput) => submitCapture(projectId, input),
+    onSuccess: (result, input) => {
+      clearComposer();
+      setWasRecorded(!!input.audio);
+      showResult(result);
+    },
+  });
   const categoriesMut = useMutation({
     mutationFn: (v: { decisions: CategoryDecision[]; added: AddedEvent[] }) => {
       if (agentResult?.status !== "needs_category") throw new Error("No capture is waiting for categories");
@@ -91,15 +114,19 @@ export default function CapturePage() {
   const stepPending = categoriesMut.isPending || answers.isPending || review.isPending;
   const busy = capture.isPending || stepPending;
   const send = (input: CaptureInput) => {
+    if (busy) return;
+    setAgentResult(null);
+    categoriesMut.reset();
+    answers.reset();
+    review.reset();
     setLastInput(input);
     capture.mutate(input);
   };
   const submitRecording = (rec: Recording) =>
-    send({ audio: { blob: rec.blob, filename: `note.${rec.mimeType.includes("mp4") ? "m4a" : "webm"}` }, text, images });
+    send({ audio: { blob: rec.blob, filename: `note.${rec.mimeType.includes("mp4") ? "m4a" : "webm"}` }, images });
 
   const reset = () => {
-    setText("");
-    setImages([]);
+    clearComposer();
     setAgentResult(null);
     capture.reset();
     categoriesMut.reset();
@@ -107,15 +134,33 @@ export default function CapturePage() {
     review.reset();
   };
   const addImages = (files: FileList | null) => {
-    if (!files) return;
-    setImages((cur) => [...cur, ...Array.from(files).filter((f) => f.type.startsWith("image/"))].slice(0, MAX_IMAGES));
+    if (!files?.length) return;
+    // FileList is live. Copy the selection before the change handler clears the input.
+    const selected = Array.from(files);
+    const attachments: File[] = [];
+    const errors: string[] = [];
+    for (const file of selected) {
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const mime = file.type && file.type !== "application/octet-stream"
+        ? file.type
+        : PHOTO_TYPES[extension];
+      if (!acceptedPhotoTypes.has(mime)) {
+        errors.push("Choose a JPEG, PNG, WebP or GIF photo.");
+      } else if (!file.size || file.size > 5 * 1024 * 1024) {
+        errors.push(file.size ? "Choose a photo of 5 MB or less." : "The camera returned an empty photo. Take it again.");
+      } else {
+        attachments.push(mime === file.type ? file : new File([file], file.name, { type: mime, lastModified: file.lastModified }));
+      }
+    }
+    setPhotoError([...new Set(errors)].join(" "));
+    setImages((cur) => [...cur, ...attachments].slice(0, MAX_IMAGES));
   };
 
   const canSubmit = !blocked && !busy && (text.trim().length > 0 || images.length > 0);
   const quoteText = agentResult && "transcript" in agentResult && agentResult.transcript ? agentResult.transcript : "";
   const finished = agentResult?.status === "saved";
   const reviewing = !!agentResult && !finished && agentResult.status !== "discarded" && agentResult.status !== "no_events";
-  const stage = finished ? 3 : reviewing ? 2 : busy ? 1 : 0;
+  const stage = reviewing ? 2 : capture.isPending ? 1 : 0;
   const STEPS = ["Note sent", "Details picked out", "You confirm"];
 
   return (
@@ -152,9 +197,9 @@ export default function CapturePage() {
         </section>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* Capture */}
-        <section aria-label="New note" className="relative flex flex-col gap-6 overflow-hidden rounded-[28px] bg-hero p-6 text-hero-foreground md:p-8">
+        <fieldset aria-label="New note" disabled={busy || reviewing} className="relative flex min-w-0 flex-col gap-6 overflow-hidden rounded-[28px] bg-hero p-6 text-hero-foreground md:p-8">
           <div>
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
               <span className="size-2 rounded-full bg-primary" aria-hidden /> New site note
@@ -163,7 +208,7 @@ export default function CapturePage() {
             <p className="mt-1 text-sm text-hero-muted">Say what, where, when, and who was affected. Any language is fine.</p>
           </div>
 
-          <MicButton onSubmit={submitRecording} disabled={!!micBlocked || busy} disabledReason={micBlocked} />
+          <MicButton key={micKey} onSubmit={submitRecording} disabled={!!micBlocked || busy || reviewing} disabledReason={reviewing ? "Finish checking your current note below." : micBlocked} />
 
           <div className="flex flex-wrap justify-center gap-2">
             <Button
@@ -182,6 +227,21 @@ export default function CapturePage() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   multiple
+                  className="sr-only"
+                  disabled={!!blocked || images.length >= MAX_IMAGES}
+                  onChange={(e) => {
+                    addImages(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </Button>
+            <Button variant="ghost" size="touch" className="rounded-xl bg-white/10 text-white hover:bg-white/15 hover:text-white md:hidden" asChild>
+              <label className={blocked || images.length >= MAX_IMAGES ? "pointer-events-none opacity-50" : "cursor-pointer"}>
+                <Camera aria-hidden /> Take photo
+                <input
+                  type="file"
+                  accept="image/*"
                   capture="environment"
                   className="sr-only"
                   disabled={!!blocked || images.length >= MAX_IMAGES}
@@ -194,6 +254,7 @@ export default function CapturePage() {
             </Button>
           </div>
 
+          {photoError && <p role="alert" className="text-sm text-hero-foreground">{photoError}</p>}
           {images.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Attached photos">
               {images.map((f, i) => (
@@ -260,18 +321,18 @@ export default function CapturePage() {
               <Send aria-hidden /> Send {images.length === 1 ? "photo" : "photos"}
             </Button>
           )}
-        </section>
+        </fieldset>
 
         {/* Check */}
-        <section aria-label="Check the details" aria-live="polite" className="flex flex-col gap-5 rounded-[28px] bg-card p-6 md:p-8">
+        <section aria-label="Check the details" aria-live="polite" className="flex min-w-0 flex-col gap-5 rounded-[28px] bg-card p-4 [overflow-wrap:anywhere] sm:p-6 md:p-8">
           <h2 className="text-lg font-bold">Check the details</h2>
           <ol className="grid grid-cols-3 gap-2" aria-label="Progress">
             {STEPS.map((label, i) => {
               const doneStep = stage > i;
-              const current = stage === i + 1 || (stage === 0 && i === 0);
+              const current = stage > 0 && i === stage;
               return (
-                <li key={label} className="flex flex-col gap-1.5">
-                  <span className={`h-1.5 rounded-full ${doneStep ? "bg-primary" : current && stage > 0 ? "animate-pulse bg-primary/50" : "bg-muted"}`} />
+                <li key={label} aria-current={current ? "step" : undefined} className="flex flex-col gap-1.5">
+                  <span className={`h-1.5 rounded-full ${doneStep ? "bg-primary" : current ? "animate-pulse bg-primary/50" : "bg-muted"}`} />
                   <span className={`text-xs ${doneStep ? "font-semibold" : "text-muted-foreground"}`}>{label}</span>
                 </li>
               );
@@ -279,16 +340,30 @@ export default function CapturePage() {
           </ol>
 
           {capture.isPending ? (
-            <Working text="Listening, looking and picking out the details… this can take up to a minute." />
+            <Working text={[
+              lastInput?.audio && "Transcribing your recording.",
+              !!lastInput?.images?.length && "Reading your photos.",
+              "Picking out site events for you to check.",
+            ].filter(Boolean).join(" ")} />
           ) : capture.isError ? (
             <ErrorState error={capture.error} onRetry={lastInput ? () => capture.mutate(lastInput) : undefined} />
+          ) : finished ? (
+            <div role="status" className="rounded-xl border p-3 text-sm">
+              <p className="font-semibold">Saved to the project. Ready for your next note.</p>
+              {role === "foreman" && <Link className="underline" href="/foreman/reports">View My reports</Link>}
+              <details className="mt-2">
+                <summary className="cursor-pointer">Last saved note</summary>
+                <SavedNoteDetails result={agentResult} />
+              </details>
+            </div>
           ) : agentResult ? (
             <div className="flex flex-col gap-3">
               {quoteText && agentResult.status !== "no_events" && agentResult.status !== "needs_category" && (
-                <Quote text={quoteText} label={lastInput?.audio ? "What was heard" : "Your note"} />
+                <Quote text={quoteText} label={wasRecorded ? "What was heard" : "Your note"} />
               )}
               {(categoriesMut.isError || answers.isError || review.isError) && <ErrorState error={categoriesMut.error ?? answers.error ?? review.error} />}
               <AgentReview
+                key={agentResult.status === "needs_input" ? `${agentResult.thread_id}-${agentResult.round}` : agentResult.status}
                 result={agentResult}
                 categories={categories.data}
                 pending={stepPending}
@@ -297,6 +372,7 @@ export default function CapturePage() {
                 onReview={(d) => review.mutate(d)}
                 onReset={reset}
               />
+              {reviewing && <Button variant="ghost" size="sm" disabled={busy} onClick={reset}>Leave review and start another note</Button>}
               {agentResult.status === "needs_category" && categories.isError && <ErrorState error={categories.error} onRetry={() => void categories.refetch()} />}
             </div>
           ) : (

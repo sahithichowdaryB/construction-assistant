@@ -12,11 +12,13 @@ class LLMError(RuntimeError):
     pass
 
 
+class InvalidModelOutput(LLMError):
+    """The provider replied, but its payload cannot be validated as an object."""
 
 class LLMClient(Protocol):
     model: str
 
-    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict: ...
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None, *, schema: dict | None = None) -> dict: ...
 
 
 def parse_json(raw: str) -> dict:
@@ -25,9 +27,9 @@ def parse_json(raw: str) -> dict:
     try:
         value = json.loads(fenced.group(1) if fenced else raw)
     except json.JSONDecodeError as exc:
-        raise LLMError(f"Model did not return valid JSON: {exc}") from exc
+        raise InvalidModelOutput(f"Model did not return valid JSON: {exc}") from exc
     if not isinstance(value, dict):
-        raise LLMError("Model JSON must be an object")
+        raise InvalidModelOutput("Model JSON must be an object")
     return value
 
 
@@ -46,7 +48,7 @@ class ClaudeClient:
         self._client = anthropic.Anthropic(max_retries=4)  # the SDK retries 408/409/429/5xx with backoff
         self.model, self.effort, self.max_tokens = model, effort, max_tokens
 
-    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict:
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None, *, schema: dict | None = None) -> dict:
         """`images` (optional): [{"mime": "image/jpeg", "data": bytes}], sent before the text for vision."""
         anthropic = self._anthropic
         content = user
@@ -62,6 +64,10 @@ class ClaudeClient:
         )
         if self.effort:
             request["output_config"] = {"effort": self.effort}
+        if schema is not None:
+            request.setdefault("output_config", {})["format"] = {
+                "type": "json_schema", "schema": anthropic.transform_schema(schema),
+            }
         try:
             response = self._client.beta.messages.create(**request)
         except anthropic.AuthenticationError as exc:
@@ -98,7 +104,7 @@ class FakeLLM:
         self.responses = list(responses)
         self.calls = []
 
-    def generate_json(self, system: str, user: str, images: list[dict] | None = None) -> dict:
+    def generate_json(self, system: str, user: str, images: list[dict] | None = None, *, schema: dict | None = None) -> dict:
         self.calls.append((system, user))
         if not self.responses:
             raise LLMError("FakeLLM has no more scripted responses")

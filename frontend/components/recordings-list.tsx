@@ -108,7 +108,7 @@ export function RecordingsList({ projectId }: { projectId: string }) {
                 {rec.has_audio ? (
                   <RecordingAudio src={recordingAudioUrl(projectId, rec.id)} className="w-full" />
                 ) : (
-                  <p className="text-xs text-muted-foreground">Typed or dictated note (no audio stored).</p>
+                  <p className="text-xs text-muted-foreground">No audio available for this note.</p>
                 )}
                 {rec.transcript && <p className="text-sm">{rec.transcript}</p>}
                 <Analysis rec={rec} />
