@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { sourceFileUrl } from "@/lib/api";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { SOURCE_TYPE_LABEL } from "@/lib/format";
+import { sourceTitle } from "@/lib/source-title";
 import { useDocumentJob, useInvalidateOnJobDone, useSources, useUploadDocument } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime, fmtTime, localDateOf } from "@/lib/time";
@@ -222,11 +223,8 @@ const GROUPS: Group[] = [
 ];
 const groupOf = (t: SourceType) => GROUPS.find((g) => g.types.includes(t))!;
 
-/** Records captured in the app are named after their file; show what they are instead. */
-function displayTitle(s: Source) {
-  const machine = /\.(webm|aiff?|wav|m4a|mp3|ogg|jpe?g|png|heic)$/i.test(s.title) || /^Record\s+[A-Z]+-/i.test(s.title) || s.title === s.id;
-  return machine ? SOURCE_TYPE_LABEL[s.type] : s.title;
-}
+/** Records captured in the app are named after their file; show what was said or seen instead. */
+const displayTitle = (s: Source) => sourceTitle(s);
 
 /** Same id, same bars: a decorative waveform for voice notes. */
 function Wave({ seed }: { seed: string }) {
@@ -276,7 +274,7 @@ function Visual({ s }: { s: Source }) {
     s.type === "voice" ? <Wave seed={s.id} />
       : s.type === "email" ? <Envelope />
       : (s.type === "text" || s.type === "diary") && displayTitle(s) !== SOURCE_TYPE_LABEL[s.type] ? (
-        <span className="line-clamp-3 px-3 text-left text-[11.5px] leading-snug font-medium text-foreground/80">“{s.title}”</span>
+        <span className="line-clamp-3 px-3 text-left text-[11.5px] leading-snug font-medium text-foreground/80">“{displayTitle(s)}”</span>
       )
       : s.type === "text" || s.type === "diary" ? <StickyNote className="size-8 text-stone-500/60" aria-hidden />
       : s.type === "photo" ? <ImageIcon className="size-8 text-emerald-700/50" aria-hidden />

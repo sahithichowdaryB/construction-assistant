@@ -108,6 +108,7 @@ export const sourceSchema = z.object({
   summary_status: z.string().nullish(),
   /** False for records captured in the app (typed or transcribed): there is no original file */
   has_file: z.boolean().optional(),
+  headline: z.string().nullish(),
 });
 /** One malformed record must not hide the whole document list: skip it and say so in the console. */
 export const sourcesSchema = z.array(z.unknown()).transform((items) =>

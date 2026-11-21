@@ -78,6 +78,8 @@ export interface Source {
   summary_status?: string | null;
   /** Live API only: false for records captured in the app (no original file to show or download) */
   has_file?: boolean;
+  /** What the record is about, for records that only have a file name as title */
+  headline?: string | null;
 }
 
 export interface Passage {

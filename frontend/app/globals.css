@@ -188,3 +188,55 @@
     opacity: 1;
   }
 }
+
+/* Write with SiteMate: lined paper, a pen that glides, ink lines that draw, letters that write in */
+.paper-lines {
+  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, color-mix(in oklab, var(--info) 22%, transparent) 31px 32px);
+  background-position: 0 14px;
+}
+@keyframes ink-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes pen-glide {
+  0% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  45% {
+    transform: translate(calc(var(--pen-x, 220px)), 6px) rotate(4deg);
+  }
+  50% {
+    transform: translate(calc(var(--pen-x, 220px)), 34px) rotate(-6deg);
+  }
+  95% {
+    transform: translate(0, 40px) rotate(-8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+}
+@keyframes ink-reveal {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes pen-down {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}

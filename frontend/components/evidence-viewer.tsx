@@ -355,7 +355,7 @@ export function OriginalEmbed({
         <audio controls src={url} className="w-full">
           <track kind="captions" />
         </audio>
-        <p className="mt-2 text-xs text-muted-foreground">The transcript is listed under Indexed passages.</p>
+        <p className="mt-2 text-xs text-muted-foreground">The transcript is listed under Transcript.</p>
       </div>
     );
   } else if (mode === "structured" && preview.isPending) {
@@ -381,7 +381,7 @@ export function OriginalEmbed({
       <EmptyState
         icon={<FileQuestion />}
         title="No inline preview for this file"
-        description="Download the original to view it. Its text is listed under Indexed passages."
+        description={`Download the original to view it. Its text is listed under ${source.type === "voice" ? "Transcript" : "Indexed passages"}.`}
         action={<OriginalActions source={source} />}
       />
     );
