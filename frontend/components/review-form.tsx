@@ -57,22 +57,22 @@ export function ReviewForm({ proposal, onDone }: { proposal: Proposal; onDone: (
 
   const confirmButton = (
     <Button size="touch" onClick={() => submit("incident")} disabled={!!blocked || confirm.isPending}>
-      <CheckCircle2 aria-hidden /> Confirm
+      <CheckCircle2 aria-hidden /> Confirm and save
     </Button>
   );
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="transcript">Transcript (editable)</Label>
+        <Label htmlFor="transcript">What was said (you can edit this)</Label>
         <Textarea id="transcript" value={transcript} onChange={(e) => setTranscript(e.target.value)} rows={3} />
         <p className="text-xs text-muted-foreground">
-          Source {proposal.source_id} · basis: {basisLabel(proposal.basis)}
+          From {proposal.source_id} · {basisLabel(proposal.basis)}
         </p>
       </div>
 
       {proposal.duplicate_of && (
-        <div role="status" className="flex flex-col gap-2 rounded-md border border-sky-300 bg-sky-50 p-3 text-sm text-sky-950">
+        <div role="status" className="flex flex-col gap-2 rounded-2xl bg-sky-50 p-4 text-sm text-sky-950 dark:bg-sky-500/10 dark:text-sky-200">
           <p className="flex items-center gap-2 font-medium">
             <Link2 className="size-4" aria-hidden /> Possible duplicate of {proposal.duplicate_of.incident_id}: {proposal.duplicate_of.title}
           </p>
@@ -84,16 +84,16 @@ export function ReviewForm({ proposal, onDone }: { proposal: Proposal; onDone: (
         </div>
       )}
       {proposal.related_incident && (
-        <div role="status" className="rounded-md border border-sky-300 bg-sky-50 p-3 text-sm text-sky-950">
+        <div role="status" className="rounded-2xl bg-sky-50 p-4 text-sm text-sky-950 dark:bg-sky-500/10 dark:text-sky-200">
           <Link2 className="mr-1 inline size-4" aria-hidden />
           This {proposal.kind} will be attached to {proposal.related_incident.incident_id}: {proposal.related_incident.title}
         </div>
       )}
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-sm font-semibold">Proposed fields</legend>
+        <legend className="mb-1 text-sm font-semibold">Details to check</legend>
         {proposal.fields.map((f) => (
-          <div key={f.key} className="grid gap-1.5 rounded-md border p-3 sm:grid-cols-[10rem_1fr] sm:items-start">
+          <div key={f.key} className={`grid gap-1.5 rounded-2xl p-3 sm:grid-cols-[10rem_1fr] sm:items-start ${f.provenance === "missing" ? "border border-dashed border-amber-400/70 bg-amber-50 dark:bg-amber-500/10" : "bg-muted/50"}`}>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`f-${f.key}`}>{f.label}</Label>
               <ProvenanceBadge provenance={f.provenance} className="self-start" />
@@ -102,13 +102,13 @@ export function ReviewForm({ proposal, onDone }: { proposal: Proposal; onDone: (
               <Input
                 id={`f-${f.key}`}
                 value={values[f.key] ?? ""}
-                placeholder={f.provenance === "missing" ? "Missing: please provide" : undefined}
+                placeholder={f.provenance === "missing" ? "Not in the note. Please fill in." : undefined}
                 onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                className={f.provenance === "missing" ? "h-11 border-red-300 md:h-9" : "h-11 md:h-9"}
+                className="h-11 bg-card md:h-9"
                 aria-describedby={f.note ? `n-${f.key}` : undefined}
               />
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                {f.source_ref ? <CitationChip refData={f.source_ref} /> : <span>No source</span>}
+                {f.source_ref ? <CitationChip refData={f.source_ref} /> : <span>No source given</span>}
                 {f.note && <span id={`n-${f.key}`}>{f.note}</span>}
               </div>
             </div>
@@ -118,7 +118,7 @@ export function ReviewForm({ proposal, onDone }: { proposal: Proposal; onDone: (
 
       {proposal.follow_up_questions.length > 0 && (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold">Follow-up questions</legend>
+          <legend className="mb-1 text-sm font-semibold">A few questions</legend>
           {proposal.follow_up_questions.map((q) => (
             <div key={q.id} className="flex flex-col gap-1.5">
               <Label htmlFor={`q-${q.id}`}>{q.question}</Label>
@@ -126,7 +126,7 @@ export function ReviewForm({ proposal, onDone }: { proposal: Proposal; onDone: (
                 id={`q-${q.id}`}
                 value={answers[q.id] ?? ""}
                 onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                placeholder="Leave empty if unknown"
+                placeholder="Leave blank if you don't know"
                 className="h-11 md:h-9"
               />
             </div>

@@ -246,16 +246,18 @@ export function fxDismissAlert(id: string, reason: string, asOf: string) {
 }
 
 // ---------- incidents ----------
-export function fxIncidents(asOf: string): Incident[] {
+/** All incidents; with asOf, only what had been reported (and happened in the timeline) by then. */
+export function fxIncidents(asOf: string | null = null): Incident[] {
+  const known = (at: string) => asOf === null || isAvailable(at, asOf);
   return incidents
-    .filter((i) => isAvailable(i.reported_at, asOf))
+    .filter((i) => known(i.reported_at))
     .map((i) => {
-      const resolved = i.resolved_at && isAvailable(i.resolved_at, asOf) ? i.resolved_at : null;
-      const timeline = i.timeline.filter((e) => isAvailable(e.at, asOf));
+      const resolved = i.resolved_at && known(i.resolved_at) ? i.resolved_at : null;
+      const timeline = i.timeline.filter((e) => known(e.at));
       for (const d of state.drafts.filter((d) => d.incident_id === i.id)) {
         for (const v of d.versions) {
           const approval = v.reviews.find((r) => r.decision === "approved");
-          if (approval && isAvailable(approval.decided_at, asOf))
+          if (approval && known(approval.decided_at))
             timeline.push({
               kind: "approved",
               at: approval.decided_at,
@@ -271,9 +273,9 @@ export function fxIncidents(asOf: string): Incident[] {
     .sort((a, b) => b.reported_at.localeCompare(a.reported_at));
 }
 
-export function fxIncident(id: string, asOf: string): Incident {
+export function fxIncident(id: string, asOf: string | null = null): Incident {
   const i = fxIncidents(asOf).find((x) => x.id === id);
-  if (!i) throw new FixtureError(404, `Incident ${id} is not available at this time`);
+  if (!i) throw new FixtureError(404, asOf ? `Incident ${id} had not been reported by this time` : `Incident ${id} was not found`);
   return i;
 }
 
@@ -338,7 +340,7 @@ export function fxToday(asOf: string): TodayBriefing {
     },
     activities: todays,
     open_alerts: fxAlerts(asOf),
-    open_incidents: fxIncidents(asOf).filter((i) => i.status !== "resolved"),
+    open_incidents: fxIncidents().filter((i) => i.status !== "resolved"),
     drafts_awaiting_review: fxDrafts(asOf).filter((d) => d.status !== "approved"),
   };
 }

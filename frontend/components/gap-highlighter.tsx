@@ -18,7 +18,7 @@ function inline(text: string, sources: CitedSource[], keyPrefix: string): ReactN
     const key = `${keyPrefix}-${i}`;
     if (/^\[(MISSING|UNVERIFIED):/.test(part)) {
       return (
-        <mark key={key} className="rounded bg-red-100 px-1 font-medium text-red-800 ring-1 ring-red-300">
+        <mark key={key} className="rounded-md border border-dashed border-amber-500 bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900">
           <AlertTriangle className="mr-0.5 inline size-3 align-[-1px]" aria-hidden />
           {part}
         </mark>

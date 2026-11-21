@@ -6,25 +6,24 @@ import { DraftStatusBadge } from "@/components/badges";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
 import { EmptyState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
-import { Button } from "@/components/ui/button";
 import { NOTICE_LABEL } from "@/lib/format";
 import { useDrafts } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
-import { AS_OF_PRESETS, fmtDateTime, localToIso } from "@/lib/time";
+import { fmtDateTime } from "@/lib/time";
 import { useRouter } from "next/navigation";
 
 export default function DraftsPage() {
   const drafts = useDrafts();
-  const { role, setAsOf } = useApp();
+  const { role } = useApp();
   const router = useRouter();
   return (
     <>
       <PageHeader
-        title="Drafts"
-        description="Notices prepared from alerts or keywords. Every version needs review before export."
+        title="Notices"
+        description="Letters drafted from alerts or incidents. Each version is reviewed before it is sent."
         actions={
           <GatedButton reason={denyReason(role, "create_draft")} size="touch" onClick={() => router.push("/drafts/new")}>
-            <Plus aria-hidden /> New draft
+            <Plus aria-hidden /> New notice
           </GatedButton>
         }
       />
@@ -34,12 +33,12 @@ export default function DraftsPage() {
         empty={
           <EmptyState
             icon={<FilePen />}
-            title="No drafts yet"
-            description="The delay notice is drafted when the signed report arrives at 17:30 on 10 November."
+            title="No notices yet"
+            description="Create one from an alert or incident, or start from keywords."
             action={
-              <Button size="touch" variant="outline" onClick={() => setAsOf(localToIso(AS_OF_PRESETS[2].local))}>
-                Jump to {AS_OF_PRESETS[2].label}
-              </Button>
+              <GatedButton reason={denyReason(role, "create_draft")} size="touch" variant="outline" onClick={() => router.push("/drafts/new")}>
+                <Plus aria-hidden /> New notice
+              </GatedButton>
             }
           />
         }
@@ -52,7 +51,7 @@ export default function DraftsPage() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{d.title}</span>
                     <span className="text-xs text-muted-foreground">
-                      {NOTICE_LABEL[d.type]} · v{d.latest_version} · {d.open_gaps} open gap{d.open_gaps === 1 ? "" : "s"} · updated {fmtDateTime(d.updated_at)}
+                      {NOTICE_LABEL[d.type]} · version {d.latest_version} · {d.open_gaps} item{d.open_gaps === 1 ? "" : "s"} to complete · updated {fmtDateTime(d.updated_at)}
                     </span>
                   </span>
                   <DraftStatusBadge status={d.status} />

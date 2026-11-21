@@ -1,18 +1,17 @@
 "use client";
 
-import { ArrowLeft, Download, FileDown, Save, Send, ShieldCheck, Undo2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Download, Eye, History, PencilLine, Save, Scale, Send, ShieldCheck, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DraftStatusBadge } from "@/components/badges";
-import { DisclaimerBanner } from "@/components/disclaimer-banner";
+import { DISCLAIMER } from "@/components/disclaimer-banner";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { findGapMarkers, GapHighlighter } from "@/components/gap-highlighter";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
-import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
+import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -73,132 +72,177 @@ function Editor({ draft, version, latest, onSaved }: { draft: Draft; version: Dr
   const reviewBase =
     notLatest ?? (dirty ? "Save your changes as a new version first." : null) ?? (version.status !== "in_review" ? "Submit the version for review first." : null);
   const approveReason =
-    denyReason(role, "approve") ?? reviewBase ?? (openCount > 0 ? `${openCount} gap${openCount === 1 ? "" : "s"} remain. Fill or omit each one with a reason.` : null);
+    denyReason(role, "approve") ?? reviewBase ?? (openCount > 0 ? `${openCount} item${openCount === 1 ? "" : "s"} still to complete. Fill each one in or remove it.` : null);
   const changesReason = denyReason(role, "request_changes") ?? reviewBase;
-  const exportReason = version.status !== "approved" ? "Only an approved version can be exported." : denyReason(role, "export");
+  const exportReason = version.status !== "approved" ? "Approve this version before downloading it." : denyReason(role, "export");
 
   const mutationError = save.error ?? review.error ?? exporter.error;
   const busy = save.isPending || review.isPending || exporter.isPending;
 
-  const doExport = (format: "pdf" | "docx") =>
+  const doExport = () =>
     exporter.mutate(
-      { version: version.version, format },
+      { version: version.version, format: "pdf" },
       {
         onSuccess: (exp) => {
           const a = document.createElement("a");
           a.href = exp.url;
-          a.download = `${draft.id}-v${version.version}.${format}.txt`;
+          a.download = `${draft.id}-v${version.version}.txt`;
           a.click();
+          // The object URL is only needed for this click; release it afterwards.
+          window.setTimeout(() => URL.revokeObjectURL(exp.url), 1000);
         },
       },
     );
 
+  const steps = [
+    { label: "Details complete", done: openCount === 0, hint: openCount ? `${openCount} to fill in` : "All filled" },
+    { label: "Saved as a version", done: !dirty, hint: dirty ? "Unsaved changes" : `Version ${version.version}` },
+    { label: "Submitted for review", done: version.status === "in_review" || version.status === "approved", hint: version.status === "changes_requested" ? "Changes requested" : null },
+    { label: "Approved", done: version.status === "approved", hint: null },
+  ];
+  const doneCount = steps.filter((st) => st.done).length;
+
+  /** The one action that moves this notice forward right now. */
+  const next =
+    dirty && editable
+      ? { label: "Save changes", Icon: Save, reason: saveReason, run: () => save.mutate({ body, gaps, base_version: version.version, author: ROLE_PERSON[role] }, { onSuccess: onSaved }) }
+      : version.status === "draft" || version.status === "changes_requested"
+        ? { label: "Submit for review", Icon: Send, reason: submitReason, run: () => review.mutate({ version: version.version, decision: "submitted", reviewer: ROLE_PERSON[role] }) }
+        : version.status === "in_review"
+          ? { label: "Approve notice", Icon: ShieldCheck, reason: approveReason, run: () => review.mutate({ version: version.version, decision: "approved", reviewer: ROLE_PERSON[role] }) }
+          : { label: "Download approved letter", Icon: Download, reason: exportReason, run: doExport };
+
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        <DraftStatusBadge status={version.status} className="text-sm" />
-        {openCount > 0 ? (
-          <span className="text-sm text-red-800">{openCount} open gap{openCount === 1 ? "" : "s"}</span>
-        ) : (
-          <span className="text-sm text-emerald-800">No open gaps</span>
-        )}
-        {dirty && <span className="text-sm text-amber-800">Unsaved changes</span>}
-        {latest.status === "draft" && draft.versions.some((v) => v.status === "approved") && (
-          <span className="text-sm text-muted-foreground">An earlier version was approved; this edit needs its own review.</span>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <GatedButton reason={saveReason} size="touch" disabled={busy} onClick={() => save.mutate({ body, gaps, base_version: version.version, author: ROLE_PERSON[role] }, { onSuccess: onSaved })}>
-          <Save aria-hidden /> Save version
-        </GatedButton>
-        {dirty && editable && (
-          <Button
-            variant="ghost"
-            size="touch"
-            onClick={() => {
-              setBody(version.body);
-              setGaps(version.gaps);
-            }}
-          >
-            <Undo2 aria-hidden /> Discard changes
-          </Button>
-        )}
-        <GatedButton reason={submitReason} size="touch" variant="outline" disabled={busy} onClick={() => review.mutate({ version: version.version, decision: "submitted", reviewer: ROLE_PERSON[role] })}>
-          <Send aria-hidden /> Submit for review
-        </GatedButton>
-        <GatedButton reason={approveReason} size="touch" variant="outline" disabled={busy} onClick={() => review.mutate({ version: version.version, decision: "approved", reviewer: ROLE_PERSON[role] })}>
-          <ShieldCheck aria-hidden /> Approve
-        </GatedButton>
-        <GatedButton reason={changesReason} size="touch" variant="outline" disabled={busy} onClick={() => setReasonOpen(true)}>
-          <Undo2 aria-hidden /> Request changes
-        </GatedButton>
-        <GatedButton reason={exportReason} size="touch" variant="outline" disabled={busy} onClick={() => doExport("pdf")}>
-          <FileDown aria-hidden /> Export PDF
-        </GatedButton>
-        <GatedButton reason={exportReason} size="touch" variant="outline" disabled={busy} onClick={() => doExport("docx")}>
-          <Download aria-hidden /> Export Word
-        </GatedButton>
-      </div>
-      {mutationError && <ErrorState error={mutationError} />}
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Letter</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue={editable ? "edit" : "preview"}>
-              <TabsList>
-                <TabsTrigger value="edit" disabled={!editable} className="min-h-9">
-                  Edit
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        {/* Letter */}
+        <section aria-label="Letter" className="flex min-w-0 flex-col gap-3">
+          <Tabs defaultValue="preview" className="gap-0">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <TabsList className="rounded-xl">
+                <TabsTrigger value="preview" className="min-h-9 rounded-lg px-4">
+                  <Eye aria-hidden /> Read
                 </TabsTrigger>
-                <TabsTrigger value="preview" className="min-h-9">
-                  Preview
+                <TabsTrigger value="edit" disabled={!editable} className="min-h-9 rounded-lg px-4">
+                  <PencilLine aria-hidden /> Edit
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="edit" className="mt-3">
-                <Label htmlFor="draft-body" className="sr-only">
-                  Letter text (Markdown)
-                </Label>
-                <Textarea id="draft-body" value={body} onChange={(e) => setBody(e.target.value)} rows={22} className="font-mono text-sm" readOnly={!editable} />
-                <p className="mt-1 text-xs text-muted-foreground">Markdown. [n] cites source n. Keep [MISSING: …] until resolved.</p>
-              </TabsContent>
-              <TabsContent value="preview" className="mt-3 rounded-md border bg-white p-4">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                {dirty && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">Unsaved changes</span>}
+                Based on records up to {fmtDateTime(version.as_of)}
+              </span>
+            </div>
+            <div className="rounded-[22px] bg-[#fffdf8] text-[#1c1d20] shadow-[0_1px_2px_rgba(17,18,20,0.05),0_12px_32px_-12px_rgba(17,18,20,0.12)] ring-1 ring-black/5">
+              <div className="flex items-center justify-between border-b border-black/5 px-6 py-3 text-[11px] font-semibold tracking-wider text-[#b45309] uppercase md:px-10">
+                <span>Version {version.version}</span>
+                <span className="text-[#6b7078]">{NOTICE_LABEL[draft.type]}</span>
+              </div>
+              <TabsContent value="preview" className="px-6 py-7 text-[15px] md:px-10 md:py-9 [&_p]:leading-7">
                 <GapHighlighter text={body} sources={version.evidence_refs} />
               </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Evidence</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EvidencePanel
-                sources={version.evidence_refs}
-                gaps={gaps}
-                strayMarkers={strayMarkers}
-                assumptions={version.assumptions}
-                editable={editable}
-                onFill={(g, v) => resolve(g, "filled", v)}
-                onOmit={(g, r) => resolve(g, "omitted", r)}
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Review and export history (v{version.version})</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 text-sm">
+              <TabsContent value="edit" className="px-4 py-4 md:px-8 md:py-6">
+                <Label htmlFor="draft-body" className="sr-only">
+                  Letter text
+                </Label>
+                <Textarea
+                  id="draft-body"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={24}
+                  className="min-h-[520px] resize-y border-0 bg-transparent text-[15px] leading-7 text-[#1c1d20] shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  readOnly={!editable}
+                />
+                <p className="mt-2 text-xs text-[#6b7078]">Text in [square brackets] still needs information. Fill it in on the right or remove it before approval.</p>
+              </TabsContent>
+              <p className="flex items-center gap-2 border-t border-black/5 px-6 py-3 text-xs text-[#6b7078] md:px-10">
+                <Scale className="size-3.5 shrink-0" aria-hidden /> {DISCLAIMER}
+              </p>
+            </div>
+          </Tabs>
+        </section>
+
+        {/* Review rail */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="rounded-[22px] bg-card p-5">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-base font-bold">Before it goes out</h2>
+              <span className="text-sm text-muted-foreground tabular">
+                {doneCount}/{steps.length}
+              </span>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+            </div>
+            <ol className="mt-4 flex flex-col gap-3">
+              {steps.map((st) => (
+                <li key={st.label} className="flex items-center gap-3 text-sm">
+                  {st.done ? (
+                    <CheckCircle2 className="size-5 shrink-0 text-success" aria-hidden />
+                  ) : (
+                    <Circle className="size-5 shrink-0 text-muted-foreground/50" aria-hidden />
+                  )}
+                  <span className={st.done ? "font-medium" : "text-muted-foreground"}>{st.label}</span>
+                  {st.hint && <span className="ml-auto text-xs text-muted-foreground">{st.hint}</span>}
+                  <span className="sr-only">{st.done ? "done" : "not done"}</span>
+                </li>
+              ))}
+            </ol>
+
+            <GatedButton reason={next.reason} size="touch" disabled={busy} onClick={next.run} className="mt-5 h-12 w-full rounded-2xl text-[15px] md:h-12">
+              <next.Icon aria-hidden /> {next.label}
+            </GatedButton>
+            <div className="mt-2 flex flex-wrap justify-center gap-1">
+              {version.status === "in_review" && (
+                <GatedButton reason={changesReason} size="touch" variant="ghost" disabled={busy} onClick={() => setReasonOpen(true)}>
+                  <Undo2 aria-hidden /> Request changes
+                </GatedButton>
+              )}
+              {dirty && editable && (
+                <Button
+                  variant="ghost"
+                  size="touch"
+                  onClick={() => {
+                    setBody(version.body);
+                    setGaps(version.gaps);
+                  }}
+                >
+                  <Undo2 aria-hidden /> Discard changes
+                </Button>
+              )}
+            </div>
+            {latest.status === "draft" && draft.versions.some((v) => v.status === "approved") && (
+              <p className="mt-2 text-xs text-muted-foreground">An earlier version was approved; this edit needs its own review.</p>
+            )}
+            {mutationError && <ErrorState error={mutationError} className="mt-3" />}
+          </div>
+
+          <div className="rounded-[22px] bg-card p-5">
+            <EvidencePanel
+              sources={version.evidence_refs}
+              gaps={gaps}
+              strayMarkers={strayMarkers}
+              assumptions={version.assumptions}
+              editable={editable}
+              onFill={(g, v) => resolve(g, "filled", v)}
+              onOmit={(g, r) => resolve(g, "omitted", r)}
+            />
+          </div>
+
+          <details className="group rounded-[22px] bg-card p-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-base font-bold">
+              History
+              <span className="text-sm font-normal text-muted-foreground">
+                version {version.version} · {version.reviews.length} review{version.reviews.length === 1 ? "" : "s"}
+              </span>
+            </summary>
+            <div className="mt-3 flex flex-col gap-3 text-sm">
               <p className="text-xs text-muted-foreground">
-                Created {fmtDateTime(version.created_at)} by {version.created_by} · evidence as of {fmtDateTime(version.as_of)}
+                Created {fmtDateTime(version.created_at)} by {version.created_by} · based on records as of {fmtDateTime(version.as_of)}
               </p>
               {version.reviews.length ? (
                 <ul className="flex flex-col gap-2">
                   {version.reviews.map((r, i) => (
-                    <li key={i} className="rounded-md border p-2">
+                    <li key={i} className="rounded-xl bg-muted/60 p-3">
                       <span className="font-medium">{DECISION_LABEL[r.decision]}</span> by {r.reviewer} · {fmtDateTime(r.decided_at)}
                       {r.reason && <p className="text-muted-foreground">Reason: {r.reason}</p>}
                     </li>
@@ -211,15 +255,15 @@ function Editor({ draft, version, latest, onSaved }: { draft: Draft; version: Dr
                 <ul className="flex flex-col gap-1">
                   {version.exports.map((e, i) => (
                     <li key={i} className="break-all">
-                      {e.format.toUpperCase()} · {fmtDateTime(e.created_at)} · SHA-256 <span className="font-mono text-xs">{e.digest.slice(0, 16)}…</span>
+                      {e.format.toUpperCase()} · {fmtDateTime(e.created_at)} · fingerprint <span className="font-mono text-xs" title={e.digest}>{e.digest.slice(0, 12)}…</span>
                     </li>
                   ))}
-                  <li className="text-xs text-muted-foreground">Fixture mode exports the exact approved text; the backend will render PDF and Word.</li>
+                  <li className="text-xs text-muted-foreground">Demo build: the download is a plain-text copy of the approved wording. The live service will produce PDF and Word files.</li>
                 </ul>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </details>
+        </aside>
       </div>
 
       <Dialog open={reasonOpen} onOpenChange={setReasonOpen}>
@@ -265,68 +309,61 @@ export default function DraftEditorPage() {
   const latest = versions.at(-1);
   const version = versions.find((v) => v.version === selected) ?? latest;
 
-  const back = (
-    <Link href="/drafts" className="mb-3 inline-flex min-h-11 items-center gap-1 text-sm hover:underline md:min-h-0">
-      <ArrowLeft className="size-4" aria-hidden /> Drafts
-    </Link>
-  );
-
   return (
     <>
-      {back}
-      <div className="mb-4">
-        <DisclaimerBanner />
-      </div>
+      <Link href="/drafts" className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground md:min-h-0">
+        <ArrowLeft className="size-4" aria-hidden /> Notices
+      </Link>
       {draft.isPending ? (
         <LoadingSkeleton variant="detail" rows={2} />
       ) : draft.isError ? (
         draft.error instanceof ApiError && draft.error.status === 404 ? (
-          <EmptyState title="Draft not available" description="This draft did not exist yet at the selected time. Move the clock forward." />
+          <EmptyState title="Notice not available" description="This notice had not been created by the time you are viewing. Move the time forward to see it." />
         ) : (
           <ErrorState error={draft.error} onRetry={() => void draft.refetch()} />
         )
       ) : !version || !latest ? (
         <EmptyState title="No versions yet" />
       ) : (
-        <div className="flex flex-col gap-4">
-          <PageHeader
-            title={draft.data.title}
-            description={
-              <>
-                {NOTICE_LABEL[draft.data.type]}
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <DraftStatusBadge status={version.status} />
+                <span>{NOTICE_LABEL[draft.data.type]}</span>
                 {draft.data.alert_id && (
                   <>
-                    {" · from "}
-                    <Link className="underline" href={`/alerts/${draft.data.alert_id}`}>
-                      alert
+                    ·
+                    <Link className="font-medium text-foreground underline-offset-2 hover:underline" href={`/alerts/${draft.data.alert_id}`}>
+                      from alert
                     </Link>
                   </>
                 )}
                 {draft.data.incident_id && (
                   <>
-                    {" · incident "}
-                    <Link className="underline" href={`/incidents/${draft.data.incident_id}`}>
-                      {draft.data.incident_id}
+                    ·
+                    <Link className="font-medium text-foreground underline-offset-2 hover:underline" href={`/incidents/${draft.data.incident_id}`}>
+                      from incident
                     </Link>
                   </>
                 )}
-              </>
-            }
-            actions={
-              <Select value={String(version.version)} onValueChange={(v) => setSelected(Number(v))}>
-                <SelectTrigger aria-label="Version" className="h-11 min-w-56 md:h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[...versions].reverse().map((v) => (
-                    <SelectItem key={v.id} value={String(v.version)}>
-                      v{v.version} · {v.status.replace("_", " ")} · {fmtDateTime(v.created_at)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            }
-          />
+              </div>
+              <h1 className="mt-1.5 text-2xl font-bold md:text-[28px]">{draft.data.title}</h1>
+            </div>
+            <Select value={String(version.version)} onValueChange={(v) => setSelected(Number(v))}>
+              <SelectTrigger aria-label="Version" className="h-11 min-w-56 rounded-xl bg-card md:h-10">
+                <History className="size-4" aria-hidden />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[...versions].reverse().map((v) => (
+                  <SelectItem key={v.id} value={String(v.version)}>
+                    Version {v.version} · {v.status.replace("_", " ")} · {fmtDateTime(v.created_at)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Editor key={`${version.id}-${version.status}-${version.reviews.length}`} draft={draft.data} version={version} latest={latest} onSaved={() => setSelected(null)} />
         </div>
       )}

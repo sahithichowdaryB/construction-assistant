@@ -33,6 +33,12 @@ class DiskStorage:
     def get(self, key: str) -> bytes:
         return self._resolve(key).read_bytes()
 
+    def path(self, key: str) -> Path:
+        return self._resolve(key)
+
+    def delete(self, key: str) -> None:
+        self._resolve(key).unlink(missing_ok=True)
+
 
 def audio_storage() -> DiskStorage:
     return DiskStorage(_root("AGENT_UPLOAD_DIR", "storage/voice"))

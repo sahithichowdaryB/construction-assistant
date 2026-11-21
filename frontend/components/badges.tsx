@@ -18,7 +18,7 @@ export function SeverityBadge({
   if (kind === "missing_report")
     return (
       <span className={cn(base, "border-amber-300 bg-amber-50 text-amber-900", className)}>
-        <FileQuestion aria-hidden /> Report missing
+        <FileQuestion aria-hidden /> No report
       </span>
     );
   switch (severity) {
@@ -37,19 +37,19 @@ export function SeverityBadge({
     case "high":
       return (
         <span className={cn(base, "border-red-300 bg-red-50 text-red-800", className)}>
-          <AlertOctagon aria-hidden /> High
+          <AlertOctagon aria-hidden /> High priority
         </span>
       );
     case "medium":
       return (
         <span className={cn(base, "border-amber-300 bg-amber-50 text-amber-900", className)}>
-          <AlertTriangle aria-hidden /> Medium
+          <AlertTriangle aria-hidden /> Medium priority
         </span>
       );
     case "none":
       return (
         <span className={cn(base, "border-emerald-300 bg-emerald-50 text-emerald-800", className)}>
-          <CheckCircle2 aria-hidden /> Within threshold
+          <CheckCircle2 aria-hidden /> On track
         </span>
       );
     default:
@@ -63,22 +63,22 @@ export function SeverityBadge({
 
 const PROVENANCE: Record<Provenance, { label: string; cls: string; Icon: typeof CheckCircle2; hint: string }> = {
   verified: {
-    label: "Verified",
+    label: "From source",
     cls: "border-emerald-300 bg-emerald-50 text-emerald-800",
     Icon: CheckCircle2,
-    hint: "Stated in the source",
+    hint: "Stated in the source document",
   },
   inferred: {
-    label: "Inferred",
+    label: "Please check",
     cls: "border-amber-300 bg-amber-50 text-amber-900",
     Icon: HelpCircle,
-    hint: "Derived from a register or context; please check",
+    hint: "Worked out from project records. Check before use.",
   },
   missing: {
-    label: "Missing",
+    label: "Not in source",
     cls: "border-red-300 bg-red-50 text-red-800",
     Icon: XCircle,
-    hint: "Not found in the source",
+    hint: "Not found in the source document",
   },
 };
 
@@ -93,7 +93,7 @@ export function ProvenanceBadge({ provenance, className }: { provenance: Provena
 
 const DRAFT: Record<DraftStatus, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
   draft: { label: "Draft", cls: "border-border bg-muted text-foreground", Icon: FilePen },
-  in_review: { label: "In review", cls: "border-sky-300 bg-sky-50 text-sky-800", Icon: Eye },
+  in_review: { label: "Awaiting review", cls: "border-sky-300 bg-sky-50 text-sky-800", Icon: Eye },
   changes_requested: { label: "Changes requested", cls: "border-amber-300 bg-amber-50 text-amber-900", Icon: RotateCcw },
   approved: { label: "Approved", cls: "border-emerald-300 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
 };
@@ -108,10 +108,10 @@ export function DraftStatusBadge({ status, className }: { status: DraftStatus; c
 }
 
 const JOB: Record<JobStatus, { label: string; cls: string; Icon: typeof CheckCircle2; spin?: boolean }> = {
-  uploaded: { label: "Uploaded", cls: "border-border bg-muted text-foreground", Icon: CircleDashed },
-  extracting: { label: "Extracting", cls: "border-sky-300 bg-sky-50 text-sky-800", Icon: CircleDashed, spin: true },
-  indexed: { label: "Indexed", cls: "border-emerald-300 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
-  failed: { label: "Failed", cls: "border-red-300 bg-red-50 text-red-800", Icon: MinusCircle },
+  uploaded: { label: "Received", cls: "border-border bg-muted text-foreground", Icon: CircleDashed },
+  extracting: { label: "Reading", cls: "border-sky-300 bg-sky-50 text-sky-800", Icon: CircleDashed, spin: true },
+  indexed: { label: "Ready", cls: "border-emerald-300 bg-emerald-50 text-emerald-800", Icon: CheckCircle2 },
+  failed: { label: "Could not read", cls: "border-red-300 bg-red-50 text-red-800", Icon: MinusCircle },
 };
 
 export function JobStatusBadge({ status, className }: { status: JobStatus; className?: string }) {

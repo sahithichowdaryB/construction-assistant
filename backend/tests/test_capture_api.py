@@ -21,7 +21,9 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 32
 
 
 @pytest.fixture()
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("AGENT_UPLOAD_DIR", str(tmp_path / "a"))  # the audio route reads the same configured directory
+    monkeypatch.setenv("AGENT_IMAGE_DIR", str(tmp_path / "i"))
     os.environ["DATABASE_URL"] = os.environ.get("TEST_READER_URL", URL)
     os.environ["OPS_DATABASE_URL"] = os.environ.get("TEST_OPS_URL", URL)
     from database import engine_for
@@ -37,7 +39,7 @@ def client(tmp_path):
     with admin.begin() as c:
         _clean(c)
         c.execute(text("INSERT INTO sitemate.projects (id,name,timezone,threshold,high_threshold) VALUES (:p,'c','UTC',10,30)"), {"p": PID})
-        for m, role in (("writer", "contributor"), ("viewer", "viewer")):
+        for m, role in (("writer", "contributor"), ("other", "contributor"), ("viewer", "viewer")):
             c.execute(text("INSERT INTO sitemate.project_members (project_id,member_id,token_hash,role) VALUES (:p,:m,:h,:r)"),
                       {"p": PID, "m": m, "h": sha(f"tok-{m}"), "r": role})
     service = CaptureService(create_engine(os.environ.get("TEST_AGENT_URL", URL)), FakeLLM(),
@@ -77,7 +79,21 @@ def test_auth_and_validation(client):
     assert client.post(f"{url}/00000000-0000-0000-0000-000000000000/answers", headers=AUTH, json={"answers": []}).status_code == 404
 
 
-def test_multipart_capture_confirm_answer_and_save(client):
+def run_to_review(client, text_="The lift is not working", files=None, headers=AUTH):
+    url = f"/projects/{PID}/captures"
+    r = client.post(url, headers=headers, data={"transcript": text_}, files=files or [])
+    assert r.status_code == 202
+    body = r.json()
+    r = client.post(f"{url}/{body['thread_id']}/categories", headers=headers,
+                    json={"events": [{"index": 0, "category": "equipment", "event_type": "equipment_failure", "keep": True}], "added": []})
+    while r.status_code == 202 and r.json()["status"] == "needs_input":  # business rules ask for details
+        qs = r.json()["questions"]
+        r = client.post(f"{url}/{body['thread_id']}/answers", headers=headers, json={"answers": [{"id": x["id"], "answer": "unknown"} for x in qs]})
+    assert r.status_code == 202 and r.json()["status"] == "needs_review"
+    return url, body, r.json()
+
+
+def test_multipart_capture_confirm_answer_review_and_save(client):
     url = f"/projects/{PID}/captures"
     r = client.post(url, headers=AUTH, data={"transcript": "The lift is not working"}, files=[("images", ("p.png", PNG, "image/png"))])
     assert r.status_code == 202
@@ -88,14 +104,55 @@ def test_multipart_capture_confirm_answer_and_save(client):
                     json={"events": [{"index": 0, "category": "equipment", "event_type": "equipment_failure", "keep": True}], "added": []})
     assert r.status_code == 202 and r.json()["status"] == "needs_input"  # business rule asks for details
     qs = r.json()["questions"]
+    assert qs[0]["field_name"]  # the UI picks a date-time input from the field name
     r = client.post(f"{url}/{body['thread_id']}/answers", headers=AUTH, json={"answers": [{"id": x["id"], "answer": "unknown"} for x in qs]})
+    assert r.status_code == 202 and r.json()["status"] == "needs_review"  # the speaker's last look before saving
+    assert client.post(f"{url}/{body['thread_id']}/review", headers={"Authorization": "Bearer tok-other"}, json={}).status_code == 403
+    r = client.post(f"{url}/{body['thread_id']}/review", headers=AUTH, json={})
     assert r.status_code == 201
     saved = r.json()
     assert saved["status"] == "saved" and saved["incident_links"][0]["created"] is True and saved["incident_links"][0]["severity"] == "medium"
     # the same endpoints the UI reads now show the incident
     incidents = client.get(f"/projects/{PID}/incidents", headers=AUTH).json()
     assert incidents[0]["report_count"] == 1 and incidents[0]["category"] == "equipment"
-    assert client.post(f"{url}/{body['thread_id']}/answers", headers=AUTH, json={"answers": []}).status_code == 404
+    assert client.post(f"{url}/{body['thread_id']}/review", headers=AUTH, json={}).status_code == 404
+
+
+def test_review_validation_and_discard(client):
+    url, body, review = run_to_review(client)
+    r = client.post(f"{url}/{body['thread_id']}/review", headers=AUTH, json={"additions": [
+        {"event_index": 0, "field_name": "occurred_at", "value": "yesterday-ish"}]})
+    assert r.status_code == 422 and "date and time" in r.json()["detail"]
+    assert client.post(f"{url}/{body['thread_id']}/review", headers=AUTH, json={"discard": True}).json() == {"status": "discarded"}
+    assert client.get(url, headers=AUTH).json() == {"recordings": []}
+
+
+def test_recordings_list_and_audio_playback(client, tmp_path):
+    client.app.dependency_overrides  # noqa: B018  (the service fixture already stores audio under tmp_path)
+    from capture import get_capture_service
+    service = client.app.dependency_overrides[get_capture_service]()
+    service.transcription_on = lambda: True
+    url = f"/projects/{PID}/captures"
+    r = client.post(url, headers=AUTH, files=[("audio", ("note.webm", b"RIFFfakeaudio", "audio/webm"))])
+    assert r.status_code == 202 and r.json()["transcript"] == "spoken"
+    thread = r.json()["thread_id"]
+    r = client.post(f"{url}/{thread}/categories", headers=AUTH, json={"events": []})
+    while r.json()["status"] == "needs_input":
+        r = client.post(f"{url}/{thread}/answers", headers=AUTH, json={"answers": [{"id": x["id"], "answer": "unknown"} for x in r.json()["questions"]]})
+    assert client.get(url, headers=AUTH).json() == {"recordings": []}  # not saved yet: not listed
+    assert client.post(f"{url}/{thread}/review", headers=AUTH, json={}).status_code == 201
+    mine = client.get(url, headers=AUTH).json()["recordings"]
+    assert len(mine) == 1 and mine[0]["has_audio"] is True and mine[0]["author"] == "writer" and mine[0]["transcript"] == "spoken"
+    assert mine[0]["incidents"] and mine[0]["incidents"][0]["category"] == "equipment"
+    # another member does not see it; the owner can play it, with Range support for seeking
+    assert client.get(url, headers={"Authorization": "Bearer tok-other"}).json() == {"recordings": []}
+    audio = f"{url}/{mine[0]['id']}/audio"
+    assert client.get(audio, headers={"Authorization": "Bearer tok-other"}).status_code == 404
+    r = client.get(audio, headers=AUTH)
+    assert r.status_code == 200 and r.content == b"RIFFfakeaudio" and r.headers["content-type"].startswith("audio/webm")
+    r = client.get(audio, headers={**AUTH, "Range": "bytes=0-3"})
+    assert r.status_code == 206 and r.content == b"RIFF"
+    assert client.get(f"{url}/CAP-NOPE/audio", headers=AUTH).status_code == 404
 
 
 def test_event_categories_for_any_member(client):

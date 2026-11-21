@@ -149,6 +149,7 @@ capture (voice | photos | text)
   → classify: split into events, SUGGEST a category + type + rationale
   → ⏸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
   → search DB → relationships → required-field questions (per category)
+  → ⏸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
   → persist in ONE transaction: passages, events, then
       correlation under an advisory lock (auto-link / LLM adjudicate / new incident),
       severity (rule matrix + bounded LLM nudge), alert + revision, facts, debounced agent job
@@ -163,7 +164,7 @@ add a row with a `project_id` to override per project). Grouping weights and thr
 Setup and run (everything is Python except the web UI):
 
 ```bash
-.venv/bin/alembic upgrade head                  # includes 0005_event_pipeline and 0006_capture_state
+.venv/bin/alembic upgrade head                  # includes 0005_event_pipeline, 0006_capture_state, 0007_capture_review
 .venv/bin/python provision_agent.py             # sitemate_agent: capture writes   (AGENT_DATABASE_URL)
 .venv/bin/python provision_reader.py            # sitemate_reader: read-only API   (DATABASE_URL)
 .venv/bin/python provision_ops.py               # sitemate_ops: manager actions + worker (OPS_DATABASE_URL)
@@ -183,6 +184,9 @@ Capture endpoints on FastAPI, port 8000 (bearer token of a `contributor`, `manag
   `transcript`, optional `recorded_at`. Returns `202 needs_category` with `thread_id` and one suggestion per event.
 - `POST /projects/{pid}/captures/{thread}/categories` — `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
   Events you do not mention keep the AI's suggestion; `keep:false` means "not an event".
+- `POST /projects/{pid}/captures/{thread}/review` — `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
+  Only the person who recorded the note may review it; `discard` deletes the capture and its files; facts are saved as `confirmed` by that person.
+- `GET /projects/{pid}/captures` (this member's saved notes) and `GET /projects/{pid}/captures/{source}/audio` (their recording, Range requests supported).
 - `POST /projects/{pid}/captures/{thread}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
   The final `201 saved` response includes `incident_links` (new incident or which one it joined, report/reporter counts, severity).
 - `GET /projects/{pid}/event-categories` — categories with their types.

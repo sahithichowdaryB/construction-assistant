@@ -112,18 +112,21 @@ def start(service, m, words, **kw):
     return service.start(PID, member(m), text_=words, audio=kw.get("audio"), images=kw.get("images", []), recorded_at=None)
 
 
-def resume(service, thread_id, body):
-    """Confirm categories, then answer any business-rule questions with "unknown", as a user who has nothing to add."""
+def resume(service, thread_id, body, who="m1", review=None):
+    """Confirm categories, answer any business-rule questions with "unknown", then approve the review unchanged:
+    a person who has nothing to add."""
     code, out = service.confirm_categories(PID, thread_id, body)
     while code == 202 and out["status"] == "needs_input":
         code, out = service.answer(PID, thread_id, [{"id": x["id"], "answer": "unknown"} for x in out["questions"]])
+    if code == 202 and out["status"] == "needs_review":
+        code, out = service.review(PID, member(who), thread_id, review or {})
     return code, out
 
 
 def accept(service, m, words):
     status, body = start(service, m, words)
     assert status == 202 and body["status"] == "needs_category"
-    return resume(service, body["thread_id"], {"events": []})
+    return resume(service, body["thread_id"], {"events": []}, who=m)
 
 
 def q(admin, sql, **p):
@@ -162,10 +165,13 @@ def test_a_capture_can_only_be_resumed_once_and_survives_a_restart(svc, admin):
         service.confirm_categories(PID, body["thread_id"], {"events": []})
     assert err.value.status == 404
     answers = [{"id": x["id"], "answer": "unknown"} for x in paused["questions"]]
-    assert FakeLLM and CaptureService(create_engine(os.environ.get("TEST_AGENT_URL", ADMIN)), FakeLLM(), images=service.images,
-                                      audio=service.audio).answer(PID, body["thread_id"], answers)[0] == 201  # a second restart
+    second = CaptureService(create_engine(os.environ.get("TEST_AGENT_URL", ADMIN)), FakeLLM(), images=service.images, audio=service.audio)
+    code, review = second.answer(PID, body["thread_id"], answers)  # a second restart
+    assert (code, review["status"]) == (202, "needs_review")
     with pytest.raises(CaptureError):
         service.answer(PID, body["thread_id"], answers)
+    third = CaptureService(create_engine(os.environ.get("TEST_AGENT_URL", ADMIN)), FakeLLM(), images=service.images, audio=service.audio)
+    assert third.review(PID, member("m1"), body["thread_id"], {})[0] == 201  # and a third
 
 
 def test_five_parallel_reports_of_the_same_lift_become_one_incident(svc):
@@ -236,7 +242,9 @@ def test_required_field_questions_pause_and_resume(svc):
     code, paused = service.confirm_categories(PID, body["thread_id"], {"events": []})
     assert code == 202 and paused["status"] == "needs_input" and paused["questions"][0]["field_name"] == "injured_count"
     assert q(admin, "SELECT status FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["status"] == "needs_input"
-    code, done = service.answer(PID, body["thread_id"], [{"id": paused["questions"][0]["id"], "answer": "0"}])
+    code, review = service.answer(PID, body["thread_id"], [{"id": paused["questions"][0]["id"], "answer": "0"}])
+    assert (code, review["status"]) == (202, "needs_review")
+    code, done = service.review(PID, member("m1"), body["thread_id"], {})
     assert code == 201 and done["incident_links"][0]["created"] is True
     assert any(p["locator"].startswith("answer:") for p in q(admin, "SELECT locator FROM sitemate.source_passages WHERE project_id=:p AND source_id=:s", s=done["source_id"]))
 
@@ -269,3 +277,74 @@ def test_validation_and_failures_are_reported_and_leave_a_retryable_state(svc):
     assert q(admin, "SELECT status FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["status"] == "needs_category"
     llm.fail = None
     assert resume(service, body["thread_id"], {"events": []})[0] == 201
+
+
+def review_ready(service, m="m1", words="Crane fault at the tower"):
+    status, body = start(service, m, words)
+    code, out = service.confirm_categories(PID, body["thread_id"], {"events": []})
+    while out["status"] == "needs_input":
+        code, out = service.answer(PID, body["thread_id"], [{"id": x["id"], "answer": "unknown"} for x in out["questions"]])
+    assert (code, out["status"]) == (202, "needs_review")
+    return body, out
+
+
+def test_facts_are_confirmed_by_the_speaker_and_corrections_are_cited(svc):
+    service, _, admin = svc
+    body, out = review_ready(service)
+    assert out["facts"] == []  # the fake LLM extracted no facts
+    gap = {"event_index": 0, "field_name": "workers_affected", "rule_key": "r", "why": "required by rule"}  # a gap the rules reported
+    state = q(admin, "SELECT state FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["state"]
+    state["validation"]["missing"] = [gap]
+    with admin.begin() as c:
+        c.execute(text("UPDATE sitemate.captures SET state=CAST(:s AS jsonb) WHERE id=CAST(:c AS uuid)"), {"s": json.dumps(state), "c": body["capture_id"]})
+    code, saved = service.review(PID, member("m1"), body["thread_id"], {"additions": [
+        {"event_index": gap["event_index"], "field_name": gap["field_name"], "value": "5"},
+        {"event_index": 0, "field_name": "not_a_gap", "value": "x"}]})  # only a reported gap can be filled
+    assert code == 201 and [f["field_name"] for f in saved["facts"]] == [gap["field_name"]]
+    fact = q(admin, "SELECT * FROM sitemate.capture_facts WHERE project_id=:p AND source_id=:s", s=saved["source_id"])[0]
+    assert (fact["review_status"], fact["reviewed_by"], fact["locator"], fact["basis"]) == ("confirmed", "m1", "review:add0", "reported")
+    assert fact["reviewed_at"] is not None
+    assert q(admin, "SELECT excerpt FROM sitemate.source_passages WHERE project_id=:p AND source_id=:s AND locator='review:add0'", s=saved["source_id"])[0]["excerpt"].startswith("Added ")
+
+
+def test_edits_and_removals_apply_to_extracted_facts(svc):
+    service, _, admin = svc
+    body, out = review_ready(service)
+    state = q(admin, "SELECT state FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["state"]
+    state["validation"]["validated_facts"] = [
+        {"event_index": 0, "field_name": "workers_affected", "value": "3", "basis": "reported", "source": "transcript", "evidence_refs": [], "reasoning": ""},
+        {"event_index": 0, "field_name": "occurred_at", "value": "2026-11-21T09:00:00+01:00", "basis": "reported", "source": "transcript", "evidence_refs": [], "reasoning": ""},
+        {"event_index": 0, "field_name": "zone", "value": "A", "basis": "reported", "source": "transcript", "evidence_refs": [], "reasoning": ""}]
+    with admin.begin() as c:
+        c.execute(text("UPDATE sitemate.captures SET state=CAST(:s AS jsonb) WHERE id=CAST(:c AS uuid)"), {"s": json.dumps(state), "c": body["capture_id"]})
+    with pytest.raises(CaptureError, match="date and time"):
+        service.review(PID, member("m1"), body["thread_id"], {"edits": [{"index": 1, "value": "later"}]})  # index 1 is occurred_at
+    # a refused review leaves the capture waiting, so the person can fix it and resubmit
+    code, saved = service.review(PID, member("m1"), body["thread_id"], {"edits": [{"index": 0, "value": "4"}, {"index": 9, "value": "x"}], "removed": [1]})
+    facts = {f["field_name"]: f for f in saved["facts"]}
+    assert code == 201 and set(facts) == {"workers_affected", "zone"} and facts["workers_affected"]["value"] == "4"
+    row = q(admin, "SELECT value, locator, basis FROM sitemate.capture_facts WHERE project_id=:p AND source_id=:s AND field_name='workers_affected'", s=saved["source_id"])[0]
+    assert (row["value"], row["locator"], row["basis"]) == (4, "review:0", "reported")
+
+
+def test_only_the_speaker_can_review_and_discard_removes_everything(svc, tmp_path):
+    service, _, admin = svc
+    body, _ = review_ready(service, "m1", "Crane fault at the tower")
+    with pytest.raises(CaptureError) as err:
+        service.review(PID, member("m2"), body["thread_id"], {})
+    assert err.value.status == 403
+    assert q(admin, "SELECT status FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["status"] == "needs_review"
+    src = q(admin, "SELECT source_id FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body["capture_id"])[0]["source_id"]
+    status, body2 = service.start(PID, member("m1"), text_="Crane fault again", images=[(b"x", "a.png", "image/png")], audio=(b"RIFF", "n.webm", "audio/webm"), recorded_at=None)
+    code, out = service.confirm_categories(PID, body2["thread_id"], {"events": []})
+    while out["status"] == "needs_input":
+        code, out = service.answer(PID, body2["thread_id"], [{"id": x["id"], "answer": "unknown"} for x in out["questions"]])
+    src2 = q(admin, "SELECT source_id FROM sitemate.captures WHERE id=CAST(:c AS uuid)", c=body2["capture_id"])[0]["source_id"]
+    assert list((tmp_path / "aud" / PID).glob(f"{src2}*")) and list((tmp_path / "img" / PID).glob(f"{src2}*"))
+    assert service.review(PID, member("m1"), body2["thread_id"], {"discard": True}) == (200, {"status": "discarded"})
+    for table, col in (("captures", "source_id"), ("sources", "id"), ("capture_attachments", "source_id"), ("events", "source_id"), ("source_passages", "source_id")):
+        assert q(admin, f"SELECT count(*)::int AS n FROM sitemate.{table} WHERE project_id=:p AND {col}=:s", s=src2)[0]["n"] == 0, table
+    assert not list((tmp_path / "aud" / PID).glob(f"{src2}*")) and not list((tmp_path / "img" / PID).glob(f"{src2}*"))
+    with pytest.raises(CaptureError):  # a discarded capture cannot be resumed
+        service.review(PID, member("m1"), body2["thread_id"], {})
+    assert q(admin, "SELECT count(*)::int AS n FROM sitemate.captures WHERE project_id=:p AND source_id=:s", s=src)[0]["n"] == 1  # the other capture is untouched

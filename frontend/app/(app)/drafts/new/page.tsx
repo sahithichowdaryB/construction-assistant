@@ -14,38 +14,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NOTICE_LABEL } from "@/lib/format";
-import { useAlerts, useCreateDraft } from "@/lib/queries";
+import { useAlerts, useCreateDraft, useIncidents } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import type { NoticeType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const TYPES: NoticeType[] = ["delay", "additional_cost", "defect", "concern"];
+const NONE = "none";
 
-function NewDraftInner() {
+function NewNoticeInner() {
   const params = useSearchParams();
   const router = useRouter();
   const { role } = useApp();
   const alerts = useAlerts();
+  const incidents = useIncidents();
   const create = useCreateDraft();
   const [type, setType] = useState<NoticeType>("delay");
   const [keywords, setKeywords] = useState("");
-  const [alertId, setAlertId] = useState<string>(params.get("alert") ?? "none");
+  const [alertId, setAlertId] = useState<string>(params.get("alert") ?? NONE);
+  const [incidentId, setIncidentId] = useState<string>(params.get("incident") ?? NONE);
 
   const blocked = denyReason(role, "create_draft");
-  const missing = !keywords.trim() && alertId === "none" ? "Enter keywords or choose an alert." : null;
+  const missing = !keywords.trim() && alertId === NONE && incidentId === NONE ? "Add a few keywords, or choose an alert or incident." : null;
 
   return (
     <>
       <Link href="/drafts" className="mb-3 inline-flex min-h-11 items-center gap-1 text-sm hover:underline md:min-h-0">
-        <ArrowLeft className="size-4" aria-hidden /> Drafts
+        <ArrowLeft className="size-4" aria-hidden /> Notices
       </Link>
-      <PageHeader title="New draft" description="Start from keywords or from an open alert. SiteMate retrieves dated evidence and marks every gap." />
+      <PageHeader title="New notice" description="Start from an alert, an incident, or a few keywords. SiteMate pulls in the relevant records and marks anything missing." />
       <div className="mb-4">
         <DisclaimerBanner />
       </div>
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Notice</CardTitle>
+          <CardTitle>What is this notice about?</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -53,14 +56,19 @@ function NewDraftInner() {
             onSubmit={(e) => {
               e.preventDefault();
               create.mutate(
-                { type, keywords: keywords.trim() || null, alert_id: alertId === "none" ? null : alertId },
+                {
+                  type,
+                  keywords: keywords.trim() || null,
+                  alert_id: alertId === NONE ? null : alertId,
+                  incident_id: incidentId === NONE ? null : incidentId,
+                },
                 { onSuccess: (d) => router.push(`/drafts/${d.id}`) },
               );
             }}
           >
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">Notice type</legend>
-              <div className="grid grid-cols-2 gap-2">
+              <legend className="mb-1 text-sm font-medium">Type of notice</legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {TYPES.map((t) => (
                   <label
                     key={t}
@@ -75,18 +83,15 @@ function NewDraftInner() {
                 ))}
               </div>
             </fieldset>
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="keywords">Keywords</Label>
-              <Input id="keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="e.g. EX-02 breakdown, Zone B, foundations" className="h-11 md:h-9" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="from-alert">Start from alert (optional)</Label>
+              <Label htmlFor="from-alert">Based on an alert</Label>
               <Select value={alertId} onValueChange={setAlertId}>
                 <SelectTrigger id="from-alert" className="h-11 md:h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No alert</SelectItem>
+                  <SelectItem value={NONE}>No alert</SelectItem>
                   {alerts.data?.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.activity_code} · {alertSummary(a)}
@@ -94,12 +99,39 @@ function NewDraftInner() {
                   ))}
                 </SelectContent>
               </Select>
-              {alerts.isError && <p className="text-xs text-red-800">Alerts could not be loaded; you can still draft from keywords.</p>}
+              {alerts.isError && <p className="text-xs text-red-800">Alerts could not be loaded. You can still start from keywords.</p>}
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="from-incident">Related incident</Label>
+              <Select value={incidentId} onValueChange={setIncidentId}>
+                <SelectTrigger id="from-incident" className="h-11 md:h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>No incident</SelectItem>
+                  {incidents.data?.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {incidents.isError && <p className="text-xs text-red-800">Incidents could not be loaded. You can still start from keywords.</p>}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="keywords">Keywords (optional)</Label>
+              <Input id="keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="e.g. excavator breakdown, Zone B, foundations" className="h-11 md:h-9" />
+            </div>
+
             {create.isError && <ErrorState error={create.error} />}
-            <GatedButton type="submit" reason={blocked ?? missing} size="touch" disabled={create.isPending} className="self-start">
-              <FilePen aria-hidden /> Create draft
-            </GatedButton>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <GatedButton type="submit" reason={blocked ?? missing} size="touch" disabled={create.isPending} className="self-start">
+                <FilePen aria-hidden /> Create notice
+              </GatedButton>
+              {!blocked && !missing && <p className="text-xs text-muted-foreground">You can edit the wording before anything is sent.</p>}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -107,10 +139,10 @@ function NewDraftInner() {
   );
 }
 
-export default function NewDraftPage() {
+export default function NewNoticePage() {
   return (
     <Suspense>
-      <NewDraftInner />
+      <NewNoticeInner />
     </Suspense>
   );
 }

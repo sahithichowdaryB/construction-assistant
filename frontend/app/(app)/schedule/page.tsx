@@ -10,10 +10,10 @@ import { EmptyState, ErrorState, LoadingSkeleton, PageHeader, QueryState } from 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { servedFromFixtures } from "@/lib/endpoints";
 import { basisLabel, fmtQty } from "@/lib/format";
 import { useActivities, useProgress } from "@/lib/queries";
-import { fmtDateTime, fmtLocalDate } from "@/lib/time";
+import { fmtDateTime, fmtLocalDate, localDateOf } from "@/lib/time";
+import { useApp } from "@/components/providers/app-context";
 import type { Activity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,6 @@ const REPORT_DATES = ["2026-11-08", "2026-11-09", "2026-11-10", "2026-11-11", "2
 
 function DayView({ activity, date, onDate, onClose }: { activity: Activity; date: string; onDate: (d: string) => void; onClose: () => void }) {
   const progress = useProgress(activity.code, date);
-  const live = !servedFromFixtures("progress");
   return (
     <Card className="mt-4" aria-live="polite">
       <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -30,7 +29,7 @@ function DayView({ activity, date, onDate, onClose }: { activity: Activity; date
           <CardTitle>
             <span className="font-mono">{activity.code}</span> {activity.name}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">Day view · data from {live ? "live API" : "fixtures"}</p>
+          <p className="text-xs text-muted-foreground">Daily progress for the selected day</p>
         </div>
         <Button variant="ghost" size="icon-touch" onClick={onClose} aria-label="Close day view">
           <X aria-hidden />
@@ -56,7 +55,7 @@ function DayView({ activity, date, onDate, onClose }: { activity: Activity; date
               <CitationChip refData={progress.data.plan_evidence} />
               {progress.data.evidence && (
                 <>
-                  <span className="text-sm text-muted-foreground">Reading</span>
+                  <span className="text-sm text-muted-foreground">Report</span>
                   <CitationChip refData={progress.data.evidence} />
                 </>
               )}
@@ -69,20 +68,20 @@ function DayView({ activity, date, onDate, onClose }: { activity: Activity; date
               shortfallPct={progress.data.shortfall_pct}
               severity={progress.data.severity}
             />
-            <h3 className="text-sm font-semibold">Eligible observations</h3>
+            <h3 className="text-sm font-semibold">Recorded quantities</h3>
             {progress.data.observations.length ? (
               <ul className="flex flex-col divide-y rounded-md border text-sm">
                 {progress.data.observations.map((o) => (
                   <li key={`${o.source_id}-${o.locator}`} className="flex flex-wrap items-center justify-between gap-2 p-3">
                     <span>
-                      <span className="font-semibold">{fmtQty(o.quantity, progress.data.unit)}</span> · {basisLabel(o.basis)} · available {fmtDateTime(o.available_at)}
+                      <span className="font-semibold">{fmtQty(o.quantity, progress.data.unit)}</span> · {basisLabel(o.basis)} · recorded {fmtDateTime(o.available_at)}
                     </span>
                     <CitationChip refData={{ source_id: o.source_id, locator: o.locator, page: o.page }} />
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No reading at this time: actual is Unknown.</p>
+              <p className="text-sm text-muted-foreground">Nothing has been recorded for this day yet.</p>
             )}
           </div>
         )}
@@ -96,7 +95,8 @@ function ScheduleInner() {
   const params = useSearchParams();
   const router = useRouter();
   const code = params.get("code");
-  const date = params.get("date") ?? "2026-11-10";
+  const { asOf } = useApp();
+  const date = params.get("date") ?? localDateOf(asOf);
 
   const select = (c: string | null, d: string = date) => {
     const sp = new URLSearchParams();
@@ -109,7 +109,7 @@ function ScheduleInner() {
 
   return (
     <>
-      <PageHeader title="Schedule" description="Baseline programme. Select an activity to see plan versus actual for a day." />
+      <PageHeader title="Programme" description="Planned work for each activity. Select one to compare the plan with what was done on a day." />
       <QueryState query={activities} loading={<LoadingSkeleton rows={6} />} empty={<EmptyState title="No activities in the schedule" />}>
         {(list) => {
           const selected = list.find((a) => a.code === code);
@@ -124,8 +124,8 @@ function ScheduleInner() {
                       <TableHead className="hidden sm:table-cell">Zone</TableHead>
                       <TableHead className="hidden md:table-cell">Unit</TableHead>
                       <TableHead className="hidden md:table-cell">Dates</TableHead>
-                      <TableHead className="text-right">Planned/day</TableHead>
-                      <TableHead className="hidden lg:table-cell">Predecessors</TableHead>
+                      <TableHead className="text-right">Planned per day</TableHead>
+                      <TableHead className="hidden lg:table-cell">Must finish first</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

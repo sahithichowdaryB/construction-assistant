@@ -37,6 +37,8 @@ def main():
             cur.execute("GRANT UPDATE (resolved_at, status, severity, severity_version, summary, report_count, "
                         "reporter_count, last_reported_at, recurrence_of_id) ON sitemate.incidents TO sitemate_agent")
             cur.execute("GRANT UPDATE (status, state) ON sitemate.captures TO sitemate_agent")
+            # "Discard" at the review step removes the capture, its source row (no passages exist yet) and its files.
+            cur.execute("GRANT DELETE ON sitemate.captures, sitemate.capture_attachments, sitemate.sources TO sitemate_agent")
             cur.execute("GRANT UPDATE (incident_id, status) ON sitemate.events TO sitemate_agent")
             cur.execute("GRANT UPDATE (unlinked_at) ON sitemate.incident_events TO sitemate_agent")
             cur.execute("GRANT UPDATE (status, checkpoint_at) ON sitemate.alerts TO sitemate_agent")

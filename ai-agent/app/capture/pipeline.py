@@ -3,7 +3,8 @@ paused for the person survives a restart and two clicks can't resume it twice.
 
   start()               upload -> transcribe -> describe photos -> classify         => needs_category   (202)
   confirm_categories()  person's categories -> search -> relationships -> validate  => needs_input (202) | saved (201)
-  answer()              manager's answers  -> validate again                       => needs_input (202) | saved (201)
+  answer()              manager's answers  -> validate again                       => needs_input (202) | needs_review (202)
+  review()              the speaker's edits, removals or discard                   => saved (201) | discarded (200)
 
 Persisting (events, incident grouping, severity, alerts, facts) is one transaction: see persist.py."""
 
@@ -32,6 +33,9 @@ MAX_IMAGES = int(os.environ.get("AGENT_MAX_IMAGES", "5"))
 MAX_QUESTION_ROUNDS = int(os.environ.get("AGENT_MAX_QUESTION_ROUNDS", "2"))
 # How a member's role is weighted as evidence by the root-cause agent (sources.author_role).
 AUTHOR_ROLE = {"contributor": "foreman", "manager": "site_supervisor", "approver": "site_supervisor"}
+
+# Date or date-time like 2026-11-21 or 2026-11-21T09:15:00+01:00 (fromisoformat alone accepts things like "0").
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?(Z|[+-]\d{2}:?\d{2})?$")
 
 BLANK_EVENT = {"occurred_at": None, "zone": None, "activity_code": None, "equipment_id_spoken": None,
                "equipment_description": None, "material": None, "quantity": None, "unit": None, "quantity_basis": None,
@@ -262,6 +266,92 @@ class CaptureService:
                          "transcript": state["transcript"], "events": state["events"],
                          "questions": state["validation"]["questions"], "round": state["round"] + 1}
 
+        # Nothing more to ask: the person who spoke gets a last look at the extracted facts before anything is written.
+        self._set(project_id, capture_id, "needs_review", state)
+        return 202, {"status": "needs_review", "thread_id": state["thread_id"], "capture_id": capture_id,
+                     "transcript": state["transcript"], "events": state["events"],
+                     "facts": [{"index": i, "event_index": f["event_index"], "field_name": f["field_name"], "value": f["value"],
+                                "basis": f["basis"]} for i, f in enumerate(state["validation"]["validated_facts"])],
+                     "gaps": state["validation"]["missing"]}
+
+    # ------------------------------------------------------------------------------------------- review -----------
+    def review(self, project_id: str, member: dict, thread_id: str, body: dict) -> tuple[int, dict]:
+        """body: {edits: [{index, value}], removed: [index], additions: [{event_index, field_name, value}], discard: bool}.
+        Corrected values replace the agent's, removed facts are dropped, additions may only fill a gap the rules reported,
+        and "discard" saves nothing. Only the person who recorded the note may review it."""
+        claimed = self._claim(project_id, thread_id, "needs_review", "review")
+        state, capture_id = claimed["state"], claimed["capture_id"]
+        auditor = steps.Auditor(project_id, capture_id, getattr(self.llm, "model", None))
+        try:
+            if state["captured_by"] != member["member_id"]:
+                raise CaptureError(403, "Only the person who recorded this note can review it")
+            body = body or {}
+            if body.get("discard") is True:
+                self._discard(state)
+                return 200, {"status": "discarded"}
+            self._apply_review(state, body)
+            return self._finish(state, self._taxonomy(project_id), auditor)
+        except Exception:
+            self._set(project_id, capture_id, "needs_review")  # nothing was saved: let the person try again
+            raise
+        finally:
+            auditor.flush(self.engine)
+
+    @staticmethod
+    def _apply_review(state: dict, decision: dict) -> None:
+        facts = state["validation"]["validated_facts"]
+        valid = lambda i: isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(facts)  # noqa: E731
+        removed = {i for i in (decision.get("removed") or []) if valid(i)}
+        edits = {e["index"]: e["value"].strip() for e in (decision.get("edits") or [])
+                 if isinstance(e, dict) and valid(e.get("index")) and isinstance(e.get("value"), str) and e["value"].strip()}
+        additions = [a for a in (decision.get("additions") or []) if isinstance(a, dict)]
+        # occurred_at becomes a timestamp in the database, so refuse anything that is not a date-time before saving.
+        for field, value in ([(facts[i]["field_name"], v) for i, v in edits.items()]
+                             + [(a.get("field_name"), a.get("value")) for a in additions]):
+            if field == "occurred_at" and isinstance(value, str) and value.strip() and not ISO_DATE.match(value.strip()):
+                raise CaptureError(422, f'"occurred at" must be a date and time, for example 2026-11-21T09:15:00+01:00 (got "{value}")')
+
+        notes, reviewed = [], []
+        for index, f in enumerate(facts):
+            if index in removed:
+                continue
+            new = edits.get(index)
+            if new is None or new == str(f["value"]):
+                reviewed.append(f)
+                continue
+            notes.append({"id": str(index), "text": f'Corrected {f["field_name"].replace("_", " ")}: "{f["value"]}" -> "{new}"'})
+            reviewed.append({**f, "value": new, "basis": "reported", "source": f"review:{index}", "evidence_refs": [],
+                             "reasoning": "Corrected by the speaker before saving"})
+        open_gaps = {(g["event_index"], g["field_name"]): g for g in state["validation"]["missing"]}
+        for n, a in enumerate(additions):
+            value = a.get("value").strip() if isinstance(a.get("value"), str) else ""
+            key = (a.get("event_index"), a.get("field_name"))
+            if not value or key not in open_gaps:
+                continue
+            del open_gaps[key]
+            notes.append({"id": f"add{n}", "text": f'Added {a["field_name"].replace("_", " ")}: "{value}"'})
+            reviewed.append({"event_index": a["event_index"], "field_name": a["field_name"], "value": value, "basis": "reported",
+                             "source": f"review:add{n}", "evidence_refs": [], "reasoning": "Supplied by the speaker before saving"})
+        state["validation"] = {**state["validation"], "validated_facts": reviewed, "missing": list(open_gaps.values())}
+        state["review_notes"] = notes
+
+    def _discard(self, state: dict) -> None:
+        """Nothing is kept: the capture, its source row and the uploaded files are removed."""
+        project_id, capture_id, source_id = state["project_id"], state["capture_id"], state["source_id"]
+        with self.engine.begin() as conn:
+            keys = [r[0] for r in conn.execute(text("""
+                DELETE FROM sitemate.capture_attachments WHERE project_id=:p AND capture_id=CAST(:c AS uuid) RETURNING storage_key"""),
+                                               {"p": project_id, "c": capture_id})]
+            conn.execute(text("DELETE FROM sitemate.captures WHERE project_id=:p AND id=CAST(:c AS uuid)"), {"p": project_id, "c": capture_id})
+            conn.execute(text("DELETE FROM sitemate.sources WHERE project_id=:p AND id=:s"), {"p": project_id, "s": source_id})
+        for key in keys:
+            for storage in (self.audio, self.images):
+                try:
+                    storage.delete(key)
+                except (OSError, ValueError):
+                    pass
+
+    def _finish(self, state: dict, taxonomy: Taxonomy, auditor) -> tuple[int, dict]:
         ctx = {
             "adjudicate": lambda event, cands: auditor.run(
                 "correlation", lambda: steps.adjudicate(self.llm, event, cands), input={"event": event["summary"]}),
@@ -269,6 +359,5 @@ class CaptureService:
                 "severity", lambda: steps.adjust_severity(self.llm, incident, rule, stats),
                 incident_id=incident["id"], input={"incident": incident["summary"], "rule": rule["level"]}).model_dump(),
         }
-        state_for_persist = {**state, "validation": state["validation"]}
-        result = persist_capture(self.engine, state_for_persist, taxonomy, ctx)
+        result = persist_capture(self.engine, state, taxonomy, ctx)
         return 201, {"status": "saved", "thread_id": state["thread_id"], "events": state["events"], **result}

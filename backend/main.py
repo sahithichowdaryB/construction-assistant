@@ -250,7 +250,8 @@ def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
         if timeline and timeline[0]["kind"] != "reported":
             timeline[0] = {**timeline[0], "kind": "reported"}
         out.append({"id": r["id"], "activity_code": r["activity_code"],
-                    "type": "equipment_breakdown" if r["kind"] == "equipment_failure" else "other",
+                    "type": {"equipment_failure": "equipment_breakdown", "delivery_delay": "delivery",
+                             "quality_observation": "defect"}.get(r["kind"], "other"),
                     "category": r["category"] or "general", "event_type": r["event_type"] or r["kind"],
                     "title": r["title"], "summary": r["summary"] or r["title"], "zone": r["zone"],
                     "asset_key": r["asset_key"], "severity": r["severity"],

@@ -125,7 +125,7 @@ export function CategoryPicker({
         const changed = c.category !== e.suggested_category || c.event_type !== e.suggested_event_type;
         const raises = categories.find((x) => x.key === c.category)?.creates_incident;
         return (
-          <fieldset key={i} className={cn("flex flex-col gap-3 rounded-lg border p-3", !c.keep && "bg-muted/40 opacity-70")}>
+          <fieldset key={i} className={cn("flex flex-col gap-3 rounded-2xl bg-muted/50 p-4", !c.keep && "bg-muted/40 opacity-70")}>
             <legend className="sr-only">Event {i + 1}</legend>
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm font-medium">{e.summary}</p>

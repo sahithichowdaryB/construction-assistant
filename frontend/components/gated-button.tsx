@@ -10,7 +10,7 @@ export function GatedButton({ reason, children, ...props }: ComponentProps<typeo
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} className="inline-flex rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" aria-label={`${typeof children === "string" ? children : ""} unavailable: ${reason}`}>
+        <span tabIndex={0} className={`inline-flex rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${props.className?.includes("w-full") ? "w-full" : ""}`} aria-label={`${typeof children === "string" ? children : ""} unavailable: ${reason}`}>
           <Button {...props} disabled aria-disabled className={`pointer-events-none ${props.className ?? ""}`}>
             {children}
           </Button>

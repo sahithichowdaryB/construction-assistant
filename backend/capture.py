@@ -5,16 +5,19 @@ insert rights the read-only API role deliberately lacks."""
 
 from functools import lru_cache
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import engine_for
-from deps import check_member, connection, require_writer
+from deps import check_member, connection, current_member, require_writer
 
 from app.capture.llm_factory import get_capture_llm  # noqa: E402  (ai-agent is on sys.path, see main.py)
 from app.capture.pipeline import CaptureError, CaptureService  # noqa: E402
+from app.capture.storage import audio_storage  # noqa: E402
 from app.capture.taxonomy import load_taxonomy  # noqa: E402
 from app.llm import LLMError  # noqa: E402
 
@@ -109,3 +112,116 @@ def event_categories(project_id: str, conn=Depends(connection)):
              "sort_order": c.get("sort_order", 100),
              "types": [{"key": t["key"], "label": t["label"], "severity_hint": t.get("severity_hint")} for t in taxonomy.types_of(c["key"])]}
             for c in taxonomy.categories]
+
+
+class ReviewEdit(BaseModel):
+    index: int
+    value: str
+
+
+class ReviewAddition(BaseModel):
+    event_index: int
+    field_name: str
+    value: str
+
+
+class ReviewBody(BaseModel):
+    edits: list[ReviewEdit] = Field(default_factory=list)
+    removed: list[int] = Field(default_factory=list)
+    additions: list[ReviewAddition] = Field(default_factory=list)
+    discard: bool = False
+
+
+@router.post("/projects/{project_id}/captures/{thread_id}/review")
+def review_capture(project_id: str, thread_id: str, body: ReviewBody, member=Depends(require_writer),
+                   service: CaptureService = Depends(get_capture_service)):
+    """The speaker's last look before anything is saved: corrected values, removed facts, values for gaps the rules
+    reported, or `discard` to save nothing. Only the person who recorded the note may review it."""
+    return _respond(lambda: service.review(project_id, member, thread_id, body.model_dump()))
+
+
+# ------------------------------------------------------------------------ the member's saved notes ---------------
+
+AUDIO_TYPES = {".webm": "audio/webm", ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+               ".aiff": "audio/aiff", ".ogg": "audio/ogg"}
+# A member sees their own saved notes. Older voice notes saved before authorship was recorded (author is null) stay visible.
+VISIBLE = """((c.id IS NOT NULL AND c.status = 'saved' AND s.author = :me)
+              OR (c.id IS NULL AND s.kind = 'voice_note' AND (s.author = :me OR s.author IS NULL)))"""
+
+
+@router.get("/projects/{project_id}/captures")
+def list_recordings(project_id: str, member=Depends(current_member), conn=Depends(connection)):
+    """This member's saved notes, newest first: transcript, answers, facts and the incidents they raised."""
+    rows = [dict(r) for r in conn.execute(text(f"""
+        SELECT s.id, s.path, s.available_at, s.author, s.author_role,
+               EXISTS (SELECT 1 FROM sitemate.capture_attachments a
+                       WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio')
+                 OR (c.id IS NULL AND s.path <> 'inline:transcript') AS has_audio
+        FROM sitemate.sources s LEFT JOIN sitemate.captures c ON (c.project_id, c.source_id) = (s.project_id, s.id)
+        WHERE s.project_id = :p AND {VISIBLE} ORDER BY s.available_at DESC LIMIT 50"""),
+                            {"p": project_id, "me": member["member_id"]}).mappings()]
+    if not rows:
+        return {"recordings": []}
+    ids = [r["id"] for r in rows]
+    passages = [dict(r) for r in conn.execute(text("""
+        SELECT source_id, locator, excerpt FROM sitemate.source_passages
+        WHERE project_id = :p AND source_id = ANY(CAST(:ids AS text[]))
+          AND (locator = 'transcript' OR locator LIKE 'answer:%' OR locator LIKE 'review:%') ORDER BY source_id, locator"""),
+                                 {"p": project_id, "ids": ids}).mappings()]
+    all_facts = [dict(r) for r in conn.execute(text("""
+        SELECT id::text AS id, supersedes_id::text AS supersedes_id, source_id, incident_id::text AS incident_id, field_name, value,
+               basis, review_status, reviewed_by, effective_at
+        FROM sitemate.capture_facts WHERE project_id = :p AND source_id = ANY(CAST(:ids AS text[]))
+        ORDER BY effective_at, field_name, id"""), {"p": project_id, "ids": ids}).mappings()]
+    superseded = {f["supersedes_id"] for f in all_facts if f["supersedes_id"]}  # a fact a later row supersedes is history
+    facts = [f for f in all_facts if f["id"] not in superseded]
+    # incidents a note raised or joined: through its facts, and through the events grouped into incidents
+    event_links = [dict(r) for r in conn.execute(text("""
+        SELECT source_id, incident_id::text AS incident_id FROM sitemate.events
+        WHERE project_id = :p AND source_id = ANY(CAST(:ids AS text[])) AND incident_id IS NOT NULL ORDER BY event_index"""),
+                                                 {"p": project_id, "ids": ids}).mappings()]
+    incident_ids = sorted({f["incident_id"] for f in facts if f["incident_id"]} | {e["incident_id"] for e in event_links})
+    incidents = {i["id"]: i for i in (dict(r) for r in conn.execute(text("""
+        SELECT id::text AS id, kind, title, activity_code, occurred_at, resolved_at, category, status, severity
+        FROM sitemate.incidents WHERE project_id = :p AND id = ANY(CAST(:ids AS uuid[]))"""),
+                                                {"p": project_id, "ids": incident_ids}).mappings())} if incident_ids else {}
+    out = []
+    for r in rows:
+        own = [x for x in passages if x["source_id"] == r["id"]]
+        mine = [f for f in facts if f["source_id"] == r["id"]]
+        out.append({
+            "id": r["id"], "recorded_at": r["available_at"], "has_audio": bool(r["has_audio"]), "author": r["author"],
+            "author_role": r["author_role"],
+            "transcript": next((x["excerpt"] for x in own if x["locator"] == "transcript"), None),
+            "answers": [x["excerpt"] for x in own if x["locator"].startswith("answer:")],
+            "facts": [{"field_name": f["field_name"], "value": f["value"], "basis": f["basis"], "review_status": f["review_status"],
+                       "reviewed_by": f["reviewed_by"], "incident_id": f["incident_id"]} for f in mine],
+            "incidents": [incidents[i] for i in dict.fromkeys(
+                [e["incident_id"] for e in event_links if e["source_id"] == r["id"]] + [f["incident_id"] for f in mine if f["incident_id"]])
+                          if i in incidents],
+        })
+    return {"recordings": out}
+
+
+@router.get("/projects/{project_id}/captures/{source_id}/audio")
+def recording_audio(project_id: str, source_id: str, member=Depends(current_member), conn=Depends(connection)):
+    """The stored recording of one of this member's notes. FileResponse serves Range requests, so seeking works."""
+    row = conn.execute(text(f"""
+        SELECT s.path, s.kind, (SELECT a.storage_key FROM sitemate.capture_attachments a
+                                WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio' LIMIT 1) AS key,
+               (SELECT a.mime FROM sitemate.capture_attachments a
+                WHERE (a.project_id, a.source_id) = (s.project_id, s.id) AND a.kind = 'audio' LIMIT 1) AS mime
+        FROM sitemate.sources s LEFT JOIN sitemate.captures c ON (c.project_id, c.source_id) = (s.project_id, s.id)
+        WHERE s.project_id = :p AND s.id = :s AND {VISIBLE}"""),
+                       {"p": project_id, "s": source_id, "me": member["member_id"]}).mappings().one_or_none()
+    key = row and (row["key"] or (row["path"] if row["kind"] == "voice_note" and row["path"] != "inline:transcript" else None))
+    if not key:
+        raise HTTPException(404, "No recording for this note")
+    try:
+        file = audio_storage().path(key)
+    except ValueError:
+        raise HTTPException(404, "No recording for this note") from None
+    if not file.is_file():
+        raise HTTPException(404, "Recording file is missing")
+    return FileResponse(file, media_type=(row["mime"] or AUDIO_TYPES.get(Path(key).suffix.lower()) or "application/octet-stream"),
+                        headers={"Cache-Control": "private, max-age=300"})

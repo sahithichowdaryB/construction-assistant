@@ -1,6 +1,6 @@
 """Write a confirmed capture into project memory in ONE transaction:
 passages -> events -> incidents/alerts (grouping under advisory locks) -> proposed capture_facts -> evidence.
-The source and capture rows already exist (created when the upload arrived). Facts stay review_status='proposed'."""
+The source and capture rows already exist (created when the upload arrived). The speaker has reviewed the facts first, so they are saved as confirmed (reviewed_by = the speaker)."""
 
 import json
 import re
@@ -41,6 +41,7 @@ def _int_or_none(v):
 def persist_capture(engine, state: dict, taxonomy: Taxonomy, correlation_ctx: dict) -> dict:
     p, capture_id, source_id = state["project_id"], state["capture_id"], state["source_id"]
     transcript, perception, answers = state.get("transcript"), state.get("perception") or [], state.get("answers") or []
+    review_notes = state.get("review_notes") or []
     events, validation, matches, context = state["events"], state["validation"], state["matches"], state["context"]
     recorded_at = state["recorded_at"]
 
@@ -56,8 +57,10 @@ def persist_capture(engine, state: dict, taxonomy: Taxonomy, correlation_ctx: di
             passage(f"image:{ph['n']}", ph["passage"])
         for a in answers:
             passage(f"answer:{a['id']}", f"Q: {a['question']}\nA: {a['answer']}")
+        for n in review_notes:
+            passage(f"review:{n['id']}", n["text"])
         own_refs = ([f"{source_id}|transcript"] if transcript else []) + [f"{source_id}|image:{x['n']}" for x in perception] \
-            + [f"{source_id}|answer:{a['id']}" for a in answers]
+            + [f"{source_id}|answer:{a['id']}" for a in answers] + [f"{source_id}|review:{n['id']}" for n in review_notes]
 
         known_refs = {f"{x['source_id']}|{x['locator']}" for m in matches for x in m["passages"]} | set(own_refs)
         known_activities = {a["code"] for a in context["activities"]} | {a["code"] for m in matches for a in m["activities"]}
@@ -108,16 +111,21 @@ def persist_capture(engine, state: dict, taxonomy: Taxonomy, correlation_ctx: di
         saved = []
         for f in validation["validated_facts"]:
             image_locator = f"image:{perception[0]['n'] if perception else 1}"
-            locator = f["source"] if f["source"].startswith("answer:") and any(f"answer:{a['id']}" == f["source"] for a in answers) \
-                else ("transcript" if transcript else image_locator)
+            own_source = (f["source"].startswith("answer:") and any(f"answer:{a['id']}" == f["source"] for a in answers)) or (
+                f["source"].startswith("review:") and any(f"review:{n['id']}" == f["source"] for n in review_notes))
+            locator = f["source"] if own_source else ("transcript" if transcript else image_locator)
             effective = facts_by(f["event_index"], "occurred_at") or (events[f["event_index"]].get("occurred_at") if f["event_index"] < len(events) else None) or recorded_at
             fact_id = conn.scalar(text("""
-                INSERT INTO sitemate.capture_facts (project_id, incident_id, source_id, locator, field_name, value, basis, effective_at)
-                VALUES (:p, CAST(:inc AS uuid), :src, :loc, :field, CAST(:val AS jsonb), :basis, CAST(:eff AS timestamptz))
+                INSERT INTO sitemate.capture_facts
+                  (project_id, incident_id, source_id, locator, field_name, value, basis, effective_at, review_status, reviewed_by, reviewed_at)
+                VALUES (:p, CAST(:inc AS uuid), :src, :loc, :field, CAST(:val AS jsonb), :basis, CAST(:eff AS timestamptz),
+                        :rs, :rb, CASE WHEN CAST(:rb AS text) IS NULL THEN NULL ELSE now() END)
                 RETURNING id::text"""),
                                   {"p": p, "inc": incident_ids.get(f["event_index"]), "src": source_id, "loc": locator,
                                    "field": f["field_name"], "val": json.dumps(parse_value(f["value"])), "basis": f["basis"],
-                                   "eff": effective})
+                                   "eff": effective,
+                                   # the speaker reviewed these before saving, so they are confirmed by that person
+                                   "rs": "confirmed" if state.get("captured_by") else "proposed", "rb": state.get("captured_by")})
             for ref in f["evidence_refs"]:
                 if f"{ref.get('source_id')}|{ref.get('locator')}" in known_refs:
                     conn.execute(text("""

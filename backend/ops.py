@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from auth import check_member, current_manager, current_member, ops_connection
+from auth import check_member, connection, current_manager, current_member, ops_connection
 
 router = APIRouter()
 IMAGE_ROOT = Path(os.environ.get("AGENT_IMAGE_DIR", "storage/images"))
@@ -103,7 +103,7 @@ def alert_transition(project_id: str, alert_id: str, action: Literal["ack", "ass
 
 
 @router.get("/projects/{project_id}/alerts/{alert_id}", dependencies=[Depends(check_member)])
-def alert_detail(project_id: str, alert_id: str, conn=Depends(ops_connection)):
+def alert_detail(project_id: str, alert_id: str, conn=Depends(connection)):
     alert = _alert(conn, project_id, alert_id, lock=False)
     p = {"p": project_id, "a": alert_id}
     revisions = [dict(r) for r in conn.execute(text("""
@@ -144,7 +144,7 @@ def _actions(conn, project_id, alert_id):
 
 
 @router.get("/projects/{project_id}/alerts/{alert_id}/actions", dependencies=[Depends(check_member)])
-def list_actions(project_id: str, alert_id: str, conn=Depends(ops_connection)):
+def list_actions(project_id: str, alert_id: str, conn=Depends(connection)):
     _alert(conn, project_id, alert_id, lock=False)
     return _actions(conn, project_id, alert_id)
 
@@ -255,7 +255,7 @@ def edit_action(project_id: str, alert_id: str, action_id: str, body: ActionPatc
 
 
 @router.get("/projects/{project_id}/capture-prompts")
-def capture_prompts(project_id: str, member=Depends(current_member), conn=Depends(ops_connection)):
+def capture_prompts(project_id: str, member=Depends(current_member), conn=Depends(connection)):
     """Evidence requests approved for the caller's role; the Capture page shows them as 'please record…' prompts."""
     roles = {"contributor": ("foreman",), "manager": ("site_manager", "foreman"), "approver": ("approver", "site_manager")}
     rows = conn.execute(text("""
@@ -315,7 +315,7 @@ def patch_incident(project_id: str, incident_id: str, body: IncidentPatch, membe
 
 
 @router.get("/projects/{project_id}/incidents/{incident_id}/events", dependencies=[Depends(check_member)])
-def incident_events(project_id: str, incident_id: str, conn=Depends(ops_connection)):
+def incident_events(project_id: str, incident_id: str, conn=Depends(connection)):
     """The sources of an incident: each linked event with who reported it, when, how it was linked, and any photos."""
     _uuid(incident_id, "Incident")
     rows = conn.execute(text("""
@@ -341,7 +341,7 @@ def incident_events(project_id: str, incident_id: str, conn=Depends(ops_connecti
 
 
 @router.get("/projects/{project_id}/attachments/{attachment_id}", dependencies=[Depends(check_member)])
-def attachment(project_id: str, attachment_id: str, conn=Depends(ops_connection)):
+def attachment(project_id: str, attachment_id: str, conn=Depends(connection)):
     _uuid(attachment_id, "Attachment")
     row = conn.execute(text("""
         SELECT storage_key, mime, kind FROM sitemate.capture_attachments

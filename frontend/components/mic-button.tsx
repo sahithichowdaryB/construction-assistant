@@ -2,6 +2,7 @@
 
 import { Mic, RotateCcw, Square, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RecordingAudio } from "@/components/recording-audio";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -137,42 +138,52 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
   };
 
   const recordingNow = state === "recording";
-  const bars = 12;
+  const bars = 28;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <button
-        type="button"
-        onClick={recordingNow ? stop : start}
-        disabled={disabled || state === "requesting" || state === "unsupported" || state === "recorded"}
-        aria-pressed={recordingNow}
-        aria-label={recordingNow ? "Stop recording" : "Start recording"}
-        className={cn(
-          "flex size-28 items-center justify-center rounded-full text-white shadow-lg transition focus-visible:ring-4 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-40",
-          recordingNow ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-primary/90",
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative flex size-44 items-center justify-center">
+        {recordingNow && (
+          <>
+            <span className="absolute inset-4 animate-ping rounded-full bg-red-500/25 [animation-duration:1.6s]" aria-hidden />
+            <span className="absolute inset-0 rounded-full bg-red-500/10 transition-transform" style={{ transform: `scale(${0.8 + level * 0.3})` }} aria-hidden />
+          </>
         )}
-      >
-        {recordingNow ? <Square className="size-10" aria-hidden /> : <Mic className="size-12" aria-hidden />}
-      </button>
+        {!recordingNow && state !== "recorded" && <span className="absolute inset-6 rounded-full bg-primary/15" aria-hidden />}
+        <button
+          type="button"
+          onClick={recordingNow ? stop : start}
+          disabled={disabled || state === "requesting" || state === "unsupported" || state === "recorded"}
+          aria-pressed={recordingNow}
+          aria-label={recordingNow ? "Stop recording" : "Start recording"}
+          className={cn(
+            "relative flex size-28 items-center justify-center rounded-full shadow-[0_10px_30px_-8px_rgba(255,196,0,0.55)] transition active:scale-95 focus-visible:ring-4 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-40",
+            recordingNow ? "bg-red-600 text-white shadow-[0_10px_30px_-8px_rgba(220,38,38,0.6)] hover:bg-red-700" : "bg-primary text-primary-foreground hover:brightness-95",
+          )}
+        >
+          {recordingNow ? <Square className="size-9 fill-current" aria-hidden /> : <Mic className="size-11" aria-hidden />}
+        </button>
+      </div>
 
-      <div className="flex h-8 items-end gap-1" aria-hidden>
+      <div className="flex h-10 items-center gap-[3px]" aria-hidden>
         {Array.from({ length: bars }).map((_, i) => {
-          const active = recordingNow && level * bars > i;
-          return <span key={i} className={cn("w-1.5 rounded-sm transition-all", active ? "bg-red-500" : "bg-muted")} style={{ height: `${8 + i * 2}px` }} />;
+          const shape = 0.35 + 0.65 * Math.abs(Math.sin(i * 0.9));
+          const h = Math.round(recordingNow ? 4 + level * 34 * shape : 4 + 6 * shape);
+          return <span key={i} className={cn("w-[3px] rounded-full transition-[height] duration-100", recordingNow ? "bg-red-400" : "bg-current opacity-25")} style={{ height: `${h}px` }} />;
         })}
       </div>
 
-      <p className="text-sm tabular-nums text-muted-foreground" aria-live="polite">
-        {state === "idle" && (disabled ? disabledReason : "Tap to record a site note")}
+      <p className="text-sm tabular-nums opacity-80" aria-live="polite">
+        {state === "idle" && (disabled ? disabledReason : "Tap to start recording")}
         {state === "requesting" && "Waiting for microphone permission…"}
-        {state === "recording" && <span className="font-medium text-red-700">● Recording {fmt(elapsed)}</span>}
-        {state === "recorded" && recording && `Recorded ${fmt(recording.durationMs)} (${recording.mimeType.split(";")[0]})`}
+        {state === "recording" && <span className="font-semibold text-red-400">● Recording {fmt(elapsed)} · tap to stop</span>}
+        {state === "recorded" && recording && `Recorded ${fmt(recording.durationMs)}`}
         {state === "denied" && "Microphone permission was denied. Use “Type instead”."}
         {state === "unsupported" && "Recording is not supported in this browser. Use “Type instead”."}
       </p>
 
       {recordingNow && (
-        <Button variant="ghost" size="touch" onClick={cancel}>
+        <Button variant="ghost" size="touch" className="text-current hover:bg-white/10 hover:text-current" onClick={cancel}>
           <Trash2 aria-hidden /> Cancel
         </Button>
       )}
@@ -180,14 +191,13 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
       {state === "recorded" && recording && (
         <div className="flex w-full flex-col items-center gap-2">
           {previewUrl && (
-            <audio controls src={previewUrl} className="w-full max-w-sm">
-              <track kind="captions" />
-            </audio>
+            <RecordingAudio src={previewUrl} className="w-full max-w-sm rounded-full" />
           )}
           <div className="flex flex-wrap justify-center gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="touch"
+              className="bg-white/10 text-current hover:bg-white/15 hover:text-current"
               onClick={() => {
                 cancel();
                 void start();
@@ -195,11 +205,11 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
             >
               <RotateCcw aria-hidden /> Re-record
             </Button>
-            <Button variant="ghost" size="touch" onClick={cancel}>
+            <Button variant="ghost" size="touch" className="text-current hover:bg-white/10 hover:text-current" onClick={cancel}>
               <Trash2 aria-hidden /> Discard
             </Button>
             <Button size="touch" onClick={() => onSubmit(recording)} disabled={disabled}>
-              <Upload aria-hidden /> Submit recording
+              <Upload aria-hidden /> Send recording
             </Button>
           </div>
         </div>

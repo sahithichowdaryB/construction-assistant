@@ -173,18 +173,19 @@ export async function dismissAlert(pid: string, id: string, reason: string, asOf
 }
 
 // ---------- incidents ----------
-export async function getIncidents(pid: string, asOf: string): Promise<Incident[]> {
+/** Every incident on record. Pass asOf only to limit the list to what was known at that instant. */
+export async function getIncidents(pid: string, asOf: string | null = null): Promise<Incident[]> {
   if (servedFromFixtures("incidents")) return fixture("incidents", () => fx.fxIncidents(asOf));
   return http(`/projects/${encodeURIComponent(pid)}/incidents${qs({ as_of: asOf })}`, incidentsSchema);
 }
 
-export async function getIncident(pid: string, id: string, asOf: string): Promise<Incident> {
+export async function getIncident(pid: string, id: string, asOf: string | null = null): Promise<Incident> {
   if (servedFromFixtures("incident")) return fixture("incident", () => fx.fxIncident(id, asOf));
   return http(`/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}${qs({ as_of: asOf })}`, incidentSchema);
 }
 
 /** Latest cause reasoning for an incident (404 until the agent has run, or nothing was known at as_of). */
-export async function getIncidentReasoning(pid: string, id: string, asOf: string): Promise<IncidentReasoning> {
+export async function getIncidentReasoning(pid: string, id: string, asOf: string | null): Promise<IncidentReasoning> {
   return http(
     `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
     incidentReasoningSchema,
@@ -192,7 +193,7 @@ export async function getIncidentReasoning(pid: string, id: string, asOf: string
 }
 
 /** Runs the evidence agent now (database read + LLM calls) and stores the result. Callers refetch afterwards. */
-export async function runIncidentReasoning(pid: string, id: string, asOf: string) {
+export async function runIncidentReasoning(pid: string, id: string, asOf: string | null) {
   return http(
     `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
     z.object({ version: z.number(), reused: z.boolean() }).passthrough(),
