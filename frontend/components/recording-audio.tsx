@@ -31,7 +31,7 @@ export function RecordingAudio({ src, className }: { src: string; className?: st
     };
   }, [src]);
 
-  if (!playable && !failed) return <p className="text-sm text-muted-foreground">Preparing audio…</p>;
+  if (!playable && !failed) return <p className="text-sm opacity-70">Preparing audio…</p>;
 
   return (
     <audio controls preload="metadata" src={playable ?? src} className={className}>

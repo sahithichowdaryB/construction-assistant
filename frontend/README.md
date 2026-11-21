@@ -50,10 +50,18 @@ The source of truth is `lib/endpoints.ts`. Settings lists the same table at runt
 | `GET /projects/{pid}/alerts?as_of` | **Real** |
 | `GET /projects/{pid}/activities/{code}/progress?date&as_of` | **Real** |
 | `GET /projects/{pid}/sources/{sid}/file` | **Real** (demo pack fallback in fixture mode) |
-| `GET /projects/{pid}/incidents?as_of`, `GET /projects/{pid}/incidents/{id}?as_of` | **Real** (built from `incidents`, `capture_facts`, `fact_evidence`) |
+| Documents and search: `GET /sources?as_of`, `GET /sources/{id}` (with passages), `GET`/`POST /sources/{id}/summary`, `GET /evidence/{passage_id}`, `GET /sources/{id}/readings`, `GET /sources/{id}/preview`, `GET /sources/{id}/storage`, `POST /sources` (Documents upload), `GET /jobs/{id}` (document jobs), `GET /search`, `GET`/`PATCH /action-items` | **Real** (`backend/documents`) |
+| `GET /projects/{pid}/incidents[?as_of]`, `GET /projects/{pid}/incidents/{id}[?as_of]` | **Real**. The UI omits `as_of` by default so every incident is listed (built from `incidents`, `capture_facts`, `fact_evidence`) |
 | `GET /projects/{pid}/incidents/{id}/reasoning?as_of`, `POST …/reasoning` | **Real only, no fixtures**. The cause-and-evidence agent (see `../ai-agent/README.md`). Needs `NEXT_PUBLIC_USE_FIXTURES=false` |
-| `GET /today`, `POST /ask`, `POST /sources`, `GET /jobs/{id}`, `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `GET /sources/{id}/summary`, `GET /evidence/{passage_id}`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
-| `GET /projects/{pid}`, `GET /activities`, `GET /sources?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+| `GET /today`, `POST /ask`, `POST /sources` + `GET /jobs/{id}` from Capture (typed or voice notes), `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
+| `GET /projects/{pid}`, `GET /activities`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+
+Documents pages in live mode: **Documents** (upload with job status and review notes), **Document detail** (original,
+extracted report quantities, cited summary with provisional values and quoted external text, regenerate, passages),
+**Search** (`/search`, evidence search at the as-of time) and **Actions** (`/actions`, open actions with owner, due date
+and citation). Passage ids are `<source_id>:<locator>`; the backend also resolves short legacy locators used in fixtures
+(`E01:body`, `R10:incidents`). With the backend and frontend running in live mode, `node scripts/check-live-api.mts`
+validates every documents response through the proxy with the zod schemas.
 
 Fixture routes run in the browser (`lib/fixture-server.ts`). They filter records by the as-of clock, add about 250 ms of
 latency so loading states are visible, and keep draft lifecycle state in memory. That state resets on reload.
@@ -77,7 +85,7 @@ Riverside incident id is a UUID from the database. To browse the dummy agent cas
 
 ## The as-of clock
 
-The header control "As of: …" (`components/as-of-control.tsx`) replays the demo. Every query sends `as_of` as an ISO
+The header control "Showing …" (`components/as-of-control.tsx`) replays the demo. Incidents are the exception: the list and detail show every incident unless the user ticks "Only show what was reported by the time I'm viewing". Every query sends `as_of` as an ISO
 instant with a UTC offset, and all times are displayed in Europe/Vienna. Presets: 10 Nov 07:00, 10 Nov 10:15 (default),
 10 Nov 17:30, 11 Nov 17:30 and 12 Nov 07:15. For demos you can deep-link with `?as_of=2026-11-10T17:30:00%2B01:00` and
 `?role=approver`.
@@ -96,7 +104,8 @@ The role switcher stores the role in React context and localStorage. Disabled ac
 ## Layout
 
 ```
-app/(app)/            today, capture, alerts[/id], schedule, incidents[/id], documents[/sourceId], drafts[/new|/id], settings
+app/(app)/            today, capture (Site notes), alerts[/id], schedule (Programme), incidents[/id], documents[/sourceId], drafts (Notices)[/new|/id], search, actions, settings
+app/(auth)/           login, signup templates. Auth goes through lib/auth.ts, which is not connected to a provider yet
 app/api/sm/           server-side proxy and health passthrough
 components/           shared components (MicButton, ProvenanceBadge, CitationChip, EvidenceViewer, AlertCard, SeverityBadge,
                       ProgressBar, Timeline, DraftStatusBadge, GapHighlighter, DisclaimerBanner, AsOfControl, RoleSwitcher,

@@ -21,6 +21,7 @@ import sourcesJson from "@/fixtures/sources.json";
 import summariesJson from "@/fixtures/summaries.json";
 import { isAvailable, localDateOf } from "@/lib/time";
 import type {
+  ActionItem,
   Activity,
   Alert,
   AlertContext,
@@ -38,7 +39,9 @@ import type {
   ProgressObservation,
   Project,
   Proposal,
+  ReportReadings,
   Role,
+  SearchResponse,
   Source,
   SourceSummary,
   SourceType,
@@ -138,6 +141,68 @@ export function fxSummary(sourceId: string, asOf: string): SourceSummary {
   return s;
 }
 
+/** Fixture stand-in for GET /search: keyword overlap over the fixture passages (no ranking model). */
+export function fxSearch(query: string, asOf: string): SearchResponse {
+  const terms = query.toLowerCase().split(/[^a-z0-9³²-]+/).filter((t) => t.length > 2);
+  const visible = new Map(fxSources(asOf).map((s) => [s.id, s]));
+  const results = passages
+    .filter((p) => visible.has(p.source_id))
+    .map((p) => ({ p, score: terms.filter((t) => p.text.toLowerCase().includes(t)).length }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map(({ p, score }) => {
+      const s = visible.get(p.source_id)!;
+      return {
+        passage_id: p.id,
+        source_id: p.source_id,
+        locator: p.locator,
+        page: p.page,
+        excerpt: p.text,
+        kind: "paragraph",
+        section: null,
+        untrusted: s.type === "email",
+        source_kind: s.type,
+        source_title: s.title,
+        available_at: s.available_at,
+        score,
+        ref: { source_id: p.source_id, locator: p.locator, page: p.page, passage_id: p.id },
+      };
+    });
+  return { query, reranked: false, results };
+}
+
+/** Fixture stand-in for GET /action-items: the open actions of the fixture summaries. */
+export function fxActionItems(asOf: string): ActionItem[] {
+  const visible = new Map(fxSources(asOf).map((s) => [s.id, s]));
+  return summaries
+    .filter((s) => visible.has(s.source_id))
+    .flatMap((s) =>
+      s.open_actions.map((a, i) => {
+        const src = visible.get(s.source_id)!;
+        return {
+          id: `${s.source_id}-${i}`,
+          description: a.text,
+          owner_name: a.owner,
+          due_at: a.due,
+          completed_at: null,
+          quote: null,
+          source_id: s.source_id,
+          source_type: src.type,
+          source_title: src.title,
+          available_at: src.available_at,
+          overdue: !!a.due && isAvailable(a.due, asOf),
+          ref: a.refs[0] ?? { source_id: s.source_id },
+        };
+      }),
+    );
+}
+
+export function fxReadings(sourceId: string, asOf: string): ReportReadings {
+  fxSource(sourceId, asOf);
+  throw new FixtureError(404, "Report readings come from the live API (set NEXT_PUBLIC_USE_FIXTURES=false)");
+}
+
 // ---------- progress and alerts ----------
 export function fxProgress(code: string, date: string, asOf: string): Progress {
   const p = progress.find((x) => x.activity_code === code && x.work_date === date);
@@ -181,16 +246,18 @@ export function fxDismissAlert(id: string, reason: string, asOf: string) {
 }
 
 // ---------- incidents ----------
-export function fxIncidents(asOf: string): Incident[] {
+/** All incidents; with asOf, only what had been reported (and happened in the timeline) by then. */
+export function fxIncidents(asOf: string | null = null): Incident[] {
+  const known = (at: string) => asOf === null || isAvailable(at, asOf);
   return incidents
-    .filter((i) => isAvailable(i.reported_at, asOf))
+    .filter((i) => known(i.reported_at))
     .map((i) => {
-      const resolved = i.resolved_at && isAvailable(i.resolved_at, asOf) ? i.resolved_at : null;
-      const timeline = i.timeline.filter((e) => isAvailable(e.at, asOf));
+      const resolved = i.resolved_at && known(i.resolved_at) ? i.resolved_at : null;
+      const timeline = i.timeline.filter((e) => known(e.at));
       for (const d of state.drafts.filter((d) => d.incident_id === i.id)) {
         for (const v of d.versions) {
           const approval = v.reviews.find((r) => r.decision === "approved");
-          if (approval && isAvailable(approval.decided_at, asOf))
+          if (approval && known(approval.decided_at))
             timeline.push({
               kind: "approved",
               at: approval.decided_at,
@@ -206,9 +273,9 @@ export function fxIncidents(asOf: string): Incident[] {
     .sort((a, b) => b.reported_at.localeCompare(a.reported_at));
 }
 
-export function fxIncident(id: string, asOf: string): Incident {
+export function fxIncident(id: string, asOf: string | null = null): Incident {
   const i = fxIncidents(asOf).find((x) => x.id === id);
-  if (!i) throw new FixtureError(404, `Incident ${id} is not available at this time`);
+  if (!i) throw new FixtureError(404, asOf ? `Incident ${id} had not been reported by this time` : `Incident ${id} was not found`);
   return i;
 }
 
@@ -273,7 +340,7 @@ export function fxToday(asOf: string): TodayBriefing {
     },
     activities: todays,
     open_alerts: fxAlerts(asOf),
-    open_incidents: fxIncidents(asOf).filter((i) => i.status !== "resolved"),
+    open_incidents: fxIncidents().filter((i) => i.status !== "resolved"),
     drafts_awaiting_review: fxDrafts(asOf).filter((d) => d.status !== "approved"),
   };
 }

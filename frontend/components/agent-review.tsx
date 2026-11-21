@@ -36,7 +36,7 @@ function DateTimeField({ id, value, onChange, disabled }: { id: string; value: s
       <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange(toIsoWithOffset(new Date()))}>
         Now
       </Button>
-      {value && !valid && <span className="text-xs text-amber-700">Not a date: “{value}”. Pick one.</span>}
+      {value && !valid && <span className="text-xs text-warning">Not a date: “{value}”. Pick one.</span>}
     </div>
   );
 }
@@ -46,8 +46,8 @@ function Events({ events }: { events: AgentEvent[] }) {
   return (
     <ul className="flex flex-col gap-1.5 text-sm">
       {events.map((e, i) => (
-        <li key={i} className="rounded-md border bg-muted/40 p-2">
-          <span className="mr-2 rounded bg-secondary px-1.5 py-0.5 text-xs font-medium">{label(e.event_type)}</span>
+        <li key={i} className="rounded-2xl bg-muted/60 p-3">
+          <span className="mr-2 rounded-md bg-primary/20 px-1.5 py-0.5 text-xs font-semibold">{e.event_type.replace(/_/g, " ")}</span>
           {e.summary}
         </li>
       ))}
@@ -94,15 +94,15 @@ function FactsReview({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium">Check what was understood before it is saved</p>
+        <p className="text-base font-bold">Check what was understood before it is saved</p>
         <p className="text-xs text-muted-foreground">
           Nothing is saved yet. Correct any value that is wrong and remove anything you did not say, then press Save.
         </p>
       </div>
 
       {eventIndexes.map((ei) => (
-        <fieldset key={ei} className="flex flex-col gap-2 rounded-md border p-3">
-          <legend className="px-1 text-sm font-medium">{events[ei] ? `${label(events[ei].event_type)}: ${events[ei].summary}` : `Event ${ei + 1}`}</legend>
+        <fieldset key={ei} className="flex flex-col gap-3 rounded-2xl bg-muted/50 p-4">
+          <legend className="px-1 text-sm font-semibold">{events[ei] ? `${label(events[ei].event_type)}: ${events[ei].summary}` : `Event ${ei + 1}`}</legend>
           {facts
             .filter((f) => f.event_index === ei)
             .map((f) => {
@@ -149,8 +149,8 @@ function FactsReview({
           {gaps
             .filter((g) => g.event_index === ei)
             .map((g) => (
-              <div key={gapKey(g)} className="grid grid-cols-[7.5rem_1fr] items-center gap-2 rounded-md bg-amber-50 p-2 text-sm dark:bg-amber-950/30">
-                <Label htmlFor={`gap-${gapKey(g)}`} className="font-normal text-amber-900 dark:text-amber-200">
+              <div key={gapKey(g)} className="grid grid-cols-[7.5rem_1fr] items-center gap-2 rounded-xl bg-warning/10 p-3 text-sm">
+                <Label htmlFor={`gap-${gapKey(g)}`} className="font-medium text-warning">
                   {label(g.field_name)} <span className="text-xs">(missing)</span>
                 </Label>
                 {isTimeField(g.field_name) ? (
@@ -209,7 +209,7 @@ export function AgentReview({
           description="Nothing was saved. Check what was heard below: if it is wrong or unclear, record again, speaking close to the microphone, or type the note."
           action={<Button size="touch" onClick={onReset}>Try again</Button>}
         />
-        <div className="rounded-md border bg-muted/40 p-3 text-sm">
+        <div className="rounded-2xl bg-muted/60 p-4 text-sm">
           <p className="mb-1 text-xs font-medium text-muted-foreground">What was heard</p>
           <p className="whitespace-pre-line">{result.transcript || "(nothing)"}</p>
         </div>
@@ -229,14 +229,14 @@ export function AgentReview({
     return (
       <div className="flex flex-col gap-4">
         <EmptyState
-          icon={<CheckCircle2 className="text-emerald-600" />}
+          icon={<CheckCircle2 className="text-success" />}
           title="Saved to the project"
           description={`${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} saved as ${result.source_id}. You can find it under Your recordings.`}
           action={<Button size="touch" onClick={onReset}>Capture another</Button>}
         />
         <Events events={result.events} />
         {result.gaps.length > 0 && (
-          <p className="text-sm text-amber-700">Still missing: {result.gaps.map((g) => label(g.field_name)).join(", ")}</p>
+          <p className="text-sm text-warning">Still missing: {result.gaps.map((g) => label(g.field_name)).join(", ")}</p>
         )}
       </div>
     );
@@ -251,7 +251,7 @@ export function AgentReview({
       }}
     >
       <Events events={result.events} />
-      <p className="text-sm font-medium">A few details are missing (round {result.round})</p>
+      <p className="text-base font-bold">A few details are missing (round {result.round})</p>
       {result.questions.map((q) => (
         <div key={q.id} className="flex flex-col gap-1.5">
           <Label htmlFor={`q-${q.id}`}>{q.question}</Label>

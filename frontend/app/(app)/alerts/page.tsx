@@ -1,17 +1,23 @@
 "use client";
 
 import { BellOff } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { AlertCard } from "@/components/alert-card";
+import { useApp } from "@/components/providers/app-context";
 import { EmptyState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { AS_OF_PRESETS, fmtDateTime, localToIso } from "@/lib/time";
 import { useActivities, useAlerts } from "@/lib/queries";
-import { useApp } from "@/components/providers/app-context";
+import { AS_OF_PRESETS, fmtDateTime, localToIso } from "@/lib/time";
 import type { Severity } from "@/lib/types";
 
 type Filter = "all" | Severity | "missing_report";
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "high", label: "High priority" },
+  { value: "medium", label: "Medium priority" },
+  { value: "missing_report", label: "No report" },
+];
 
 export default function AlertsPage() {
   const alerts = useAlerts();
@@ -22,11 +28,11 @@ export default function AlertsPage() {
 
   return (
     <>
-      <PageHeader title="Alerts" description={`Signed shortfalls and missing reports as of ${fmtDateTime(asOf)}`} />
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter alerts">
-        {(["all", "high", "medium", "missing_report"] as Filter[]).map((f) => (
-          <Button key={f} size="touch" variant={filter === f ? "default" : "outline"} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {f === "all" ? "All" : f === "missing_report" ? "Missing report" : f[0].toUpperCase() + f.slice(1)}
+      <PageHeader title="Alerts" description={`Activities behind plan, or with no daily report, as of ${fmtDateTime(asOf)}.`} />
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter alerts">
+        {FILTERS.map((f) => (
+          <Button key={f.value} size="touch" variant={filter === f.value ? "default" : "outline"} aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
+            {f.label}
           </Button>
         ))}
       </div>
@@ -37,10 +43,10 @@ export default function AlertsPage() {
           <EmptyState
             icon={<BellOff />}
             title="No open alerts"
-            description="No signed reading is below the threshold at this time."
+            description="Every activity is on track at this time."
             action={
               <Button size="touch" variant="outline" onClick={() => setAsOf(localToIso(AS_OF_PRESETS[2].local))}>
-                Jump to {AS_OF_PRESETS[2].label}
+                Look at {AS_OF_PRESETS[2].label}
               </Button>
             }
           />
@@ -57,7 +63,14 @@ export default function AlertsPage() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No alerts match this filter" action={<Link href="/alerts" onClick={() => setFilter("all")} className="underline">Show all</Link>} />
+            <EmptyState
+              title="No alerts match this filter"
+              action={
+                <Button variant="outline" size="touch" onClick={() => setFilter("all")}>
+                  Show all alerts
+                </Button>
+              }
+            />
           );
         }}
       </QueryState>

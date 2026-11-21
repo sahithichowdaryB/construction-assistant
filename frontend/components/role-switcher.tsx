@@ -11,7 +11,7 @@ export function RoleSwitcher() {
   const { role, setRole } = useApp();
   return (
     <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-      <SelectTrigger className="h-11 min-w-36 md:h-9" aria-label="Demo role">
+      <SelectTrigger className="h-11 min-w-fit rounded-xl md:h-9" aria-label="Demo role">
         <UserRound className="size-4" aria-hidden />
         <SelectValue />
       </SelectTrigger>

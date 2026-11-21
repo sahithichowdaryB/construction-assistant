@@ -25,10 +25,10 @@ import type { Alert } from "@/lib/types";
 function CalculationLine({ alert }: { alert: Alert }) {
   const c = alert.calculation;
   if (alert.kind === "missing_report")
-    return <p className="font-mono text-sm">Unknown: the signed shift report has not been received. No quantity is assumed.</p>;
-  if (!c) return <p className="text-sm text-muted-foreground">No calculation recorded for this revision.</p>;
-  if (c.actual === null) return <p className="font-mono text-sm">Actual: Unknown (no reading). No percentage.</p>;
-  if (c.planned === 0) return <p className="font-mono text-sm">Planned 0 {c.unit}: zero target, no percentage.</p>;
+    return <p className="text-sm">No daily report has been received, so the quantity is unknown. Nothing has been assumed.</p>;
+  if (!c) return <p className="text-sm text-muted-foreground">Calculation details are not available yet.</p>;
+  if (c.actual === null) return <p className="text-sm">No figure has been recorded, so no percentage can be worked out.</p>;
+  if (c.planned === 0) return <p className="text-sm">No target was set for this day, so no percentage applies.</p>;
   return (
     <p className="font-mono text-sm break-words" aria-label="Shortfall calculation">
       100 × max({fmtQty(c.planned)} − {fmtQty(c.actual)}, 0) / {fmtQty(c.planned)} = <strong>{fmtPct(c.shortfall_pct)}</strong>
@@ -64,19 +64,19 @@ export default function AlertDetailPage() {
     return (
       <>
         {back}
-        <EmptyState icon={<BellOff />} title="Alert not available" description={`This alert does not exist or was not open as of ${fmtDateTime(asOf)}.`} />
+        <EmptyState icon={<BellOff />} title="Alert not available" description={`This alert no longer exists or was closed by ${fmtDateTime(asOf)}.`} />
       </>
     );
 
   const activity = activities.data?.find((a) => a.code === alert.activity_code);
-  const draftReason = denyReason(role, "create_draft") ?? (alert.kind === "missing_report" ? "A delay notice needs a signed reading." : null);
+  const draftReason = denyReason(role, "create_draft") ?? (alert.kind === "missing_report" ? "A delay notice needs a confirmed report first." : null);
 
   return (
     <>
       {back}
       <PageHeader
         title={`${alert.activity_code} · ${activity?.name ?? "Activity"}`}
-        description={`Work date ${fmtLocalDate(workDate)} · checkpoint ${fmtDateTime(alert.checkpoint_at)} · revision ${alert.version} as of ${fmtDateTime(alert.as_of)}`}
+        description={`Work date ${fmtLocalDate(workDate)} · last updated ${fmtDateTime(alert.as_of)}`}
         actions={<SeverityBadge severity={alert.severity} kind={alert.kind} className="text-sm" />}
       />
 
@@ -84,12 +84,12 @@ export default function AlertDetailPage() {
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>Calculation</CardTitle>
+              <CardTitle>How this was worked out</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <CalculationLine alert={alert} />
               <p className="text-xs text-muted-foreground">
-                Basis: {alert.kind === "missing_report" ? "no reading" : "signed reading"}. Severity is set by the project thresholds on the server.
+                {alert.kind === "missing_report" ? "No report on file." : "Based on the confirmed daily report."} Priority follows the project thresholds.
               </p>
               <CitationList refs={alert.evidence_refs} />
             </CardContent>
@@ -97,7 +97,7 @@ export default function AlertDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Readings for {fmtLocalDate(workDate)}</CardTitle>
+              <CardTitle>Recorded quantities for {fmtLocalDate(workDate)}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {progress.isPending ? (
@@ -122,17 +122,17 @@ export default function AlertDetailPage() {
                             <span>
                               <span className="font-semibold">{fmtQty(o.quantity, progress.data.unit)}</span>{" "}
                               <span className={o.basis === "signed" ? "text-emerald-700" : "text-sky-700"}>{basisLabel(o.basis)}</span>
-                              {o.source_id === progress.data.evidence?.source_id && <span className="text-xs text-muted-foreground"> · used for the alert</span>}
+                              {o.source_id === progress.data.evidence?.source_id && <span className="text-xs text-muted-foreground"> · used for this alert</span>}
                             </span>
                             <CitationChip refData={{ source_id: o.source_id, locator: o.locator, page: o.page }} />
                           </div>
                           {o.excerpt && <p className="text-xs text-muted-foreground">“{o.excerpt}”</p>}
-                          <p className="text-xs text-muted-foreground">Available {fmtDateTime(o.available_at)}</p>
+                          <p className="text-xs text-muted-foreground">Recorded {fmtDateTime(o.available_at)}</p>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No readings yet: actual is Unknown.</p>
+                    <p className="text-sm text-muted-foreground">Nothing has been recorded for this day yet.</p>
                   )}
                 </>
               )}
@@ -157,13 +157,13 @@ export default function AlertDetailPage() {
                   )
                 }
               >
-                <FilePen aria-hidden /> Draft delay notice
+                <FilePen aria-hidden /> Create delay notice
               </GatedButton>
               <GatedButton reason={denyReason(role, "link_incident")} size="touch" variant="outline" onClick={() => setLinkOpen(true)}>
-                <Link2 aria-hidden /> Link incident
+                <Link2 aria-hidden /> Link to an incident
               </GatedButton>
               <GatedButton reason={denyReason(role, "dismiss_alert")} size="touch" variant="outline" onClick={() => setDismissOpen(true)}>
-                <BellOff aria-hidden /> Dismiss (reason)
+                <BellOff aria-hidden /> Dismiss alert
               </GatedButton>
               {createDraft.isError && <ErrorState error={createDraft.error} />}
             </CardContent>
@@ -171,7 +171,7 @@ export default function AlertDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Likely causes</CardTitle>
+              <CardTitle>Likely cause</CardTitle>
             </CardHeader>
             <CardContent>
               {context.isPending ? (
@@ -188,14 +188,14 @@ export default function AlertDetailPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">No cited cause recorded.</p>
+                <p className="text-sm text-muted-foreground">No likely cause has been recorded yet.</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Successors at risk</CardTitle>
+              <CardTitle>Work that depends on this</CardTitle>
             </CardHeader>
             <CardContent>
               {context.data?.successors_at_risk.length ? (
@@ -203,14 +203,14 @@ export default function AlertDetailPage() {
                   {context.data.successors_at_risk.map((s) => (
                     <li key={s.code} className="flex flex-col gap-1">
                       <span>
-                        <span className="font-mono font-semibold">{s.code}</span> {s.name} · planned start {fmtLocalDate(s.planned_start)}
+                        <span className="font-mono font-semibold">{s.code}</span> {s.name} · due to start {fmtLocalDate(s.planned_start)}
                       </span>
                       <CitationList refs={s.refs} />
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">{context.isPending ? "Loading…" : "No dependent activity recorded."}</p>
+                <p className="text-sm text-muted-foreground">{context.isPending ? "Loading…" : "No dependent work is recorded."}</p>
               )}
               {context.data?.incident_id && (
                 <p className="mt-3 text-sm">
@@ -262,7 +262,7 @@ export default function AlertDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Link incident</DialogTitle>
-            <DialogDescription>Linking writes to the backend once POST routes exist. In fixture mode the suggested link is shown only.</DialogDescription>
+            <DialogDescription>Linking is not available yet. This is the incident SiteMate suggests for the same activity and date.</DialogDescription>
           </DialogHeader>
           {context.data?.incident_id ? (
             <p className="text-sm">
@@ -273,7 +273,7 @@ export default function AlertDetailPage() {
               (same activity and date).
             </p>
           ) : (
-            <EmptyState title="No incident suggested" description="Capture an incident first, then link it here." />
+            <EmptyState title="No incident suggested" description="Report the incident from Site notes first." />
           )}
         </DialogContent>
       </Dialog>
