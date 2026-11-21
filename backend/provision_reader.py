@@ -23,7 +23,15 @@ def main():
             cur.execute("""GRANT SELECT ON sitemate.project_members, sitemate.projects,
                            sitemate.activities, sitemate.sources, sitemate.source_passages,
                            sitemate.plan_targets, sitemate.observations,
-                           sitemate.alerts, sitemate.alert_revisions TO sitemate_reader""")
+                           sitemate.alerts, sitemate.alert_revisions,
+                           sitemate.incidents, sitemate.capture_facts, sitemate.fact_evidence,
+                           sitemate.diary_entries, sitemate.contractors, sitemate.equipment,
+                           sitemate.equipment_assignments, sitemate.business_rules,
+                           sitemate.incident_analyses, sitemate.analysis_hypotheses,
+                           sitemate.analysis_evidence TO sitemate_reader""")
+            # The analyze route saves immutable analysis versions; nothing else is writable.
+            cur.execute("""GRANT INSERT ON sitemate.incident_analyses, sitemate.analysis_hypotheses,
+                           sitemate.analysis_evidence TO sitemate_reader""")
     print("Database reader provisioned.")
 
 

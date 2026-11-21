@@ -27,12 +27,13 @@ export type Action =
   | "submit_review"
   | "approve"
   | "request_changes"
-  | "export";
+  | "export"
+  | "analyze_incident";
 
 const PERMISSIONS: Record<Role, Action[]> = {
   foreman: ["capture", "confirm_capture", "upload"],
-  site_manager: ["upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review"],
-  approver: ["ask", "approve", "request_changes", "export"],
+  site_manager: ["upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "analyze_incident"],
+  approver: ["ask", "approve", "request_changes", "export", "analyze_incident"],
 };
 
 const WHO: Record<Action, string> = {
@@ -48,6 +49,7 @@ const WHO: Record<Action, string> = {
   approve: "an approver",
   request_changes: "an approver",
   export: "an approver",
+  analyze_incident: "the site manager or approver",
 };
 
 export function can(role: Role, action: Action): boolean {

@@ -32,7 +32,10 @@ export const ENDPOINTS = {
   project: { route: "GET /projects/{pid}", implemented: false },
   activities: { route: "GET /projects/{pid}/activities", implemented: false },
   sources: { route: "GET /projects/{pid}/sources?as_of", implemented: false },
-  incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: false },
+  incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: true },
+  incident: { route: "GET /projects/{pid}/incidents/{id}?as_of", implemented: true },
+  incidentAnalysis: { route: "GET /projects/{pid}/incidents/{id}/analysis?as_of", implemented: true },
+  analyzeIncident: { route: "POST /projects/{pid}/incidents/{id}/analyze?as_of", implemented: true },
   alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: false },
   dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: false },
   drafts: { route: "GET /projects/{pid}/drafts?as_of", implemented: false },
@@ -46,4 +49,5 @@ export function servedFromFixtures(key: EndpointKey): boolean {
   return USE_FIXTURES || !ENDPOINTS[key].implemented;
 }
 
-export const PROJECT_ID = "RIV";
+// Set NEXT_PUBLIC_PROJECT_ID=TST (with the TST token in SITEMATE_API_TOKEN) to browse the dummy agent cases.
+export const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || "RIV";
