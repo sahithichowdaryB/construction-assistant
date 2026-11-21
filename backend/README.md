@@ -18,6 +18,14 @@ Try `GET /projects/RIV/activities/EXC-B/progress?date=2026-11-10`. Use the optio
 
 ## Reproduce the database
 
+In the Supabase Table Editor select the private `sitemate` schema. Migration
+`0002_workflows` adds ingestion jobs, incident facts and citations, diaries,
+summaries, action items, alert revisions, notice versions, reviews and exports.
+The Riverside seed records six signed shortfall alerts and one diary entry.
+Use `GET /projects/RIV/alerts` for the mobile alert list. Pass a timezone-aware
+`as_of` to see only the revisions available by that instant. The current
+HTTP service is read-only; capture, review and export writes need their own handlers.
+
 1. Create a Python virtual environment with `python -m venv .venv` and install dependencies with `.venv/Scripts/python.exe -m pip install -r requirements.txt`.
 2. Create `.env` from `.env.example` for a new database. The migration URL uses the Supabase session pooler. Configure a separate random password for the read-only `sitemate_reader` login and a random bearer token of at least 32 characters. Keep credentials outside source control.
 3. Apply migrations, provision the reader, and seed the project.

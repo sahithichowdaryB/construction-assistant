@@ -44,6 +44,11 @@ if __name__ == "__main__":
     assert reading("EXC-B", "2026-11-11", "2026-11-12T07:15:00+01:00")["actual"] == 80
     assert reading("EXC-B", "2026-11-12")["shortfall_pct"] is None
     assert fetch("/projects/RIV/sources/R10/file").startswith(b"%PDF")
+    alerts = json.loads(fetch("/projects/RIV/alerts"))
+    assert len(alerts) == 6
+    assert sorted(a["severity"] for a in alerts) == ["high"] * 2 + ["medium"] * 4
+    cutoff = urlencode({"as_of": "2026-11-10T17:29:00+01:00"})
+    assert len(json.loads(fetch("/projects/RIV/alerts?" + cutoff))) == 2
     for route, authorized, status in [
         ("/projects/RIV/activities/EXC-B/progress?date=2026-11-10", False, 401),
         ("/projects/OTHER/sources/R10/file", True, 403),

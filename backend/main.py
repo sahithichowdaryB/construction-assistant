@@ -49,6 +49,26 @@ def check_cutoff(as_of):
         raise HTTPException(422, "as_of must include a time zone")
 
 
+@app.get("/projects/{project_id}/alerts", dependencies=[Depends(check_member)])
+def alerts(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    check_cutoff(as_of)
+    rows = conn.execute(text("""
+        SELECT a.id, a.activity_code, a.kind, a.checkpoint_at, r.version, r.as_of,
+               r.severity, r.calculation, r.evidence_refs
+        FROM sitemate.alerts a
+        JOIN LATERAL (
+            SELECT version, as_of, severity, calculation, evidence_refs
+            FROM sitemate.alert_revisions r
+            WHERE r.project_id=a.project_id AND r.alert_id=a.id
+              AND r.as_of <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')
+            ORDER BY r.as_of DESC, version DESC LIMIT 1
+        ) r ON true
+        WHERE a.project_id=:project
+        ORDER BY a.checkpoint_at DESC, a.activity_code, a.id
+    """), {"project": project_id, "cutoff": as_of})
+    return [dict(row) for row in rows.mappings()]
+
+
 @app.get("/projects/{project_id}/activities/{code}/progress", dependencies=[Depends(check_member)])
 def progress(project_id: str, code: str, date: WorkDate, as_of: datetime | None = Query(None),
              conn=Depends(connection)):

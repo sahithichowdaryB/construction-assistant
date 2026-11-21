@@ -57,6 +57,8 @@ def collect_rows():
     tables["projects"] = [dict(id=pid, name=project["name"], timezone=project["timezone"],
                                threshold=project["deviation_threshold_pct"],
                                high_threshold=project["high_if_shortfall_pct_above"])]
+    for field in ("sender", "sender_address", "recipient", "recipient_address", "contract_reference", "contract_clause"):
+        tables["projects"][0][field] = project[field]
     entries = manifest["records"]
     for entry in entries:
         if not (ROOT / entry["path"]).is_file():
@@ -126,6 +128,53 @@ KEYS = {
 }
 
 
+def seed_workflows(conn):
+    """Materialize the Riverside diary and its initial signed shortfall alerts."""
+    conn.execute(text("""
+        INSERT INTO sitemate.diary_entries
+            (project_id,id,work_date,body,source_id,locator,recorded_at)
+        SELECT s.project_id,'2ad2a5f6-8003-4b30-a8bb-e94e30a07385',o.work_date,
+               sp.excerpt,s.id,sp.locator,s.available_at
+        FROM sitemate.sources s JOIN sitemate.source_passages sp
+          ON (sp.project_id,sp.source_id)=(s.project_id,s.id)
+        JOIN sitemate.observations o ON (o.project_id,o.source_id,o.locator)=(sp.project_id,sp.source_id,sp.locator)
+        WHERE s.project_id='RIV' AND s.id='D10' AND sp.locator='handover'
+        ON CONFLICT DO NOTHING
+    """))
+    rows = conn.execute(text("""
+        SELECT o.activity_code,o.work_date,o.quantity AS actual,o.source_id,o.locator,s.available_at,
+               t.quantity AS planned,t.source_id AS plan_source,t.locator AS plan_locator,
+               p.threshold,p.high_threshold,p.timezone,a.unit,
+               ((o.work_date + TIME '17:30') AT TIME ZONE p.timezone) AS checkpoint
+        FROM sitemate.observations o JOIN sitemate.plan_targets t USING(project_id,activity_code,work_date)
+        JOIN sitemate.sources s ON (s.project_id,s.id)=(o.project_id,o.source_id)
+        JOIN sitemate.activities a ON (a.project_id,a.code)=(o.project_id,o.activity_code)
+        JOIN sitemate.projects p ON p.id=o.project_id
+        WHERE o.project_id='RIV' AND o.basis='signed' AND t.quantity>0
+          AND 100*(t.quantity-o.quantity)>p.threshold*t.quantity
+        ORDER BY s.available_at,o.activity_code
+    """)).mappings().all()
+    for row in rows:
+        params = {"code": row["activity_code"], "checkpoint": row["checkpoint"]}
+        conn.execute(text("""
+            INSERT INTO sitemate.alerts(project_id,activity_code,checkpoint_at,kind)
+            VALUES ('RIV',:code,:checkpoint,'shortfall') ON CONFLICT DO NOTHING
+        """), params)
+        pct = 100 * (row["planned"] - row["actual"]) / row["planned"]
+        params.update(as_of=row["available_at"], severity="high" if pct > row["high_threshold"] else "medium",
+                      calculation=json.dumps(dict(planned=float(row["planned"]), actual=float(row["actual"]),
+                                                  shortfall_pct=float(round(pct, 2)), unit=row["unit"])),
+                      refs=json.dumps([{"source_id": row["plan_source"], "locator": row["plan_locator"]},
+                                       {"source_id": row["source_id"], "locator": row["locator"]}]))
+        conn.execute(text("""
+            INSERT INTO sitemate.alert_revisions(project_id,alert_id,version,as_of,severity,calculation,evidence_refs)
+            SELECT project_id,id,1,:as_of,:severity,CAST(:calculation AS jsonb),CAST(:refs AS jsonb)
+              FROM sitemate.alerts WHERE project_id='RIV' AND activity_code=:code
+               AND checkpoint_at=:checkpoint AND kind='shortfall'
+            ON CONFLICT DO NOTHING
+        """), params)
+
+
 def main():
     tables = collect_rows()
     with engine_for("MIGRATION_DATABASE_URL").begin() as conn:
@@ -138,6 +187,7 @@ def main():
                              f"VALUES ({', '.join(':' + c for c in columns)}) "
                              f"ON CONFLICT ({', '.join(key.split())}) {conflict}")
             conn.execute(statement, rows)
+        seed_workflows(conn)
     print(f"Imported {len(tables['sources'])} sources and {len(tables['observations'])} observations.")
 
 

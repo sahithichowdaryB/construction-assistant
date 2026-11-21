@@ -22,7 +22,8 @@ def main():
             cur.execute("GRANT USAGE ON SCHEMA sitemate TO sitemate_reader")
             cur.execute("""GRANT SELECT ON sitemate.project_members, sitemate.projects,
                            sitemate.activities, sitemate.sources, sitemate.source_passages,
-                           sitemate.plan_targets, sitemate.observations TO sitemate_reader""")
+                           sitemate.plan_targets, sitemate.observations,
+                           sitemate.alerts, sitemate.alert_revisions TO sitemate_reader""")
     print("Database reader provisioned.")
 
 
