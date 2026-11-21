@@ -37,7 +37,7 @@ export function StoryRail({
   const seen = useSeenRecaps();
   const circle = size === "sm" ? "size-16" : "size-[76px]";
   return (
-    <ul className={cn("flex gap-4 overflow-x-auto pb-1", className)} aria-label="Daily recaps">
+    <ul className={cn("flex gap-4 overflow-x-auto pb-1 [scrollbar-width:none]", className)} aria-label="Daily recaps">
       {recaps.map((r, i) => {
         const fresh = !seen.has(seenKey(r));
         const latest = !r.live && recaps.findIndex((x) => !x.live) === i;

@@ -114,7 +114,7 @@ export function StoryViewer({
           <HardHat className="size-4" aria-hidden />
         </span>
         <p className="hidden text-[15px] font-semibold sm:block">Daily recap</p>
-        <div className="ml-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto md:ml-6" role="tablist" aria-label="Days">
+        <div className="ml-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none] md:ml-6" role="tablist" aria-label="Days">
           {days.map((d, i) => (
             <button
               key={d.work_date}
@@ -213,7 +213,7 @@ export function StoryViewer({
 
       {/* Chapter dock */}
       <div className="flex items-center justify-center px-3 pt-3 pb-[max(env(safe-area-inset-bottom),0.9rem)]">
-        <div className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-white/6 p-1.5" role="tablist" aria-label="Chapters">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-white/6 p-1.5 [scrollbar-width:none]" role="tablist" aria-label="Chapters">
           {CHAPTERS.filter((c) => chapterCount(day, c.key) > 0).map((c) => {
             const first = day.cards.findIndex((x) => x.chapter === c.key);
             const active = card.chapter === c.key;
