@@ -9,4 +9,6 @@ Stage demo for Tuesday, 10 November
 4. Inspect the alert and draft. Use the activity link in the schedule and the original service email. The project record intentionally leaves the contract reference, clause and rates open. The draft requires human review.
 5. Move the clock forward for the repair confirmation and foundation handover. The 11 November report is a scanned page received the following morning. Before receipt, display a missing-report alert.
 
+Additional replay for Friday, 13 November: see evaluation/field-cases.md for three incidents with seven source records. Set the app to live API mode and use the custom replay time 13 November 2026 at 11:00 (Vienna) to see all three.
+
 QA scope: five signed reports, ten activities, fifty activity/day combinations, six planted shortfall alerts. Zero target means no baseline production that day. The only off-plan production is catch-up recorded against EXC-B on Nov 12. Expected results include fifteen retrieval questions and the ten case descriptions in the build plan. The cross-project permissions case requires a second test identity in the app. No company documents, real notices or messages were used or sent.

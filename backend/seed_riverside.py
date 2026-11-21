@@ -1,11 +1,15 @@
 """Replay the checked-in Riverside inputs into PostgreSQL. Run after migrations."""
 
 import csv
+import email
 import hashlib
 import json
 import os
 import re
+import uuid
+import zipfile
 from datetime import date, timedelta
+from email import policy
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -16,6 +20,47 @@ from database import engine_for
 ROOT = Path(__file__).resolve().parents[1] / "data/riverside-demo"
 REGISTERS = ROOT / "uploads/registers"
 SCANNED_R11 = "e6315b3e69db41f32cfeb7e2258585eb96006f45a2f1ef89200dfc0faf73b6e8"
+
+
+# Who wrote each record, for the incident evidence agent. Supervisor-side sources outrank external ones.
+SITE_FOREMAN = ("Site foreman", "foreman")
+SAM_REED = ("Sam Reed, Site Manager", "site_supervisor")
+SOURCE_AUTHORS = {
+    **{f"V{n:02d}": SITE_FOREMAN for n in range(1, 11)},
+    "D10": SAM_REED, "M07": SAM_REED, "M08": SAM_REED,
+    "E01": ("GroundWorks plant coordinator", "external"), "E02": ("Riverside client", "client"),
+    "E03": ("SteelFix dispatch", "external"), "E04": ("Demo supplier", "external"),
+}
+KIND_ROLES = {"daily_report": ("Signed daily report", "signed_report"), "schedule": (None, "system"),
+              "register": (None, "system"), "project": (None, "system")}
+INCIDENT_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "sitemate/RIV/incident/EX-02-hose-2026-11-10"))
+
+
+def author_of(entry):
+    if "author_role" in entry:
+        return entry["author"], entry["author_role"]
+    return SOURCE_AUTHORS.get(entry["id"]) or KIND_ROLES.get(entry["type"]) or (None, "unknown")
+
+
+def sentences(value):
+    return [p.strip() for p in re.split(r"(?<=[.!?])\s+", " ".join(value.split())) if p.strip()]
+
+
+def text_passages(entry, root):
+    """Passages for voice transcripts (one per sentence), emails and minutes (one per paragraph)."""
+    if entry["type"] == "voice":
+        return [(f"seg:{n}", t) for n, t in enumerate(sentences((root / entry["transcript"]).read_text("utf8")), 1)]
+    path = root / entry["path"]
+    if entry["type"] == "email":
+        message = email.message_from_bytes(path.read_bytes(), policy=policy.default)
+        body = message.get_body(preferencelist=("plain",)).get_content()
+        return [(f"para:{n}", " ".join(p.split())) for n, p in enumerate(re.split(r"\n\s*\n", body), 1) if p.strip()]
+    if entry["type"] == "minutes":
+        with zipfile.ZipFile(path) as docx:
+            xml = docx.read("word/document.xml").decode("utf8")
+        paragraphs = [re.sub(r"<[^>]+>", "", p) for p in re.findall(r"<w:p[ >].*?</w:p>", xml, re.S)]
+        return [(f"para:{n}", " ".join(p.split())) for n, p in enumerate(filter(str.strip, paragraphs), 1)]
+    return []
 
 
 def csv_rows(name):
@@ -63,8 +108,9 @@ def collect_rows():
     for entry in entries:
         if not (ROOT / entry["path"]).is_file():
             raise FileNotFoundError(entry["path"])
+        author, role = author_of(entry)
         add("sources", id=entry["id"], kind=entry["type"], path=entry["path"],
-            available_at=entry["available_at"])
+            available_at=entry["available_at"], author=author, author_role=role)
     for row in csv_rows("contractors.csv"):
         add("contractors", id=row["contractor_id"], name=row["name"], trade=row["trade"],
             contact_role=row["contact_role"])
@@ -102,6 +148,9 @@ def collect_rows():
                 add("source_passages", source_id=entry["id"], locator=locator, page=page, excerpt=excerpt)
                 add("observations", activity_code=code, work_date=path.stem[-10:], quantity=actual,
                     basis="signed", source_id=entry["id"], locator=locator)
+        elif entry["type"] in ("voice", "email", "minutes"):
+            for locator, excerpt in text_passages(entry, ROOT):
+                add("source_passages", source_id=entry["id"], locator=locator, page=None, excerpt=excerpt)
         elif entry["id"] == "D10":
             excerpt = path.read_text(encoding="utf8").strip()
             match = re.search(r"estimates (\d+) m³ in Excavation Zone B", excerpt)
@@ -113,7 +162,8 @@ def collect_rows():
     token = os.environ["RIVERSIDE_DEMO_TOKEN"]
     if len(token) < 32:
         raise ValueError("Set a random RIVERSIDE_DEMO_TOKEN of at least 32 characters")
-    add("project_members", member_id="riverside-demo", token_hash=hashlib.sha256(token.encode()).hexdigest())
+    add("project_members", member_id="riverside-demo", token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        role="manager")
     return tables
 
 
@@ -175,6 +225,30 @@ def seed_workflows(conn):
         """), params)
 
 
+def seed_incident(conn):
+    """The EX-02 breakdown reported in V01/V03. Facts cover what was said; the agent finds the cause."""
+    conn.execute(text("""
+        INSERT INTO sitemate.incidents(project_id,id,activity_code,kind,title,occurred_at)
+        VALUES ('RIV',CAST(:id AS uuid),'EXC-B','equipment_failure',
+                'EX-02 breakdown in Excavation Zone B','2026-11-10T10:00:00+01:00')
+        ON CONFLICT DO NOTHING
+    """), {"id": INCIDENT_ID})
+    facts = [("occurred_at", {"text": "at ten"}, "V01", "seg:1"),
+             ("workers_affected", {"count": 3}, "V01", "seg:3"),
+             ("workers_affected", {"count": 3}, "V03", "seg:2")]
+    for field, value, source, locator in facts:
+        fact_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{INCIDENT_ID}/{field}/{source}/{locator}"))
+        conn.execute(text("""
+            INSERT INTO sitemate.capture_facts(project_id,id,incident_id,source_id,locator,field_name,value,basis)
+            VALUES ('RIV',CAST(:id AS uuid),CAST(:inc AS uuid),:s,:l,:f,CAST(:v AS jsonb),'reported')
+            ON CONFLICT DO NOTHING
+        """), {"id": fact_id, "inc": INCIDENT_ID, "s": source, "l": locator, "f": field, "v": json.dumps(value)})
+        conn.execute(text("""
+            INSERT INTO sitemate.fact_evidence(project_id,fact_id,source_id,locator)
+            VALUES ('RIV',CAST(:id AS uuid),:s,:l) ON CONFLICT DO NOTHING
+        """), {"id": fact_id, "s": source, "l": locator})
+
+
 def main():
     tables = collect_rows()
     with engine_for("MIGRATION_DATABASE_URL").begin() as conn:
@@ -188,6 +262,9 @@ def main():
                              f"ON CONFLICT ({', '.join(key.split())}) {conflict}")
             conn.execute(statement, rows)
         seed_workflows(conn)
+        seed_incident(conn)
+        from seed_field_cases import seed as seed_field_cases
+        seed_field_cases(conn, ROOT, text_passages)
     print(f"Imported {len(tables['sources'])} sources and {len(tables['observations'])} observations.")
 
 

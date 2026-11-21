@@ -1,0 +1,46 @@
+[
+  {
+    "source_id": "D10",
+    "title": "Site diary, 10 Nov afternoon handover",
+    "observations": [
+      { "text": "Foreman estimates 70 m³ in Excavation Zone B (provisional; last ticket still to reconcile).", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] },
+      { "text": "Mechanic's forecast at 10:18 was noon tomorrow.", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] },
+      { "text": "No release of the excavator recorded by this handover.", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] }
+    ],
+    "decisions": [
+      { "text": "Use the signed shift return for the final Zone B figure.", "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] }
+    ],
+    "open_actions": [
+      { "text": "Reconcile the last Zone B ticket.", "owner": null, "due": null, "refs": [{ "source_id": "D10", "locator": "handover", "passage_id": "D10:handover" }] }
+    ],
+    "evidence_ids": ["D10:handover"]
+  },
+  {
+    "source_id": "M07",
+    "title": "Minutes M07: site coordination meeting, 7 Nov",
+    "observations": [
+      { "text": "The Zone B excavation shift starts on 8 Nov; the north haul route is available from 07:00.", "refs": [{ "source_id": "M07", "locator": "discussion", "passage_id": "M07:discussion" }] }
+    ],
+    "decisions": [
+      { "text": "SolidBase retains the 12 Nov start for Foundations Zone B in its baseline.", "refs": [{ "source_id": "M07", "locator": "follow-up", "passage_id": "M07:follow-up" }] }
+    ],
+    "open_actions": [
+      { "text": "Provide Sam with a backup excavator plan.", "owner": "GroundWorks", "due": "2026-11-10T12:00:00+01:00", "refs": [{ "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" }] },
+      { "text": "Confirm the TC-01 inspection booking.", "owner": "CraneCo", "due": "2026-11-12T12:00:00+01:00", "refs": [{ "source_id": "M07", "locator": "actions", "passage_id": "M07:actions" }] },
+      { "text": "Check both actions at the next shift briefing.", "owner": "Sam Reed", "due": null, "refs": [{ "source_id": "M07", "locator": "follow-up", "passage_id": "M07:follow-up" }] }
+    ],
+    "evidence_ids": ["M07:discussion", "M07:actions", "M07:follow-up"]
+  },
+  {
+    "source_id": "E02",
+    "title": "Email: Zone B handover date",
+    "observations": [
+      { "text": "The client has retained the concrete booking for the foundations crew.", "refs": [{ "source_id": "E02", "locator": "body", "passage_id": "E02:body" }] }
+    ],
+    "decisions": [],
+    "open_actions": [
+      { "text": "Confirm whether the planned 12 Nov handover to the foundations crew still stands, with an update after the 10 Nov shift.", "owner": "Sam Reed", "due": null, "refs": [{ "source_id": "E02", "locator": "body", "passage_id": "E02:body" }] }
+    ],
+    "evidence_ids": ["E02:body"]
+  }
+]

@@ -1,0 +1,2234 @@
+[
+  {
+    "activity_code": "SET",
+    "work_date": "2026-11-08",
+    "unit": "sections",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SET"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-SET"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-SET",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-A",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-EXC-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-EXC-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 100,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 100,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "EXC-B"
+        },
+        "observations": [
+          {
+            "quantity": 100,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "EXC-B",
+            "page": 1,
+            "excerpt": "EXC-B | Excavation Zone B | m³ | 100 | 100",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 25,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 20,
+        "basis": "signed",
+        "shortfall_pct": 20,
+        "severity": "medium",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "FND-A"
+        },
+        "observations": [
+          {
+            "quantity": 20,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "FND-A",
+            "page": 1,
+            "excerpt": "FND-A | Foundations Zone A | m³ | 25 | 20",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-FND-B"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-FND-B",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SLAB",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SLAB"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-SLAB"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-SLAB",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "COL-L1",
+    "work_date": "2026-11-08",
+    "unit": "pcs",
+    "planned": 4,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "COL-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 4,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "COL-L1"
+        },
+        "observations": [
+          {
+            "quantity": 4,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "COL-L1",
+            "page": 1,
+            "excerpt": "COL-L1 | Columns L1 | pcs | 4 | 4",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-08",
+    "unit": "m²",
+    "planned": 40,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FORM-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 40,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "FORM-L1"
+        },
+        "observations": [
+          {
+            "quantity": 40,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "FORM-L1",
+            "page": 1,
+            "excerpt": "FORM-L1 | Formwork L1 | m² | 40 | 40",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-08",
+    "unit": "t",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "REBAR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-REBAR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-REBAR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "POUR-L1",
+    "work_date": "2026-11-08",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "POUR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-08T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R8",
+          "page": 1,
+          "locator": "zero-POUR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R8",
+            "locator": "zero-POUR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-08T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SET",
+    "work_date": "2026-11-09",
+    "unit": "sections",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SET"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-SET"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-SET",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-A",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-EXC-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-EXC-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 100,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 92,
+        "basis": "signed",
+        "shortfall_pct": 8,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "EXC-B"
+        },
+        "observations": [
+          {
+            "quantity": 92,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "EXC-B",
+            "page": 1,
+            "excerpt": "EXC-B | Excavation Zone B | m³ | 100 | 92",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 25,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 30,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "FND-A"
+        },
+        "observations": [
+          {
+            "quantity": 30,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "FND-A",
+            "page": 1,
+            "excerpt": "FND-A | Foundations Zone A | m³ | 25 | 30",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-FND-B"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-FND-B",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SLAB",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SLAB"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-SLAB"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-SLAB",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "COL-L1",
+    "work_date": "2026-11-09",
+    "unit": "pcs",
+    "planned": 4,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "COL-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 4,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "COL-L1"
+        },
+        "observations": [
+          {
+            "quantity": 4,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "COL-L1",
+            "page": 1,
+            "excerpt": "COL-L1 | Columns L1 | pcs | 4 | 4",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-09",
+    "unit": "m²",
+    "planned": 40,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FORM-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 32,
+        "basis": "signed",
+        "shortfall_pct": 20,
+        "severity": "medium",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "FORM-L1"
+        },
+        "observations": [
+          {
+            "quantity": 32,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "FORM-L1",
+            "page": 1,
+            "excerpt": "FORM-L1 | Formwork L1 | m² | 40 | 32",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-09",
+    "unit": "t",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "REBAR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-REBAR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-REBAR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "POUR-L1",
+    "work_date": "2026-11-09",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "POUR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-09T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R9",
+          "page": 1,
+          "locator": "zero-POUR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R9",
+            "locator": "zero-POUR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-09T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SET",
+    "work_date": "2026-11-10",
+    "unit": "sections",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SET"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-SET"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-SET",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-A",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-EXC-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-EXC-A",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 100,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T16:05:00+01:00",
+        "actual": 70,
+        "basis": "estimated",
+        "shortfall_pct": 30,
+        "severity": null,
+        "evidence": {
+          "source_id": "D10",
+          "page": null,
+          "locator": "handover"
+        },
+        "observations": [
+          {
+            "quantity": 70,
+            "basis": "estimated",
+            "source_id": "D10",
+            "locator": "handover",
+            "page": null,
+            "excerpt": "15:55. Foreman estimates 70 m³ in Excavation Zone B. Last ticket still to reconcile. Use the signed shift return for the final figure.",
+            "available_at": "2026-11-10T16:05:00+01:00"
+          }
+        ]
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 65,
+        "basis": "signed",
+        "shortfall_pct": 35,
+        "severity": "high",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "EXC-B"
+        },
+        "observations": [
+          {
+            "quantity": 65,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "EXC-B",
+            "page": 2,
+            "excerpt": "EXC-B | Excavation Zone B | m³ | 100 | 65",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          },
+          {
+            "quantity": 70,
+            "basis": "estimated",
+            "source_id": "D10",
+            "locator": "handover",
+            "page": null,
+            "excerpt": "15:55. Foreman estimates 70 m³ in Excavation Zone B. Last ticket still to reconcile. Use the signed shift return for the final figure.",
+            "available_at": "2026-11-10T16:05:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-FND-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-FND-A",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-FND-B"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-FND-B",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SLAB",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 40,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SLAB"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 40,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "SLAB"
+        },
+        "observations": [
+          {
+            "quantity": 40,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "SLAB",
+            "page": 2,
+            "excerpt": "SLAB | Ground slab | m³ | 40 | 40",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "COL-L1",
+    "work_date": "2026-11-10",
+    "unit": "pcs",
+    "planned": 4,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "COL-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 4,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "COL-L1"
+        },
+        "observations": [
+          {
+            "quantity": 4,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "COL-L1",
+            "page": 2,
+            "excerpt": "COL-L1 | Columns L1 | pcs | 4 | 4",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-10",
+    "unit": "m²",
+    "planned": 40,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FORM-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 48,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "FORM-L1"
+        },
+        "observations": [
+          {
+            "quantity": 48,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "FORM-L1",
+            "page": 2,
+            "excerpt": "FORM-L1 | Formwork L1 | m² | 40 | 48",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-10",
+    "unit": "t",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "REBAR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-REBAR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-REBAR-L1",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "POUR-L1",
+    "work_date": "2026-11-10",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "POUR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-10T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R10",
+          "page": 2,
+          "locator": "zero-POUR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R10",
+            "locator": "zero-POUR-L1",
+            "page": 2,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-10T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SET",
+    "work_date": "2026-11-11",
+    "unit": "sections",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SET"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-SET"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-SET",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-A",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-EXC-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-EXC-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 100,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 80,
+        "basis": "signed",
+        "shortfall_pct": 20,
+        "severity": "medium",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "EXC-B"
+        },
+        "observations": [
+          {
+            "quantity": 80,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "EXC-B",
+            "page": 1,
+            "excerpt": "EXC-B | Excavation Zone B | m³ | 100 | 80",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-FND-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-FND-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-FND-B"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-FND-B",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SLAB",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SLAB"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-SLAB"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-SLAB",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "COL-L1",
+    "work_date": "2026-11-11",
+    "unit": "pcs",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "COL-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-COL-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-COL-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-11",
+    "unit": "m²",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FORM-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-FORM-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-FORM-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-11",
+    "unit": "t",
+    "planned": 5,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "REBAR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 4,
+        "basis": "signed",
+        "shortfall_pct": 20,
+        "severity": "medium",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "REBAR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 4,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "REBAR-L1",
+            "page": 1,
+            "excerpt": "REBAR-L1 | Rebar L1 | t | 5 | 4",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "POUR-L1",
+    "work_date": "2026-11-11",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "POUR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T07:15:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R11",
+          "page": 1,
+          "locator": "zero-POUR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R11",
+            "locator": "zero-POUR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T07:15:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SET",
+    "work_date": "2026-11-12",
+    "unit": "sections",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SET"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-SET"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-SET",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-A",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-EXC-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-EXC-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "EXC-B",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "EXC-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 63,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "EXC-B"
+        },
+        "observations": [
+          {
+            "quantity": 63,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "EXC-B",
+            "page": 1,
+            "excerpt": "EXC-B | Excavation Zone B | m³ | 0 | 63",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-A",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-A"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-FND-A"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-FND-A",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FND-B",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 30,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FND-B"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 20,
+        "basis": "signed",
+        "shortfall_pct": 33.33,
+        "severity": "high",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "FND-B"
+        },
+        "observations": [
+          {
+            "quantity": 20,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "FND-B",
+            "page": 1,
+            "excerpt": "FND-B | Foundations Zone B | m³ | 30 | 20",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "SLAB",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "SLAB"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-SLAB"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-SLAB",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "COL-L1",
+    "work_date": "2026-11-12",
+    "unit": "pcs",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "COL-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-COL-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-COL-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "FORM-L1",
+    "work_date": "2026-11-12",
+    "unit": "m²",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "FORM-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-FORM-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-FORM-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "REBAR-L1",
+    "work_date": "2026-11-12",
+    "unit": "t",
+    "planned": 5,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "REBAR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 6,
+        "basis": "signed",
+        "shortfall_pct": 0,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "REBAR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 6,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "REBAR-L1",
+            "page": 1,
+            "excerpt": "REBAR-L1 | Rebar L1 | t | 5 | 6",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "activity_code": "POUR-L1",
+    "work_date": "2026-11-12",
+    "unit": "m³",
+    "planned": 0,
+    "plan_evidence": {
+      "source_id": "SCH",
+      "locator": "POUR-L1"
+    },
+    "snapshots": [
+      {
+        "available_at": "2026-11-06T08:00:00+01:00",
+        "actual": null,
+        "basis": null,
+        "shortfall_pct": null,
+        "severity": null,
+        "evidence": null,
+        "observations": []
+      },
+      {
+        "available_at": "2026-11-12T17:30:00+01:00",
+        "actual": 0,
+        "basis": "signed",
+        "shortfall_pct": null,
+        "severity": "none",
+        "evidence": {
+          "source_id": "R12",
+          "page": 1,
+          "locator": "zero-POUR-L1"
+        },
+        "observations": [
+          {
+            "quantity": 0,
+            "basis": "signed",
+            "source_id": "R12",
+            "locator": "zero-POUR-L1",
+            "page": 1,
+            "excerpt": "Other scheduled activities recorded zero production this shift.",
+            "available_at": "2026-11-12T17:30:00+01:00"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -186,6 +186,65 @@
       "path": "uploads/reports/daily_report_2026-11-12.pdf",
       "available_at": "2026-11-12T17:30:00+01:00",
       "type": "daily_report"
+    },
+    {
+      "id": "V11",
+      "path": "uploads/voice/V11.wav",
+      "available_at": "2026-11-13T07:45:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V11.txt",
+      "author": "Site foreman",
+      "author_role": "foreman"
+    },
+    {
+      "id": "E05",
+      "path": "uploads/emails/E05.eml",
+      "available_at": "2026-11-13T08:20:00+01:00",
+      "type": "email",
+      "author": "Sam Reed, Site Manager",
+      "author_role": "site_supervisor"
+    },
+    {
+      "id": "V12",
+      "path": "uploads/voice/V12.wav",
+      "available_at": "2026-11-13T09:10:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V12.txt",
+      "author": "Site foreman",
+      "author_role": "foreman"
+    },
+    {
+      "id": "E06",
+      "path": "uploads/emails/E06.eml",
+      "available_at": "2026-11-13T09:30:00+01:00",
+      "type": "email",
+      "author": "Spacer supplier dispatch",
+      "author_role": "external"
+    },
+    {
+      "id": "G13",
+      "path": "uploads/diary/G13-gate-docket.pdf",
+      "available_at": "2026-11-13T10:45:00+01:00",
+      "type": "diary",
+      "author": "Jo Vale, gate clerk",
+      "author_role": "unknown"
+    },
+    {
+      "id": "E07",
+      "path": "uploads/emails/E07.eml",
+      "available_at": "2026-11-13T10:50:00+01:00",
+      "type": "email",
+      "author": "Sam Reed, Site Manager",
+      "author_role": "site_supervisor"
+    },
+    {
+      "id": "V13",
+      "path": "uploads/voice/V13.wav",
+      "available_at": "2026-11-13T11:00:00+01:00",
+      "type": "voice",
+      "transcript": "transcripts/V13.txt",
+      "author": "Site foreman",
+      "author_role": "foreman"
     }
   ]
 }

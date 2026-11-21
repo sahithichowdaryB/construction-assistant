@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "V01",
+    "transcript": "The excavator broke down at ten. Hydraulic hose burst. Three workers can't continue digging in Zone B.",
+    "kind": "incident",
+    "basis": "provisional",
+    "fields": [
+      { "key": "occurred_at", "label": "Occurred at", "value": "2026-11-10T10:00:00+01:00", "provenance": "verified", "source_ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" }, "note": "\"broke down at ten\", resolved against the recording date" },
+      { "key": "zone", "label": "Zone", "value": "B", "provenance": "verified", "source_ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" } },
+      { "key": "activity_code", "label": "Activity", "value": "EXC-B", "provenance": "verified", "source_ref": { "source_id": "SCH", "locator": "EXC-B", "passage_id": "SCH:EXC-B" }, "note": "\"digging in Zone B\"; EXC-B is the scheduled Zone B excavation on 10 Nov" },
+      { "key": "affected_workers", "label": "Affected workers", "value": 3, "provenance": "verified", "source_ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" } },
+      { "key": "equipment_id", "label": "Equipment", "value": "EX-02", "provenance": "inferred", "source_ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" }, "note": "Foreman said \"the excavator\". The register assigns EX-02 to EXC-B on 10 Nov." },
+      { "key": "contractor_id", "label": "Contractor", "value": "GW (GroundWorks Ltd)", "provenance": "inferred", "source_ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" }, "note": "Owner of EX-02 in the equipment register" },
+      { "key": "cause", "label": "Cause", "value": "Hydraulic hose burst", "provenance": "verified", "source_ref": { "source_id": "V01", "locator": "transcript", "passage_id": "V01:transcript" } },
+      { "key": "expected_repair", "label": "Expected repair", "value": null, "provenance": "missing", "source_ref": null, "note": "Not stated in the note" }
+    ],
+    "follow_up_questions": [{ "id": "expected_repair", "question": "Expected repair time?" }],
+    "duplicate_of": null,
+    "related_incident": null
+  },
+  {
+    "source_id": "V02",
+    "transcript": "Just heard from the mechanic. He expects it back tomorrow at noon. That's his estimate.",
+    "kind": "forecast",
+    "basis": "forecast",
+    "fields": [
+      { "key": "forecast_return", "label": "Forecast return to service", "value": "2026-11-11T12:00:00+01:00", "provenance": "verified", "source_ref": { "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" }, "note": "\"tomorrow at noon\", resolved against the recording time 10 Nov 10:18" },
+      { "key": "forecast_by", "label": "Forecast by", "value": "Mechanic (name not recorded)", "provenance": "verified", "source_ref": { "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" } },
+      { "key": "equipment_id", "label": "Equipment", "value": "EX-02", "provenance": "inferred", "source_ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" }, "note": "\"it\" refers to the excavator in V01" },
+      { "key": "basis", "label": "Basis", "value": "Forecast (estimate, not a confirmed release)", "provenance": "verified", "source_ref": { "source_id": "V02", "locator": "transcript", "passage_id": "V02:transcript" } }
+    ],
+    "follow_up_questions": [],
+    "duplicate_of": null,
+    "related_incident": { "incident_id": "INC-1", "title": "EX-02 hydraulic hose burst, Zone B" }
+  },
+  {
+    "source_id": "V03",
+    "transcript": "Same machine at Zone B. Three of us are still waiting on the excavator.",
+    "kind": "duplicate",
+    "basis": "provisional",
+    "fields": [
+      { "key": "zone", "label": "Zone", "value": "B", "provenance": "verified", "source_ref": { "source_id": "V03", "locator": "transcript", "passage_id": "V03:transcript" } },
+      { "key": "equipment_id", "label": "Equipment", "value": "EX-02", "provenance": "inferred", "source_ref": { "source_id": "EQ", "locator": "EX-02", "passage_id": "EQ:EX-02" }, "note": "\"Same machine\" refers to the excavator in V01" },
+      { "key": "affected_workers", "label": "Affected workers", "value": 3, "provenance": "verified", "source_ref": { "source_id": "V03", "locator": "transcript", "passage_id": "V03:transcript" } }
+    ],
+    "follow_up_questions": [],
+    "duplicate_of": { "incident_id": "INC-1", "title": "EX-02 hydraulic hose burst, Zone B", "reason": "Same machine and zone six minutes after V01; the same three workers are affected." },
+    "related_incident": null
+  }
+]
