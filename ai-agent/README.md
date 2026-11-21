@@ -10,7 +10,8 @@ claims whose quote is not in the passage -> deterministic score cards (`scoring.
 status, confidence and reasoning -> code validates citations (one retry, else `needs_review`) -> `persist.py`.
 
 ## Configure
-`backend/.env`: `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-2.5-flash`, `GEMINI_API_KEY=<your key>`.
+`backend/.env`: `LLM_PROVIDER=claude`, `LLM_MODEL=claude-opus-5-5`, `ANTHROPIC_API_KEY=<your key>`, and optionally
+`LLM_EFFORT` (`low` | `medium` | `high` | `xhigh` | `max`; empty = the model's default).
 New provider = one adapter class + one branch in `app/llm.py:get_llm()`.
 
 ## Run (from `backend/`, venv active)

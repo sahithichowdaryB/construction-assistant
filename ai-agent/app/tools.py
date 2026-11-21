@@ -18,6 +18,7 @@ class EvidenceStore(Protocol):
     def candidate_passages(self, incident: Incident) -> list[Passage]: ...
     def rules(self, incident: Incident) -> list[str]: ...
     def trust_config(self) -> dict: ...
+    def timezone(self) -> str: ...
 
 
 class SqlEvidenceStore:
@@ -75,6 +76,10 @@ class SqlEvidenceStore:
     def trust_config(self):
         return self.conn.scalar(text("SELECT trust_config FROM sitemate.projects WHERE id=:p"),
                                 {"p": self.project_id}) or {}
+
+    def timezone(self):
+        return self.conn.scalar(text("SELECT timezone FROM sitemate.projects WHERE id=:p"),
+                                {"p": self.project_id}) or "UTC"
 
 
 def default_as_of() -> datetime:

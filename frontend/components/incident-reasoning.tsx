@@ -1,7 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { AlertTriangle, BadgeCheck, CircleHelp, FileSearch, Loader2, Quote, RefreshCw, ShieldAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CircleHelp,
+  FileSearch,
+  HelpCircle,
+  Loader2,
+  Quote,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import { CitationChip } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
@@ -15,12 +26,39 @@ import { fmtDateTime } from "@/lib/time";
 import type { AnalysisEvidence, AnalysisStatus, AuthorRole, IncidentReasoning } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const STATUS: Record<AnalysisStatus, { label: string; cls: string; Icon: typeof BadgeCheck; hint: string }> = {
-  established: { label: "Established", cls: "border-emerald-300 bg-emerald-50 text-emerald-800", Icon: BadgeCheck, hint: "Clear supervisor-side statement, uncontradicted" },
-  probable: { label: "Probable", cls: "border-sky-300 bg-sky-50 text-sky-800", Icon: BadgeCheck, hint: "Supported, with open questions" },
-  unconfirmed: { label: "Unconfirmed", cls: "border-amber-300 bg-amber-50 text-amber-900", Icon: CircleHelp, hint: "Weak or external-only support" },
-  undetermined: { label: "No stated reason", cls: "border-border bg-muted text-foreground", Icon: CircleHelp, hint: "No record says why this happened" },
-  needs_review: { label: "Needs review", cls: "border-red-300 bg-red-50 text-red-800", Icon: ShieldAlert, hint: "The automatic decision failed validation" },
+// ---------- plain-language labels ----------
+
+const STATUS: Record<AnalysisStatus, { label: string; summary: string; cls: string; Icon: typeof BadgeCheck }> = {
+  established: {
+    label: "Confirmed",
+    summary: "Site staff stated this first-hand and nothing in the records contradicts it.",
+    cls: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    Icon: BadgeCheck,
+  },
+  probable: {
+    label: "Likely",
+    summary: "The records support this, but some questions remain open.",
+    cls: "border-sky-300 bg-sky-50 text-sky-800",
+    Icon: BadgeCheck,
+  },
+  unconfirmed: {
+    label: "Not confirmed",
+    summary: "Only weak or outside-party evidence points to this. Treat it as a lead, not a finding.",
+    cls: "border-amber-300 bg-amber-50 text-amber-900",
+    Icon: CircleHelp,
+  },
+  undetermined: {
+    label: "Cause not recorded",
+    summary: "No record says why this happened. Ask the foreman or site manager to add a note.",
+    cls: "border-border bg-muted text-foreground",
+    Icon: HelpCircle,
+  },
+  needs_review: {
+    label: "Needs a person to review",
+    summary: "The automatic check could not verify this result. Please review the sources below.",
+    cls: "border-red-300 bg-red-50 text-red-800",
+    Icon: ShieldAlert,
+  },
 };
 
 const ROLE_LABEL: Record<AuthorRole, string> = {
@@ -28,99 +66,218 @@ const ROLE_LABEL: Record<AuthorRole, string> = {
   foreman: "Foreman",
   signed_report: "Signed report",
   contractor_internal: "Contractor",
-  external: "External party",
+  external: "Outside party",
   client: "Client",
-  system: "System record",
-  unknown: "Unknown author",
+  system: "Project record",
+  unknown: "Author unknown",
 };
-const SUPERVISOR_SIDE: AuthorRole[] = ["site_supervisor", "foreman", "signed_report"];
+const SITE_SIDE: AuthorRole[] = ["site_supervisor", "foreman", "signed_report"];
 
-function pct(n: number) {
-  return `${Math.round(n * 100)}%`;
+const STANCE_LABEL: Partial<Record<AnalysisEvidence["stance"], string>> = {
+  context_only: "Background only",
+  speculates: "Unverified guess",
+  contradicts: "Disagrees",
+};
+
+/** Known automatic-check notes in plain words; anything else is shown with underscores removed. */
+function plainFlag(flag: string): string {
+  if (flag.startsWith("dropped_claim")) return "Some statements could not be matched to the source text and were left out.";
+  if (flag.startsWith("validation")) return "The automatic check flagged this result. Please review it before relying on it.";
+  const known: Record<string, string> = {
+    established_without_supervisor_evidence: "Marked as confirmed, but no site-staff statement backs it.",
+    external_only_but_high_confidence: "Rated highly, yet only outside parties support it.",
+    selected_hypothesis_contradicted_by_supervisor: "A site supervisor's statement disagrees with this cause.",
+    undetermined_but_high_confidence: "No cause was found, but the confidence is unusually high.",
+  };
+  return known[flag] ?? flag.replaceAll("_", " ");
 }
 
-function ConfidenceMeter({ value, status }: { value: number; status: AnalysisStatus }) {
-  const tone = value >= 0.75 ? "bg-emerald-600" : value >= 0.45 ? "bg-sky-600" : value >= 0.2 ? "bg-amber-500" : "bg-slate-400";
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+function sureness(value: number): { word: string; bar: string } {
+  if (value >= 0.75) return { word: "High", bar: "bg-emerald-600" };
+  if (value >= 0.45) return { word: "Medium", bar: "bg-sky-600" };
+  if (value >= 0.2) return { word: "Low", bar: "bg-amber-500" };
+  return { word: "Very low", bar: "bg-slate-400" };
+}
+
+// ---------- loading state ----------
+
+const STEPS = ["Reading the site records", "Checking who said what", "Weighing the possible causes", "Writing the summary"];
+
+/** Replaces the previous answer while the agent runs, so nobody reads a stale result by mistake. */
+function ReasoningProgress() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setStep((n) => Math.min(n + 1, STEPS.length - 1)), 4500);
+    return () => clearInterval(timer);
+  }, []);
   return (
-    <div className="flex flex-col gap-1" role="img" aria-label={`Confidence ${pct(value)}, ${STATUS[status].label}`}>
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="text-muted-foreground">Confidence</span>
-        <span className="text-lg font-semibold tabular-nums">{pct(value)}</span>
+    <div role="status" aria-live="polite" className="flex flex-col gap-5 py-2">
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 items-center justify-center rounded-full bg-sky-50 text-sky-700">
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+        </span>
+        <div>
+          <p className="font-medium">{STEPS[step]}…</p>
+          <p className="text-xs text-muted-foreground">Working out the cause from the records. This usually takes 15 to 30 seconds.</p>
+        </div>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full", tone)} style={{ width: pct(value) }} />
+      <ol className="grid grid-cols-4 gap-1.5" aria-label="Progress">
+        {STEPS.map((s, i) => (
+          <li key={s} className={cn("h-1.5 rounded-full transition-colors duration-500", i <= step ? "bg-sky-600" : "bg-muted")} />
+        ))}
+      </ol>
+      <div className="flex animate-pulse flex-col gap-3" aria-hidden>
+        <div className="h-5 w-24 rounded-md bg-muted" />
+        <div className="h-7 w-3/4 rounded-md bg-muted" />
+        <div className="h-4 w-full rounded bg-muted" />
+        <div className="h-4 w-5/6 rounded bg-muted" />
+        <div className="mt-2 h-20 w-full rounded-lg bg-muted" />
+        <div className="h-20 w-full rounded-lg bg-muted" />
       </div>
     </div>
   );
 }
 
-function RoleChip({ role }: { role: AuthorRole }) {
-  const strong = SUPERVISOR_SIDE.includes(role);
+// ---------- answer ----------
+
+function Answer({ a }: { a: IncidentReasoning }) {
+  const s = STATUS[a.status];
+  const sure = sureness(a.confidence);
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium",
-        strong ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted text-muted-foreground",
-      )}
-    >
-      {ROLE_LABEL[role]}
-    </span>
+    <section aria-labelledby="answer-h" className="grid gap-5 rounded-xl border bg-card p-5 md:grid-cols-[minmax(0,1fr)_14rem]">
+      <div className="flex flex-col gap-3">
+        <h3 id="answer-h" className="sr-only">
+          Answer
+        </h3>
+        <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium [&_svg]:size-4", s.cls)}>
+          <s.Icon aria-hidden /> {s.label}
+        </span>
+        <p className="text-xl leading-snug font-semibold">{a.headline_cause ?? "The records do not say why this happened"}</p>
+        <p className="text-sm text-muted-foreground">{s.summary}</p>
+        <div className="rounded-lg bg-muted/60 p-3">
+          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Summary</p>
+          <p className="text-sm leading-relaxed">{a.reasoning}</p>
+        </div>
+      </div>
+      <div
+        className="flex flex-col justify-center gap-2 rounded-lg border p-4 md:items-stretch"
+        role="img"
+        aria-label={`Confidence ${pct(a.confidence)}, ${sure.word}`}
+      >
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">How sure are we</p>
+        <p className="text-3xl font-semibold tabular-nums">{pct(a.confidence)}</p>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className={cn("h-full rounded-full transition-all", sure.bar)} style={{ width: pct(a.confidence) }} />
+        </div>
+        <p className="text-sm">
+          <span className="font-medium">{sure.word}</span> confidence
+        </p>
+      </div>
+    </section>
   );
 }
 
-function QuoteCard({ e, tone }: { e: AnalysisEvidence; tone: "fact" | "context" }) {
+function StillUnknown({ gaps }: { gaps: string[] }) {
+  if (!gaps.length) return null;
   return (
-    <figure className={cn("rounded-md border-l-4 p-3", tone === "fact" ? "border-emerald-500 bg-emerald-50/60" : "border-slate-300 bg-muted/50")}>
+    <section aria-labelledby="gap-h" className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
+      <h3 id="gap-h" className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-950">
+        <CircleHelp className="size-4" aria-hidden /> What we still don&apos;t know
+      </h3>
+      <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm text-amber-950/90">
+        {gaps.map((g) => (
+          <li key={g}>{g}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ---------- sources ----------
+
+function QuoteCard({ e, tone }: { e: AnalysisEvidence; tone: "fact" | "other" }) {
+  const note = STANCE_LABEL[e.stance];
+  return (
+    <figure className={cn("rounded-lg border-l-4 p-3", tone === "fact" ? "border-emerald-500 bg-emerald-50/60" : "border-slate-300 bg-muted/50")}>
       <blockquote className="flex gap-2 text-sm">
         <Quote className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="whitespace-pre-wrap">“{e.quote}”</span>
       </blockquote>
       <figcaption className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <RoleChip role={e.author_role} />
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md border px-1.5 py-0.5 font-medium",
+            SITE_SIDE.includes(e.author_role) ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-border bg-muted",
+          )}
+        >
+          {ROLE_LABEL[e.author_role]}
+        </span>
         <CitationChip refData={{ source_id: e.source_id }} />
         <span className="font-mono">{e.locator}</span>
-        {e.stated_at && <span>stated {fmtDateTime(e.stated_at)}</span>}
-        {e.stance !== "states_cause" && <span className="rounded border px-1">{e.stance.replace("_", " ")}</span>}
+        {e.stated_at && <span>said {fmtDateTime(e.stated_at)}</span>}
+        {note && <span className="rounded border px-1">{note}</span>}
       </figcaption>
     </figure>
   );
 }
 
-function Verdict({ a }: { a: IncidentReasoning }) {
-  const s = STATUS[a.status];
+function Sources({ a }: { a: IncidentReasoning }) {
+  const total = a.factual_evidence.length + a.external_claims.length;
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      <div className="flex flex-col gap-2">
-        <span className={cn("inline-flex w-fit items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium [&_svg]:size-3.5", s.cls)} title={s.hint}>
-          <s.Icon aria-hidden /> {s.label}
-        </span>
-        <p className="text-lg font-semibold">
-          {a.headline_cause ?? "No record states why this happened"}
-        </p>
-        <p className="text-sm text-muted-foreground">{a.reasoning}</p>
+    <section aria-labelledby="src-h" className="flex flex-col gap-4 rounded-xl border p-5">
+      <div>
+        <h3 id="src-h" className="flex items-center gap-2 text-base font-semibold">
+          Sources
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{total}</span>
+        </h3>
+        <p className="text-xs text-muted-foreground">The exact words from the project records that this finding rests on. Select a source to open it.</p>
       </div>
-      <ConfidenceMeter value={a.confidence} status={a.status} />
-    </div>
+      <div className="flex flex-col gap-2">
+        <h4 className="text-sm font-semibold">Where it was said</h4>
+        {a.factual_evidence.length ? (
+          a.factual_evidence.map((e) => <QuoteCard key={`${e.source_id}-${e.locator}-${e.quote}`} e={e} tone="fact" />)
+        ) : (
+          <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">No site-staff record states a cause.</p>
+        )}
+      </div>
+      {a.external_claims.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h4 className="text-sm font-semibold">Other statements</h4>
+          <p className="-mt-1 text-xs text-muted-foreground">From outside parties, background or conflicting records. These were not treated as the cause.</p>
+          {a.external_claims.map((e) => (
+            <QuoteCard key={`${e.source_id}-${e.locator}-${e.quote}`} e={e} tone="other" />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-function Hypotheses({ a }: { a: IncidentReasoning }) {
-  const llmPick = a.hypotheses.find((h) => h.llm_selected);
+// ---------- how it was worked out ----------
+
+function HowWeGotHere({ a }: { a: IncidentReasoning }) {
+  if (!a.hypotheses.length) return null;
   return (
-    <section aria-labelledby="hyp-h" className="flex flex-col gap-2">
-      <h3 id="hyp-h" className="text-sm font-semibold">Candidate causes</h3>
-      <p className="text-xs text-muted-foreground">
-        The bar is the code&apos;s score from who said it. The model reads these scores, then makes the final call
-        {llmPick ? "" : " (it chose none)"}.
+    <details className="group rounded-xl border p-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold marker:content-none">
+        <span>How this was worked out</span>
+        <span className="text-xs font-normal text-muted-foreground group-open:hidden">Show</span>
+        <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Hide</span>
+      </summary>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Possible explanations found in the records. The bar shows how strong the evidence is, based on who said it. A foreman or site manager counts for more
+        than an outside party. The final call is then made by the AI, which explains any difference.
       </p>
-      <ul className="flex flex-col gap-2">
+      <ul className="mt-3 flex flex-col gap-2">
         {a.hypotheses.map((h) => {
           const card = a.score_cards.find((c) => c.hypothesis_id === h.id);
           return (
-            <li key={h.id} className={cn("rounded-md border p-3", h.llm_selected && "border-emerald-400 bg-emerald-50/40")}>
+            <li key={h.id} className={cn("rounded-lg border p-3", h.llm_selected && "border-emerald-400 bg-emerald-50/40")}>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-medium">{h.statement}</span>
-                <span className="rounded border px-1 text-xs text-muted-foreground">{h.level === "root" ? "root cause" : "immediate cause"}</span>
+                <span className="rounded border px-1 text-xs text-muted-foreground">{h.level === "root" ? "Underlying reason" : "Immediate cause"}</span>
                 {h.llm_selected && <span className="rounded border border-emerald-300 bg-emerald-50 px-1 text-xs text-emerald-800">Chosen</span>}
               </div>
               <div className="mt-2 flex items-center gap-2">
@@ -131,18 +288,20 @@ function Hypotheses({ a }: { a: IncidentReasoning }) {
               </div>
               {card && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {card.supervisor_backed ? "Supervisor-backed" : card.external_only ? "External only" : "No cause stated"} ·{" "}
+                  {card.supervisor_backed ? "Backed by site staff" : card.external_only ? "Only outside parties" : "No one states this as a cause"} ·{" "}
                   {card.independent_sources} independent source{card.independent_sources === 1 ? "" : "s"}
-                  {card.contradicted_by_supervisor ? " · contradicted by a supervisor" : ""}
+                  {card.contradicted_by_supervisor ? " · a site supervisor disagrees" : ""}
                 </p>
               )}
             </li>
           );
         })}
       </ul>
-    </section>
+    </details>
   );
 }
+
+// ---------- the card ----------
 
 export function IncidentReasoning({ incidentId }: { incidentId: string }) {
   const { role, projectId, asOf } = useApp();
@@ -150,8 +309,10 @@ export function IncidentReasoning({ incidentId }: { incidentId: string }) {
   const run = useRunReasoning(incidentId);
   const notYet = reasoning.isError && reasoning.error instanceof ApiError && reasoning.error.status === 404;
   const stale = !!reasoning.data?.stale;
+  // The mutation stays pending until the refreshed result is loaded, so the old answer is never shown beside a new run.
+  const busy = run.isPending;
 
-  // Run the agent automatically when nothing is saved for this incident and clock time, or the records have changed.
+  // Run automatically when nothing is saved for this incident and clock time, or the records changed since.
   // Once per incident + project + clock, so a failure never loops; the button remains for a manual re-run.
   const attempted = useRef(new Set<string>());
   useEffect(() => {
@@ -161,130 +322,108 @@ export function IncidentReasoning({ incidentId }: { incidentId: string }) {
     attempted.current.add(key);
     run.mutate();
   }, [notYet, stale, role, projectId, incidentId, asOf, run]);
-  // Reasoning is produced by the backend (database + LLM). Fixture incidents have no database record to reason over.
+
   if (USE_FIXTURES) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileSearch className="size-4" aria-hidden /> Cause &amp; evidence
+            <FileSearch className="size-4" aria-hidden /> Why did this happen?
           </CardTitle>
         </CardHeader>
         <CardContent>
           <EmptyState
             icon={<FileSearch />}
             title="Needs the live API"
-            description="Cause reasoning is generated by the backend from the database and the LLM. Set NEXT_PUBLIC_USE_FIXTURES=false in frontend/.env.local and restart."
+            description="The cause analysis is produced by the backend from the project database and the AI model. Set NEXT_PUBLIC_USE_FIXTURES=false in frontend/.env.local and restart."
           />
         </CardContent>
       </Card>
     );
   }
 
-  const runButton = (
-    <GatedButton
-      size="sm"
-      variant="outline"
-      reason={denyReason(role, "run_reasoning")}
-      disabled={run.isPending}
-      onClick={() => run.mutate()}
-    >
-      {run.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-      {run.isPending ? "Reasoning…" : notYet ? "Find cause" : "Re-run reasoning"}
-    </GatedButton>
-  );
-
   return (
     <Card>
       <CardHeader className="gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <FileSearch className="size-4" aria-hidden /> Cause &amp; evidence
-          </CardTitle>
-          {runButton}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileSearch className="size-5" aria-hidden /> Why did this happen?
+            </CardTitle>
+            <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+              What the project records say caused this incident, who said it, and how sure we are. Statements from the foreman and site manager count for more
+              than outside parties.
+            </p>
+          </div>
+          <GatedButton
+            size="sm"
+            variant="outline"
+            reason={denyReason(role, "run_reasoning")}
+            disabled={busy}
+            onClick={() => run.mutate()}
+          >
+            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+            {busy ? "Re-checking…" : notYet ? "Find the cause" : "Re-check"}
+          </GatedButton>
         </div>
-        <p className="text-xs text-muted-foreground">
-          What the site records say caused this incident, found by the reasoning agent from the project database as of the clock above. Supervisor and
-          foreman statements outweigh outside parties. Review before relying on it.
-        </p>
-        {run.isPending && (
+        {!busy && run.isSuccess && (
           <p role="status" className="text-xs text-muted-foreground">
-            Reading the records and asking the model. This can take up to a minute.
+            {run.data.reused ? `Checked again just now: nothing changed, still version ${run.data.version}.` : `Updated just now (version ${run.data.version}).`}
           </p>
         )}
-        {stale && !run.isPending && !can(role, "run_reasoning") && (
+        {!busy && stale && !can(role, "run_reasoning") && (
           <p role="status" className="text-xs text-amber-800">
-            New records have arrived since this was produced. A site manager or approver can re-run it.
+            New records have arrived since this was produced. A site manager or approver can re-check it.
           </p>
         )}
-        {run.isSuccess && (
-          <p role="status" className="text-xs text-muted-foreground">
-            {run.data.reused
-              ? `Ran again: same evidence and the same finding, so it stays version ${run.data.version}.`
-              : `Ran again: saved as version ${run.data.version}.`}
-          </p>
-        )}
-        {run.isError && <ErrorState error={run.error} onRetry={() => run.mutate()} />}
+        {run.isError && !busy && <ErrorState error={run.error} onRetry={() => run.mutate()} />}
       </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        {reasoning.isPending && <LoadingSkeleton variant="detail" rows={2} />}
-        {notYet && (
-          <EmptyState
-            icon={<FileSearch />}
-            title="No reasoning yet"
-            description="The agent hasn't run for this incident at this time. A site manager or approver can run it."
-          />
+      <CardContent className="flex flex-col gap-4">
+        {busy ? (
+          <ReasoningProgress />
+        ) : (
+          <>
+            {reasoning.isPending && <LoadingSkeleton variant="detail" rows={2} />}
+            {notYet && (
+              <EmptyState
+                icon={<FileSearch />}
+                title="No analysis yet"
+                description="The cause hasn't been worked out for this incident at this time. A site manager or approver can run it."
+              />
+            )}
+            {reasoning.isError && !notYet && <ErrorState error={reasoning.error} onRetry={() => void reasoning.refetch()} />}
+            {reasoning.data && <Result a={reasoning.data} />}
+          </>
         )}
-        {reasoning.isError && !notYet && <ErrorState error={reasoning.error} onRetry={() => void reasoning.refetch()} />}
-        {reasoning.data && <ReasoningBody a={reasoning.data} />}
       </CardContent>
     </Card>
   );
 }
 
-function ReasoningBody({ a }: { a: IncidentReasoning }) {
+function Result({ a }: { a: IncidentReasoning }) {
+  const flags = a.guardrail_flags.map(plainFlag);
   return (
     <>
-      <Verdict a={a} />
-      {a.guardrail_flags.length > 0 && (
-        <div role="note" className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      <Answer a={a} />
+      {flags.length > 0 && (
+        <div role="note" className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <ul className="list-inside list-disc">
-            {a.guardrail_flags.map((f) => (
-              <li key={f}>{f.replaceAll("_", " ")}</li>
-            ))}
-          </ul>
+          <div>
+            <p className="font-medium">Check before relying on this</p>
+            <ul className="mt-1 list-inside list-disc">
+              {[...new Set(flags)].map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
-      <section aria-labelledby="ev-h" className="flex flex-col gap-2">
-        <h3 id="ev-h" className="text-sm font-semibold">Where it was said</h3>
-        {a.factual_evidence.length ? (
-          a.factual_evidence.map((e) => <QuoteCard key={`${e.source_id}-${e.locator}-${e.quote}`} e={e} tone="fact" />)
-        ) : (
-          <p className="text-sm text-muted-foreground">No supervisor-side record states a cause.</p>
-        )}
-      </section>
-      {a.external_claims.length > 0 && (
-        <section aria-labelledby="ext-h" className="flex flex-col gap-2">
-          <h3 id="ext-h" className="text-sm font-semibold">Other statements: outside parties, context or conflicting (not treated as the cause)</h3>
-          {a.external_claims.map((e) => (
-            <QuoteCard key={`${e.source_id}-${e.locator}-${e.quote}`} e={e} tone="context" />
-          ))}
-        </section>
-      )}
-      <Hypotheses a={a} />
-      {a.gaps.length > 0 && (
-        <section aria-labelledby="gap-h" className="flex flex-col gap-1">
-          <h3 id="gap-h" className="text-sm font-semibold">Still unknown</h3>
-          <ul className="list-inside list-disc text-sm text-muted-foreground">
-            {a.gaps.map((g) => (
-              <li key={g}>{g}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <p className="text-xs text-muted-foreground">
-        Version {a.version} · reasoned {fmtDateTime(a.created_at)} · model {a.model}
+      <StillUnknown gaps={a.gaps} />
+      <Sources a={a} />
+      <HowWeGotHere a={a} />
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <Sparkles className="size-3.5" aria-hidden />
+        Written by AI from the project records. Review before relying on it. Version {a.version}, updated {fmtDateTime(a.created_at)}.
       </p>
     </>
   );

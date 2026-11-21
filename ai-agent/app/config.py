@@ -10,7 +10,8 @@ load_dotenv(Path(__file__).resolve().parents[2] / "backend" / ".env")
 
 def llm_settings():
     return {
-        "provider": os.environ.get("LLM_PROVIDER", "gemini").strip().lower(),
-        "model": os.environ.get("LLM_MODEL", "gemini-2.5-flash").strip(),
-        "gemini_api_key": os.environ.get("GEMINI_API_KEY", "").strip(),
+        "provider": os.environ.get("LLM_PROVIDER", "claude").strip().lower(),
+        "model": os.environ.get("LLM_MODEL", "claude-opus-5-5").strip(),
+        # Optional: low | medium | high | xhigh | max. Empty uses the model's default.
+        "effort": os.environ.get("LLM_EFFORT", "").strip().lower() or None,
     }

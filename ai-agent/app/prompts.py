@@ -19,7 +19,7 @@ Task: read the incident and the numbered passages, then return JSON with:
   causes separate: a reported hose burst does NOT establish why it burst or who is liable.
 Also extract "context_only" claims from passages about the same machine, activity, crew or location that bear on why it
 might have happened (for example maintenance or service status, earlier faults, weather, deliveries), even when they do not
-state a cause. They let the reader see what outside parties said. Skip passages unrelated to the incident. Dates and times in the text are relative to the passage's available_at.
+state a cause. They let the reader see what outside parties said. Skip passages unrelated to the incident. All times in the input are in the project's "time_zone"; quote them in that zone. Dates and times in the text are relative to the passage's available_at.
 Return {"claims": [], "hypotheses": []} if no passage speaks to the cause.
 Output only JSON."""
 

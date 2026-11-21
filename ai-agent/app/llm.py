@@ -2,7 +2,6 @@
 
 import json
 import re
-import time
 from typing import Protocol
 
 from .config import llm_settings
@@ -11,8 +10,6 @@ from .config import llm_settings
 class LLMError(RuntimeError):
     pass
 
-
-RETRY_PAUSES = [2, 5, 10]  # seconds; only for "busy" errors (503/429)
 
 
 class LLMClient(Protocol):
@@ -33,40 +30,56 @@ def parse_json(raw: str) -> dict:
     return value
 
 
-class GeminiClient:
-    def __init__(self, api_key: str, model: str):
-        if not api_key:
-            raise LLMError("GEMINI_API_KEY is empty; set it in backend/.env")
-        from google import genai  # imported lazily so tests need no SDK or key
+class ClaudeClient:
+    """Claude via the official Anthropic SDK (Messages API).
 
-        self._genai = genai
-        self._client = genai.Client(api_key=api_key)
-        self.model = model
+    Credentials come from the environment (ANTHROPIC_API_KEY, loaded from backend/.env). The model is chosen by
+    LLM_MODEL. Claude Opus 5.5 always thinks, so `thinking` and `temperature` are not sent (both are rejected);
+    reasoning depth is set with the optional LLM_EFFORT (low | medium | high | xhigh | max).
+    """
+
+    def __init__(self, model: str, effort: str | None = None, max_tokens: int = 16000):
+        import anthropic  # imported lazily so tests need neither the SDK nor a key
+
+        self._anthropic = anthropic
+        self._client = anthropic.Anthropic(max_retries=4)  # the SDK retries 408/409/429/5xx with backoff
+        self.model, self.effort, self.max_tokens = model, effort, max_tokens
 
     def generate_json(self, system: str, user: str) -> dict:
-        from google.genai import types
-
-        config = types.GenerateContentConfig(
-            system_instruction=system, response_mime_type="application/json", temperature=0.0)
-        for attempt, pause in enumerate(RETRY_PAUSES + [None]):
-            try:
-                response = self._client.models.generate_content(model=self.model, contents=user, config=config)
-                break
-            except Exception as exc:  # SDK raises several error types; surface one
-                busy = any(code in str(exc) for code in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"))
-                if pause is None or not busy:
-                    raise LLMError(f"Gemini request failed: {exc}") from exc
-                time.sleep(pause)
-        if not response.text:
-            raise LLMError("Gemini returned an empty response")
-        return parse_json(response.text)
+        anthropic = self._anthropic
+        request = dict(
+            model=self.model, max_tokens=self.max_tokens, system=system,
+            messages=[{"role": "user", "content": user}],
+            # If a safety classifier declines the request, let the API re-run it on a fallback model.
+            betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+        )
+        if self.effort:
+            request["output_config"] = {"effort": self.effort}
+        try:
+            response = self._client.beta.messages.create(**request)
+        except anthropic.AuthenticationError as exc:
+            raise LLMError("Claude rejected the API key; check ANTHROPIC_API_KEY in backend/.env") from exc
+        except anthropic.RateLimitError as exc:
+            raise LLMError("Claude is rate limiting requests; try again shortly") from exc
+        except anthropic.APIConnectionError as exc:
+            raise LLMError(f"Could not reach the Claude API: {exc}") from exc
+        except anthropic.APIStatusError as exc:
+            raise LLMError(f"Claude request failed ({exc.status_code}): {exc.message}") from exc
+        if response.stop_reason == "refusal":
+            raise LLMError("Claude declined this request (safety refusal)")
+        if response.stop_reason == "max_tokens":
+            raise LLMError("Claude's answer was cut off (max_tokens); raise it or lower LLM_EFFORT")
+        text = "".join(block.text for block in response.content if block.type == "text")
+        if not text.strip():
+            raise LLMError("Claude returned no text")
+        return parse_json(text)
 
 
 def get_llm() -> LLMClient:
     settings = llm_settings()
-    if settings["provider"] == "gemini":
-        return GeminiClient(settings["gemini_api_key"], settings["model"])
-    raise LLMError(f"Unsupported LLM_PROVIDER {settings['provider']!r}")
+    if settings["provider"] in ("claude", "anthropic"):
+        return ClaudeClient(settings["model"], settings["effort"])
+    raise LLMError(f"Unsupported LLM_PROVIDER {settings['provider']!r} (supported: claude)")
 
 
 class FakeLLM:
