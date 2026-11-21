@@ -233,9 +233,9 @@ function Wave({ seed }: { seed: string }) {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 9973;
   return (
-    <span className="flex h-10 items-center gap-[3px]" aria-hidden>
+    <span className="flex h-8 items-center gap-[3px]" aria-hidden>
       {Array.from({ length: 22 }, (_, i) => (
-        <i key={i} className="block w-[3px] rounded-full bg-violet-500/80" style={{ height: `${8 + Math.round((Math.sin(i * 1.7 + h) + 1) * 12 + ((i * 7 + h) % 6))}px` }} />
+        <i key={i} className="block w-[3px] rounded-full bg-violet-500/80" style={{ height: `${6 + Math.round((Math.sin(i * 1.7 + h) + 1) * 9 + ((i * 7 + h) % 5))}px` }} />
       ))}
     </span>
   );
@@ -276,7 +276,7 @@ function Visual({ s }: { s: Source }) {
     s.type === "voice" ? <Wave seed={s.id} />
       : s.type === "email" ? <Envelope />
       : (s.type === "text" || s.type === "diary") && displayTitle(s) !== SOURCE_TYPE_LABEL[s.type] ? (
-        <span className="line-clamp-4 px-4 text-left text-[13px] leading-snug font-medium text-foreground/80">“{s.title}”</span>
+        <span className="line-clamp-3 px-3 text-left text-[11.5px] leading-snug font-medium text-foreground/80">“{s.title}”</span>
       )
       : s.type === "text" || s.type === "diary" ? <StickyNote className="size-8 text-stone-500/60" aria-hidden />
       : s.type === "photo" ? <ImageIcon className="size-8 text-emerald-700/50" aria-hidden />
@@ -294,7 +294,7 @@ function DocCard({ s, today, index }: { s: Source; today: string; index: number 
         style={{ animationDelay: `${Math.min(index, 14) * 35}ms` }}>
       <Link href={`/documents/${s.id}`}
             className="group flex h-full flex-col overflow-hidden rounded-2xl bg-card shadow-xs transition duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-        <span className="relative block h-28 overflow-hidden">
+        <span className="relative block h-20 overflow-hidden">
           <Visual s={s} />
           {busy && (
             <span className={cn("absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold",
@@ -303,9 +303,9 @@ function DocCard({ s, today, index }: { s: Source; today: string; index: number 
             </span>
           )}
         </span>
-        <span className="flex items-center gap-2 px-3 py-2.5">
-          <g.Icon className={cn("size-4 shrink-0", g.ink)} aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{displayTitle(s)}</span>
+        <span className="flex items-center gap-1.5 px-2.5 py-2">
+          <g.Icon className={cn("size-3.5 shrink-0", g.ink)} aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-xs font-semibold">{displayTitle(s)}</span>
           <span className="shrink-0 text-[11px] font-semibold text-muted-foreground tabular">{when}</span>
         </span>
       </Link>
@@ -313,7 +313,28 @@ function DocCard({ s, today, index }: { s: Source; today: string; index: number 
   );
 }
 
-const PAGE = 30;
+const PAGE = 10;
+
+/** Page numbers around the current page, with the first and last always shown. */
+function Pager({ page, pages, total, onPage }: { page: number; pages: number; total: number; onPage: (p: number) => void }) {
+  if (pages <= 1) return null;
+  const nums = [...new Set([0, page - 1, page, page + 1, pages - 1])].filter((n) => n >= 0 && n < pages).sort((a, b) => a - b);
+  const btn = "flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-semibold tabular transition";
+  return (
+    <nav aria-label="Pages" className="flex items-center justify-center gap-1">
+      <button type="button" className={cn(btn, "hover:bg-muted disabled:opacity-30")} disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Previous page">‹</button>
+      {nums.map((n, i) => (
+        <span key={n} className="flex items-center gap-1">
+          {i > 0 && n - nums[i - 1] > 1 && <span className="px-1 text-muted-foreground">…</span>}
+          <button type="button" aria-current={n === page ? "page" : undefined} onClick={() => onPage(n)}
+                  className={cn(btn, n === page ? "bg-foreground text-background" : "hover:bg-muted")}>{n + 1}</button>
+        </span>
+      ))}
+      <button type="button" className={cn(btn, "hover:bg-muted disabled:opacity-30")} disabled={page === pages - 1} onClick={() => onPage(page + 1)} aria-label="Next page">›</button>
+      <span className="ml-3 text-xs text-muted-foreground tabular">{page * PAGE + 1}–{Math.min(total, page * PAGE + PAGE)} of {total}</span>
+    </nav>
+  );
+}
 
 export default function DocumentsPage() {
   const sources = useSources();
@@ -322,7 +343,7 @@ export default function DocumentsPage() {
   const [group, setGroup] = useState<string>("all");
   const [q, setQ] = useState("");
   const [showUpload, setShowUpload] = useState(false);
-  const [limit, setLimit] = useState(PAGE);
+  const [page, setPage] = useState(0);
   const list = sources.data ?? [];
   const ql = q.trim().toLowerCase();
   const inGroup = (s: Source) => group === "all" || groupOf(s.type).key === group;
@@ -338,7 +359,7 @@ export default function DocumentsPage() {
       <div className="flex flex-col gap-6">
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7" aria-label="Document types">
           <li>
-            <button type="button" aria-pressed={group === "all"} onClick={() => { setGroup("all"); setLimit(PAGE); }}
+            <button type="button" aria-pressed={group === "all"} onClick={() => { setGroup("all"); setPage(0); }}
                     className={cn("flex h-full w-full flex-col gap-3 rounded-[18px] bg-hero p-4 text-left text-hero-foreground transition", group === "all" ? "ring-2 ring-primary" : "hover:-translate-y-0.5")}>
               <FolderOpen className="size-5 text-primary" aria-hidden />
               <span><span className="block text-3xl leading-none font-bold tabular">{list.length}</span><span className="text-xs font-bold">All</span></span>
@@ -348,7 +369,7 @@ export default function DocumentsPage() {
             const n = fresh(g);
             return (
               <li key={g.key}>
-                <button type="button" aria-pressed={group === g.key} onClick={() => { setGroup(g.key); setLimit(PAGE); }}
+                <button type="button" aria-pressed={group === g.key} onClick={() => { setGroup(g.key); setPage(0); }}
                         className={cn("relative flex h-full w-full flex-col gap-3 rounded-[18px] p-4 text-left transition", g.tile, g.ink, group === g.key ? "ring-2 ring-foreground" : "hover:-translate-y-0.5")}>
                   {n > 0 && <span className="absolute top-3 right-3 rounded-full bg-destructive px-2 text-[10px] leading-5 font-bold text-white">{n} new</span>}
                   <g.Icon className="size-5" aria-hidden />
@@ -362,7 +383,7 @@ export default function DocumentsPage() {
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input aria-label="Search documents" placeholder="Search reports, notes, photos…" value={q} onChange={(e) => setQ(e.target.value)}
+            <Input aria-label="Search documents" placeholder="Search reports, notes, photos…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }}
                    className="h-11 rounded-xl border-0 bg-card pl-10 shadow-xs" />
             {q && (
               <button type="button" aria-label="Clear search" onClick={() => setQ("")}
@@ -379,7 +400,7 @@ export default function DocumentsPage() {
         {showUpload && <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"><UploadPanel /></div>}
 
         {sources.isPending ? (
-          <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">{Array.from({ length: 10 }, (_, i) => <li key={i}><Skeleton className="h-40 rounded-2xl" /></li>)}</ul>
+          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">{Array.from({ length: 10 }, (_, i) => <li key={i}><Skeleton className="h-28 rounded-2xl" /></li>)}</ul>
         ) : sources.isError ? (
           <ErrorState error={sources.error} onRetry={() => void sources.refetch()} />
         ) : !list.length ? (
@@ -388,14 +409,10 @@ export default function DocumentsPage() {
           <EmptyState title="Nothing matches" description="Try another search or type." />
         ) : (
           <>
-            <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" aria-label="Documents">
-              {shown.slice(0, limit).map((s, i) => <DocCard key={s.id} s={s} today={today} index={i} />)}
+            <ul key={`${group}-${page}`} className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Documents">
+              {shown.slice(page * PAGE, page * PAGE + PAGE).map((s, i) => <DocCard key={s.id} s={s} today={today} index={i} />)}
             </ul>
-            {shown.length > limit && (
-              <Button variant="outline" className="self-center rounded-xl" onClick={() => setLimit((l) => l + PAGE)}>
-                Show more · {shown.length - limit} left
-              </Button>
-            )}
+            <Pager page={page} pages={Math.ceil(shown.length / PAGE)} total={shown.length} onPage={setPage} />
           </>
         )}
       </div>
