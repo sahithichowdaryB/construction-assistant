@@ -356,11 +356,15 @@ function useBase() {
 
 // ---------- daily
 
+/** The dashboard loads once and again only when the user asks (Refresh) or changes the day: no polling, no refetch on focus. */
+const ON_DEMAND = { staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false, refetchInterval: false, retry: false } as const;
+
 export function useDailyEvaluation(date: string | null) {
   const { base, a, asOf, projectId } = useBase();
   return useQuery({
     queryKey: ["sm", projectId, "perf", "day", date, asOf],
     enabled: !!date,
+    ...ON_DEMAND,
     queryFn: () => call(`${base}/daily-evaluations/${date}?as_of=${a}`, dailySchema),
   });
 }
@@ -396,6 +400,7 @@ export function usePerformance(date: string | null) {
   const { base, a, asOf, projectId } = useBase();
   return useQuery({
     queryKey: ["sm", projectId, "perf", "snapshot", date, asOf],
+    ...ON_DEMAND,
     queryFn: () => call(`${base}/performance?as_of=${a}${date ? `&date=${date}` : ""}`, snapshotSchema),
   });
 }
@@ -497,4 +502,53 @@ export function deadlineLabel(deadline: string, clockDate: string): { text: stri
   if (days < 0) return { text: `Deadline passed ${-days} day${days === -1 ? "" : "s"} ago`, tone: "red" };
   if (days === 0) return { text: "Due today", tone: "red" };
   return { text: `Due in ${days} day${days === 1 ? "" : "s"} (${deadline})`, tone: days <= 2 ? "amber" : "muted" };
+}
+
+// ---------- reference plans (the PDFs in mock_data) and their agent summaries
+
+const planSchema = z.object({ id: z.string(), title: z.string(), filename: z.string(), size_kb: num, summarised: z.boolean() });
+const planSummarySchema = z.object({
+  id: z.string(), title: z.string(), filename: z.string(), overview: z.string(),
+  key_pages: z.array(z.object({ page: num, caption: z.string() })).default([]),
+  plans: z.array(z.object({ id: z.string(), title: z.string(), role: z.string() })).default([]),
+  key_points: z.array(z.string()).default([]), key_dates: z.array(z.string()).default([]), watch_points: z.array(z.string()).default([]),
+});
+export type PlanFile = z.infer<typeof planSchema>;
+export type PlanSummary = z.infer<typeof planSummarySchema>;
+
+export function usePlans() {
+  const { base, projectId } = useBase();
+  return useQuery({
+    queryKey: ["sm", projectId, "perf", "plans"],
+    queryFn: () => call(`${base}/plans`, z.object({ plans: z.array(planSchema) })),
+  });
+}
+
+export function usePlanSummary(id: string | null) {
+  const { base, projectId } = useBase();
+  return useQuery({
+    queryKey: ["sm", projectId, "perf", "plan-summary", id],
+    enabled: !!id,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: () => call(`${base}/plans/${id}/summary`, planSummarySchema),
+  });
+}
+
+export const planFileUrl = (projectId: string, id: string) => `/api/sm/projects/${encodeURIComponent(projectId)}/plans/${id}/file`;
+
+export const planPageUrl = (projectId: string, id: string, page: number) =>
+  `/api/sm/projects/${encodeURIComponent(projectId)}/plans/${id}/page/${page}.png`;
+
+export function useUploadPlan() {
+  const { base, projectId } = useBase();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      return call(`${base}/plans`, planSchema, { method: "POST", body: form });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sm", projectId, "perf", "plans"] }),
+  });
 }
