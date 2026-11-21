@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { DayNav } from "@/components/day-nav";
 import { SiteActivity } from "@/components/site-activity";
+import { ShortfallGauges } from "@/components/shortfall-gauges";
 import { DayPerformanceCard } from "@/components/performance/day-performance-card";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
 import { NoticeDownloads } from "@/components/notice-downloads";
-import { RecapStrip } from "@/components/recap/recap-strip";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Input } from "@/components/ui/input";
@@ -391,39 +391,17 @@ export default function ManagerPage() {
           />
         }
       />
-      {!inboxNotice && <RecapStrip />}
       {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
       {!inboxNotice && <div className="mb-5"><DayPerformanceCard date={date} /></div>}
-      {!!openShortfalls?.length && notices.isSuccess && (
-        <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
-          <h2 className="text-sm font-semibold">Shortfalls without a notice</h2>
-          <div className="flex flex-wrap gap-2">
-            {openShortfalls.map((alert) => (
-              <button key={alert.id} type="button" className="rounded-xl border bg-card px-3 py-2 text-sm hover:bg-muted"
-                onClick={() => {
-                  setInboxId(null);
-                  setPickedDate(localDateOf(alert.checkpoint_at));
-                  setPickedCode(alert.activity_code);
-                }}>
-                {alert.activity_code} · {fmtLocalDate(localDateOf(alert.checkpoint_at))} · {alert.calculation?.shortfall_pct}% short
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      {!!notices.data?.length && (
-        <section className="mb-5 grid gap-2" aria-label="Project notices">
-          <h2 className="text-sm font-semibold">Project notices</h2>
-          <div className="flex flex-wrap gap-2">
-            {notices.data.map((notice) => (
-              <button type="button" key={notice.id} aria-pressed={inboxId === notice.id}
-                className="rounded-xl border bg-card px-3 py-2 text-sm hover:bg-muted"
-                onClick={() => setInboxId(inboxId === notice.id ? null : notice.id)}>
-                {notice.title ?? noticeLabel(notice)} · {STATUS_LABEL[notice.status]}
-              </button>
-            ))}
-          </div>
-        </section>
+      {!inboxNotice && notices.isSuccess && (
+        <ShortfallGauges
+          shortfalls={openShortfalls ?? []}
+          notices={notices.data}
+          onDraft={(alert) => {
+            setPickedDate(localDateOf(alert.checkpoint_at));
+            setPickedCode(alert.activity_code);
+          }}
+        />
       )}
       {inboxNotice ? (
         <div className="grid gap-3">
