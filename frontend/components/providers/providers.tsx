@@ -14,9 +14,11 @@ export function Providers({ children }: { children: ReactNode }) {
           queries: {
             staleTime: 30_000,
             refetchOnWindowFocus: false,
-            // Don't retry 4xx answers such as "not available at this time"
+            // Don't retry 4xx answers such as "not available at this time". Server errors and network errors get
+            // a few retries with the default exponential backoff: the shared database pooler can briefly refuse
+            // a connection when its client limit is reached.
             retry: (count, error) =>
-              !(error instanceof ApiError && error.status >= 400 && error.status < 500) && count < 1,
+              !(error instanceof ApiError && error.status >= 400 && error.status < 500) && count < 3,
           },
         },
       }),

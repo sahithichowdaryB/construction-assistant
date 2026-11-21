@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { DayNav } from "@/components/day-nav";
 import { SiteActivity } from "@/components/site-activity";
+import { DayPerformanceCard } from "@/components/performance/day-performance-card";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
 import { NoticeDownloads } from "@/components/notice-downloads";
@@ -392,6 +393,7 @@ export default function ManagerPage() {
       />
       {!inboxNotice && <RecapStrip />}
       {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
+      {!inboxNotice && <div className="mb-5"><DayPerformanceCard date={date} /></div>}
       {!!openShortfalls?.length && notices.isSuccess && (
         <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
           <h2 className="text-sm font-semibold">Shortfalls without a notice</h2>

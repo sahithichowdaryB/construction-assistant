@@ -196,6 +196,41 @@ and optionally the recipient, the day and what to stress. `correspondence.py` th
 .venv/Scripts/python.exe correspondence_schema.py   # idempotent DDL (same as migration 0009_correspondence)
 ```
 
+## Performance evaluation (daily deviations and overall performance)
+
+Plan: [../plan/performance-evaluation-plan.md](../plan/performance-evaluation-plan.md). Package `performance/`:
+
+| Module | Job |
+|---|---|
+| `metrics.py` | Pure arithmetic (no DB, no model): statuses, thresholds, calendar, cumulative metrics, SPI, S-curve, forecast, critical path, ledger rules, score, notice deadlines |
+| `baseline.py` | Plan upload: deterministic CSV mapping or prompts P1a/P1b over the passages (PDFs are also sent as documents so Gantt bars are read), grounding validation, manager edits, activation (one transaction) |
+| `daily.py` | Daily evaluation: gather (as_of), metrics, P2 summary, P3 attribution, ledger, alerts, suggestions; versioned |
+| `overall.py` | Snapshot to a date: cumulative, S-curve, SPI, forecast, milestones, attribution split, score, P4 narrative |
+| `prompts.py` | P1-P4 contracts (SECURITY header, JSON schemas), ref and number validators, the adapter over the existing LLM clients |
+| `notices.py` | Additional cost, defect, concern and late-start delay notices for `POST /drafts` (`notice_type`) |
+| `export.py`, `routes.py`, `schema.py` | PDF/Word report, HTTP routes, idempotent DDL behind migration `0009_performance` |
+
+```bash
+.venv/bin/alembic upgrade head                  # 0009_performance, after 0009_correspondence (or: python -m performance.schema)
+.venv/bin/python provision_reader.py && .venv/bin/python provision_ops.py   # grants on the new tables
+.venv/bin/python -m performance.baseline --backfill RIV   # schedule.csv as baseline rev 1 (seed_riverside.py does this too)
+.venv/bin/python verify_performance.py          # with the API running; add --write for the draft/dispute/model checks
+```
+
+Rules: numbers come from `metrics.py` only; every model item must cite a supplied passage and may only repeat supplied
+numbers (otherwise it is dropped); record text is untrusted; reads filter `available_at <= as_of` and results are
+versioned (a ledger row is valid from `daily_version` until `superseded_version`); thresholds, calendar, notice periods,
+rates and ledger points are data in `performance_settings`; nothing is drafted or sent without a manager action.
+
+Routes (under `/projects/{pid}`): `POST/GET /baselines`, `GET/PATCH /baselines/{id}`, `POST /baselines/{id}/activate`,
+`POST /baselines/{id}/extract`, `GET /daily-evaluations?from=&to=`, `GET /daily-evaluations/{date}` (computed from code
+when missing or stale), `POST /daily-evaluations/{date}/recompute`, `GET /performance?date=`, `POST /performance/narrative`,
+`GET /performance/s-curve`, `GET /performance/ledger`, `PATCH /performance/ledger/{id}`, `GET /performance/report.{pdf,docx}`.
+Performance alerts (`late_start`, `equipment_idle`, `missing_report`, `quality_hold`) are listed with
+`GET /alerts?kind=performance` (or `kind=all`); the default alert list is unchanged. The worker (`worker.py`) runs
+`daily_eval` jobs (2-minute debounce per project and day; triggers: signed report parsed, capture event saved, the 18:00
+sweep, manual recompute).
+
 ## Legacy: the previous Node.js capture agent (superseded, not used any more)
 
 `src/` is a Node.js service that turns a recorded voice note into reviewed project memory.

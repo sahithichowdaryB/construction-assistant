@@ -4,11 +4,13 @@ import { ArrowRight, ChevronRight, FilePen, ClipboardPen, Siren, Sparkles, Trian
 import Link from "next/link";
 import { alertSummary } from "@/components/alert-card";
 import { CitationList } from "@/components/citation-chip";
+import { DayPerformanceCard } from "@/components/performance/day-performance-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { useApp } from "@/components/providers/app-context";
 import { SiteIllustration, zoneKeyOf, zoneLabel, type ZoneKey, type ZoneStatus } from "@/components/site-illustration";
 import { EmptyState, LoadingSkeleton, QueryState } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { USE_FIXTURES } from "@/lib/endpoints";
 import { NOTICE_LABEL } from "@/lib/format";
 import { useActivities, useIncidents, useToday } from "@/lib/queries";
 import { ROLE_PERSON } from "@/lib/roles";
@@ -221,6 +223,9 @@ export default function TodayPage() {
                 <EmptyState title="Nothing needs you right now" description="Every activity is on track and no notices are waiting." />
               )}
             </section>
+
+            {/* Day performance against the plan (server-computed daily evaluation) */}
+            {!USE_FIXTURES && <DayPerformanceCard date={t.work_date} />}
 
             {/* Details, one level down */}
             <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
