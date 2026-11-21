@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  BadgeCheck,
   Bell,
+  ClipboardPen,
+  Gauge,
   CalendarRange,
   FileText,
   FilePen,
@@ -24,16 +27,24 @@ import { AsOfControl } from "@/components/as-of-control";
 import { AskDrawer } from "@/components/ask-drawer";
 import { EvidenceSheet } from "@/components/evidence-viewer";
 import { useApp } from "@/components/providers/app-context";
-import { RoleSwitcher } from "@/components/role-switcher";
+import { AccountMenu, initials, SessionSync, useIdentity } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { useAlerts, useProject } from "@/lib/queries";
-import { ROLE_LABEL, ROLE_PERSON } from "@/lib/roles";
+import { ROLE_HOME } from "@/lib/session";
+import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; Icon: LucideIcon; badge?: "alerts" };
+
+/** The signed-in role's own screen, first in the navigation. */
+const MY_WORK: Record<Role, NavItem> = {
+  foreman: { href: ROLE_HOME.foreman, label: "Report a problem", Icon: ClipboardPen },
+  site_manager: { href: ROLE_HOME.site_manager, label: "Shortfall & notice", Icon: Gauge },
+  approver: { href: ROLE_HOME.approver, label: "Approvals", Icon: BadgeCheck },
+};
 
 const WORK: NavItem[] = [
   { href: "/today", label: "Home", Icon: Home },
@@ -122,6 +133,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const project = useProject();
   const alertCount = useAlertCount();
   const { setAskOpen, role } = useApp();
+  const identity = useIdentity();
+  const myWork = MY_WORK[role];
   const onCapture = isActive(pathname, "/capture");
 
   return (
@@ -136,6 +149,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Logo />
         </div>
         <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
+          <p className="mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">My work</p>
+          <SideLink item={myWork} pathname={pathname} />
+          <p className="mt-5 mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Site</p>
           {WORK.map((item) => (
             <SideLink key={item.href} item={item} pathname={pathname} count={item.badge ? alertCount : undefined} />
           ))}
@@ -152,16 +168,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="truncate text-sm font-semibold">{project.data?.name ?? "Riverside Office Block"}</p>
           <div className="mt-3 flex items-center gap-2.5">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-background text-xs font-semibold">
-              {ROLE_PERSON[role]
-                .split(" ")
-                .map((w) => w[0])
-                .slice(0, 2)
-                .join("")}
+              {initials(identity.name)}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{ROLE_PERSON[role]}</span>
+              <span className="block truncate text-sm font-medium">{identity.name}</span>
               <span className="block text-xs text-muted-foreground">
-                {ROLE_LABEL[role]} · {USE_FIXTURES ? "demo data" : "live data"}
+                {identity.roleLabel} · {USE_FIXTURES ? "demo data" : "live data"}
               </span>
             </span>
           </div>
@@ -190,14 +202,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Sparkles className="size-5" aria-hidden />
             </Button>
             <div className="hidden md:block">
-              <RoleSwitcher />
+              <AccountMenu />
             </div>
             <ThemeToggle />
             <AlertBell />
           </div>
           <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 md:hidden">
             <AsOfControl />
-            <RoleSwitcher />
+            <AccountMenu />
           </div>
         </header>
 
@@ -235,7 +247,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 More
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top" className="w-56 rounded-2xl p-1.5">
-                {MOBILE_MORE.map(({ href, label, Icon }) => (
+                {[myWork, ...MOBILE_MORE].map(({ href, label, Icon }) => (
                   <DropdownMenuItem key={href} asChild className="min-h-11 rounded-xl">
                     <Link href={href}>
                       <Icon aria-hidden /> {label}
@@ -250,6 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <EvidenceSheet />
       <AskDrawer />
+      <SessionSync />
     </div>
   );
 }

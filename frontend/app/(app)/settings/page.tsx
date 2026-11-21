@@ -1,17 +1,17 @@
 "use client";
 
 import { CircleCheck, CircleX, Database, LogOut, RefreshCw, UserRound } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIdentity } from "@/components/account-menu";
 import { ErrorState, LoadingSkeleton, PageHeader, QueryState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SIMULATE_ERRORS_KEY } from "@/lib/api";
+import { useSignOut } from "@/lib/auth";
 import { ENDPOINTS, servedFromFixtures, USE_FIXTURES, type EndpointKey } from "@/lib/endpoints";
-import { useApp } from "@/components/providers/app-context";
 import { useHealth, useProject } from "@/lib/queries";
-import { ROLE_LABEL, ROLE_PERSON } from "@/lib/roles";
+import { AUTH_REQUIRED } from "@/lib/session";
 
 function Missing({ value }: { value: string | null }) {
   return value ? (
@@ -50,7 +50,9 @@ function ApiIndicator() {
 }
 
 export default function SettingsPage() {
-  const { role } = useApp();
+  const identity = useIdentity();
+  const signOut = useSignOut();
+  const [signingOut, setSigningOut] = useState(false);
   const project = useProject();
   const qc = useQueryClient();
   const [simulate, setSimulate] = useState(false);
@@ -125,13 +127,25 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
               <p className="flex items-center gap-2">
-                <UserRound className="size-4" aria-hidden /> {ROLE_PERSON[role]} · {ROLE_LABEL[role]}
+                <UserRound className="size-4" aria-hidden /> {identity.name} · {identity.roleLabel}
               </p>
-              <Button asChild variant="outline" size="touch" className="self-start">
-                <Link href="/login">
-                  <LogOut aria-hidden /> Sign out
-                </Link>
-              </Button>
+              {identity.email && <p className="text-muted-foreground">{identity.email}</p>}
+              {AUTH_REQUIRED ? (
+                <Button
+                  variant="outline"
+                  size="touch"
+                  className="self-start"
+                  disabled={signingOut}
+                  onClick={() => {
+                    setSigningOut(true);
+                    void signOut();
+                  }}
+                >
+                  <LogOut aria-hidden /> {signingOut ? "Signing out…" : "Sign out"}
+                </Button>
+              ) : (
+                <p className="text-muted-foreground">Demo mode: no account. Switch role in the header.</p>
+              )}
             </CardContent>
           </Card>
           <Card>

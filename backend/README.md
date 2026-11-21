@@ -90,7 +90,7 @@ alert evidence still resolve.
 Set `ANTHROPIC_API_KEY` in `.env`. All model calls go through `documents/llm.py` with the
 Anthropic Python SDK:
 
-- **Model:** `claude-opus-5-5` (`DOCS_LLM_MODEL`). Summaries, scanned-page OCR and photo captions
+- **Model:** `claude-sonnet-5-5` (`DOCS_LLM_MODEL`). Summaries, scanned-page OCR and photo captions
   run at effort `medium` (`DOCS_LLM_EFFORT`); search reranking runs at `low`.
 - **JSON:** every call uses structured outputs (`output_config.format` with a JSON schema), so the
   reply is always schema-valid JSON.
@@ -124,38 +124,77 @@ database ranking (the reranker pauses for 5 minutes after a 429 or 529).
 Write routes need the `contributor`, `manager` or `approver` role. The demo member is seeded as
 `manager`.
 
+## Sign-in and the three-screen demo
+
+One login, three users, three screens, all on the Zone B excavator breakdown (Riverside, `RIV`).
+
+| Role (`project_members.role`) | Screen | Routes | Tables written |
+|---|---|---|---|
+| `contributor` (foreman) | `/foreman`: record a note, check the facts, confirm | `POST /projects/{pid}/field-notes`, `POST â€¦/field-notes/{id}/confirm` | `sources`, `source_passages`, `capture_facts`, `fact_evidence` |
+| `manager` (site manager) | `/manager`: 65 of 100 mÂ³ on EXC-B, then draft the delay notice | `POST /projects/{pid}/drafts`, `POST â€¦/drafts/{id}/versions` | `drafts`, `draft_versions` (reads `alerts`, `plan_targets`, `observations`) |
+| `approver` | `/approver`: notice text, missing contract clause, Approve or Request changes | `POST â€¦/drafts/{id}/versions/{v}/review` | `reviews` |
+
+**Accounts.** Users are Supabase Auth accounts (`auth.users`). `project_members.auth_user_id` links an
+account to a project role. `POST /auth/login` checks the password inside the database
+(`sitemate.verify_password`, bcrypt via pgcrypto) and returns a random session token; only its SHA-256 is
+stored in `sitemate.sessions`. `GET /auth/me` and `POST /auth/logout` use the same token. Five failed
+attempts for one email lock that email for 10 minutes. Static `token_hash` members still work for scripts.
+
+**Live data.** `GET /projects/{pid}/site-day?date=&as_of=` computes every planned activity's plan, signed and
+estimated quantity, shortfall, equipment, field notes and notice status from `plan_targets`, `observations`
+and the registers. `GET /projects/{pid}/related?activity_code=&date=&as_of=` finds other records about that work
+with the documents search. `POST /drafts` takes an `alert_id`, or an `activity_code` and `work_date`: the
+shortfall is checked against the signed figures and recorded as an alert when it exceeds the threshold.
+
+**Password reset.** `POST /auth/password/forgot` stores a single-use, 30-minute link (`sitemate.password_resets`,
+hash only) and answers the same for unknown emails. No mail service is configured, so the link is logged;
+`AUTH_DEV_RESET_LINKS=true` also shows it on the page (development only). `POST /auth/password/reset` sets the new
+password (10+ characters, letters and numbers) and signs out every session of that account.
+
+**Rules.** Field-note facts are `proposed` until the foreman confirms them. A value the note does not state
+(the machine ID) is filled from the equipment register and marked `inferred`. The notice quotes only
+confirmed notes, cites every statement, and shows `[MISSING: â€¦]` for contract details the project record
+lacks. An approver cannot approve while anything is missing; the manager fills it in as a new version.
+
+```powershell
+.venv/Scripts/python.exe auth_schema.py           # idempotent DDL (same as migration 0008_auth_sessions)
+.venv/Scripts/python.exe seed_demo_users.py       # create the 3 accounts; prints passwords once
+.venv/Scripts/python.exe seed_demo_users.py --reset-passwords
+.venv/Scripts/python.exe reset_demo_workflow.py   # remove demo notes, notices and reviews to run it again
+```
+
 ## Legacy: the previous Node.js capture agent (superseded, not used any more)
 
 `src/` is a Node.js service that turns a recorded voice note into reviewed project memory.
 It is a LangGraph pipeline over four LangChain tools in `src/agent/tools/`:
 
 ```
-audio ─Whisper─▶ transcript ─fact_extraction (Claude fills JSON)─▶ events
-  ─database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)─▶ matches
-  ─relationship_matching (dependencies, contractors, shared equipment, open alerts)─▶ relationships
-  ─question_generation (Claude + sitemate.business_rules)─▶ validated facts / missing fields / questions
-  ─[pause: ask manager ─▶ answers ─▶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
-  ─▶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
+audio â”€Whisperâ”€â–¶ transcript â”€fact_extraction (Claude fills JSON)â”€â–¶ events
+  â”€database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)â”€â–¶ matches
+  â”€relationship_matching (dependencies, contractors, shared equipment, open alerts)â”€â–¶ relationships
+  â”€question_generation (Claude + sitemate.business_rules)â”€â–¶ validated facts / missing fields / questions
+  â”€[pause: ask manager â”€â–¶ answers â”€â–¶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
+  â”€â–¶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
 ```
 
 Facts are stored with `review_status='proposed'`; a person confirms them later. Each manager answer is
 stored as its own passage (`answer:<question id>`) so every fact cites where it came from.
 
-## Event pipeline: capture → event → incident → alert → action
+## Event pipeline: capture â†’ event â†’ incident â†’ alert â†’ action
 
 ```
 capture (voice | photos | text)
-  → perceive (Whisper, Claude vision)            Python  ai-agent/app/capture/pipeline.py, served by FastAPI (capture.py)
-  → classify: split into events, SUGGEST a category + type + rationale
-  → ⏸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
-  → search DB → relationships → required-field questions (per category)
-  → ⏸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
-  → persist in ONE transaction: passages, events, then
+  â†’ perceive (Whisper, Claude vision)            Python  ai-agent/app/capture/pipeline.py, served by FastAPI (capture.py)
+  â†’ classify: split into events, SUGGEST a category + type + rationale
+  â†’ â¸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
+  â†’ search DB â†’ relationships â†’ required-field questions (per category)
+  â†’ â¸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
+  â†’ persist in ONE transaction: passages, events, then
       correlation under an advisory lock (auto-link / LLM adjudicate / new incident),
       severity (rule matrix + bounded LLM nudge), alert + revision, facts, debounced agent job
-  ⇒ worker (Python, backend/worker.py) claims agent_jobs:
-      reasoning  → analyze_incident (root cause)  → plan_actions (recommended actions, guardrailed)
-  → manager approves / edits / enacts actions on the Alerts page
+  â‡’ worker (Python, backend/worker.py) claims agent_jobs:
+      reasoning  â†’ analyze_incident (root cause)  â†’ plan_actions (recommended actions, guardrailed)
+  â†’ manager approves / edits / enacts actions on the Alerts page
 ```
 
 Categories and event types live in `sitemate.event_categories` / `event_types` (seeded from `rules/event_taxonomy.json`;
@@ -180,21 +219,21 @@ longer needed or started, and can be deleted. The model is `CAPTURE_LLM_MODEL`, 
 
 Capture endpoints on FastAPI, port 8000 (bearer token of a `contributor`, `manager` or `approver` member):
 
-- `POST /projects/{pid}/captures` — multipart: `audio` (one file), `images` (up to 5, JPEG/PNG/WebP/GIF, 5 MB each),
+- `POST /projects/{pid}/captures` â€” multipart: `audio` (one file), `images` (up to 5, JPEG/PNG/WebP/GIF, 5 MB each),
   `transcript`, optional `recorded_at`. Returns `202 needs_category` with `thread_id` and one suggestion per event.
-- `POST /projects/{pid}/captures/{thread}/categories` — `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
+- `POST /projects/{pid}/captures/{thread}/categories` â€” `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
   Events you do not mention keep the AI's suggestion; `keep:false` means "not an event".
-- `POST /projects/{pid}/captures/{thread}/review` — `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
+- `POST /projects/{pid}/captures/{thread}/review` â€” `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
   Only the person who recorded the note may review it; `discard` deletes the capture and its files; facts are saved as `confirmed` by that person.
 - `GET /projects/{pid}/captures` (this member's saved notes) and `GET /projects/{pid}/captures/{source}/audio` (their recording, Range requests supported).
-- `POST /projects/{pid}/captures/{thread}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
+- `POST /projects/{pid}/captures/{thread}/answers` â€” `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
   The final `201 saved` response includes `incident_links` (new incident or which one it joined, report/reporter counts, severity).
-- `GET /projects/{pid}/event-categories` — categories with their types.
+- `GET /projects/{pid}/event-categories` â€” categories with their types.
 
 FastAPI (`main.py` + `ops.py`): `GET /incidents` (severity, status, report/reporter counts), `GET /incidents/{id}/events`,
 `PATCH /incidents/{id}`, `POST /incidents/{id}/merge`, `POST /incidents/{id}/events/{eid}/unlink`,
 `GET /alerts?status&kind`, `GET /alerts/{id}`, `POST /alerts/{id}/{ack|assign|dismiss|resolve|reopen}`,
-`GET /alerts/{id}/actions`, `POST /alerts/{id}/actions/{aid}/{approve|reject|complete}`, `PATCH …/actions/{aid}`,
+`GET /alerts/{id}/actions`, `POST /alerts/{id}/actions/{aid}/{approve|reject|complete}`, `PATCH â€¦/actions/{aid}`,
 `GET /capture-prompts`. Manager actions need a `manager` or `approver` token and `OPS_DATABASE_URL`.
 
 Notes: audio still needs `OPENAI_API_KEY` or `WHISPER_BASE_URL`; photos and audio are stored on local disk
