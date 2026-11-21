@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { signUp } from "@/lib/auth";
+import { AuthError, signUp } from "@/lib/auth";
 import { issuesToErrors, signUpSchema } from "@/lib/auth-schemas";
 import { ROLE_LABEL, ROLES } from "@/lib/roles";
 import type { Role } from "@/lib/types";
@@ -50,8 +50,8 @@ export default function SignUpPage() {
       void _terms;
       await signUp(account);
       router.push("/today");
-    } catch {
-      setFormError("We could not create your account. Please try again.");
+    } catch (err) {
+      setFormError(err instanceof AuthError ? err.message : "We could not create your account. Please try again.");
     } finally {
       setPending(false);
     }

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { backendConfig, demoPackFile } from "@/lib/server/backend";
+import { AUTH_REQUIRED, SESSION_COOKIE } from "@/lib/session";
 
 /**
  * Server-side proxy to the SiteMate FastAPI service.
@@ -30,8 +31,13 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
     return demoPackFile(fileMatch[1], fileMatch[2], req.nextUrl.searchParams.get("as_of"));
   }
 
+  // The signed-in user's session token (httpOnly cookie). The shared SITEMATE_API_TOKEN is only a
+  // fallback when sign-in is not required (fixture mode); in live mode every call acts as a person.
+  const session = req.cookies.get(SESSION_COOKIE)?.value;
+  const bearer = session || (AUTH_REQUIRED ? "" : token);
+  if (!bearer) return Response.json({ detail: "Not signed in" }, { status: 401 });
   const headers = new Headers({ accept: req.headers.get("accept") ?? "application/json" });
-  if (token) headers.set("authorization", `Bearer ${token}`);
+  headers.set("authorization", `Bearer ${bearer}`);
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 

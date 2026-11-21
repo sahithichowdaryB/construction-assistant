@@ -19,14 +19,31 @@ def connection():
 
 def current_member(project_id: str, credentials: HTTPAuthorizationCredentials = Depends(bearer),
                    conn=Depends(connection)):
+    """The project member behind the bearer token: a signed-in account's session, or a static token."""
     digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
     member = conn.execute(text("""
-        SELECT member_id, role FROM sitemate.project_members
-        WHERE project_id=:project AND token_hash=:digest
+        SELECT m.member_id, m.role, coalesce(m.display_name, m.member_id) AS display_name
+        FROM sitemate.sessions s
+        JOIN sitemate.project_members m ON m.auth_user_id = s.auth_user_id
+        WHERE m.project_id = :project AND s.token_hash = :digest
+          AND s.revoked_at IS NULL AND s.expires_at > now()
+        UNION ALL
+        SELECT member_id, role, coalesce(display_name, member_id) FROM sitemate.project_members
+        WHERE project_id = :project AND token_hash = :digest
+        LIMIT 1
     """), {"project": project_id, "digest": digest}).mappings().one_or_none()
     if member is None:
         raise HTTPException(403, "Project access denied")
     return dict(member)
+
+
+def require_roles(*roles):
+    """Dependency that admits only members with one of the given project roles."""
+    def check(member=Depends(current_member)):
+        if member["role"] not in roles:
+            raise HTTPException(403, f"This action needs the {' or '.join(roles)} role")
+        return member
+    return check
 
 
 def check_member(member=Depends(current_member)):

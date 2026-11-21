@@ -124,6 +124,45 @@ database ranking (the reranker pauses for 5 minutes after a 429 or 529).
 Write routes need the `contributor`, `manager` or `approver` role. The demo member is seeded as
 `manager`.
 
+## Sign-in and the three-screen demo
+
+One login, three users, three screens, all on the Zone B excavator breakdown (Riverside, `RIV`).
+
+| Role (`project_members.role`) | Screen | Routes | Tables written |
+|---|---|---|---|
+| `contributor` (foreman) | `/foreman`: record a note, check the facts, confirm | `POST /projects/{pid}/field-notes`, `POST …/field-notes/{id}/confirm` | `sources`, `source_passages`, `capture_facts`, `fact_evidence` |
+| `manager` (site manager) | `/manager`: 65 of 100 m³ on EXC-B, then draft the delay notice | `POST /projects/{pid}/drafts`, `POST …/drafts/{id}/versions` | `drafts`, `draft_versions` (reads `alerts`, `plan_targets`, `observations`) |
+| `approver` | `/approver`: notice text, missing contract clause, Approve or Request changes | `POST …/drafts/{id}/versions/{v}/review` | `reviews` |
+
+**Accounts.** Users are Supabase Auth accounts (`auth.users`). `project_members.auth_user_id` links an
+account to a project role. `POST /auth/login` checks the password inside the database
+(`sitemate.verify_password`, bcrypt via pgcrypto) and returns a random session token; only its SHA-256 is
+stored in `sitemate.sessions`. `GET /auth/me` and `POST /auth/logout` use the same token. Five failed
+attempts for one email lock that email for 10 minutes. Static `token_hash` members still work for scripts.
+
+**Live data.** `GET /projects/{pid}/site-day?date=&as_of=` computes every planned activity's plan, signed and
+estimated quantity, shortfall, equipment, field notes and notice status from `plan_targets`, `observations`
+and the registers. `GET /projects/{pid}/related?activity_code=&date=&as_of=` finds other records about that work
+with the documents search. `POST /drafts` takes an `alert_id`, or an `activity_code` and `work_date`: the
+shortfall is checked against the signed figures and recorded as an alert when it exceeds the threshold.
+
+**Password reset.** `POST /auth/password/forgot` stores a single-use, 30-minute link (`sitemate.password_resets`,
+hash only) and answers the same for unknown emails. No mail service is configured, so the link is logged;
+`AUTH_DEV_RESET_LINKS=true` also shows it on the page (development only). `POST /auth/password/reset` sets the new
+password (10+ characters, letters and numbers) and signs out every session of that account.
+
+**Rules.** Field-note facts are `proposed` until the foreman confirms them. A value the note does not state
+(the machine ID) is filled from the equipment register and marked `inferred`. The notice quotes only
+confirmed notes, cites every statement, and shows `[MISSING: …]` for contract details the project record
+lacks. An approver cannot approve while anything is missing; the manager fills it in as a new version.
+
+```powershell
+.venv/Scripts/python.exe auth_schema.py           # idempotent DDL (same as migration 0007_auth_sessions)
+.venv/Scripts/python.exe seed_demo_users.py       # create the 3 accounts; prints passwords once
+.venv/Scripts/python.exe seed_demo_users.py --reset-passwords
+.venv/Scripts/python.exe reset_demo_workflow.py   # remove demo notes, notices and reviews to run it again
+```
+
 ## Voice capture agent (Node.js + LangChain + Claude)
 
 `src/` is a Node.js service that turns a recorded voice note into reviewed project memory.

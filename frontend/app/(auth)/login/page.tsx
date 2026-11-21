@@ -1,19 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { FormField, describedByFor } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { signIn } from "@/lib/auth";
+import { AuthError, signIn } from "@/lib/auth";
 import { issuesToErrors, loginSchema } from "@/lib/auth-schemas";
 
 type Values = { email: string; password: string; remember: boolean };
+type DevAccount = { label: string; email: string; password: string };
+
+/** Development only: demo logins from SITEMATE_DEV_ACCOUNTS (.env.local); empty in production builds. */
+function DevAccounts({ onUse }: { onUse: (account: DevAccount) => void }) {
+  const [accounts, setAccounts] = useState<DevAccount[]>([]);
+  useEffect(() => {
+    fetch("/api/auth/dev-accounts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { accounts: [] }))
+      .then((d) => setAccounts(Array.isArray(d.accounts) ? d.accounts : []))
+      .catch(() => setAccounts([]));
+  }, []);
+  if (!accounts.length) return null;
+  return (
+    <section aria-labelledby="dev-accounts" className="mt-5 rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-3 dark:bg-amber-500/10">
+      <h2 id="dev-accounts" className="mb-2 text-xs font-semibold tracking-wider text-amber-900 uppercase dark:text-amber-200">
+        Demo accounts · development only
+      </h2>
+      <ul className="flex flex-col gap-2">
+        {accounts.map((a) => (
+          <li key={a.email} className="flex items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-xs ring-1 ring-border">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold">{a.label}</span>
+              <span className="block truncate font-mono">{a.email}</span>
+              <span className="block font-mono text-muted-foreground">{a.password}</span>
+            </span>
+            <Button type="button" size="sm" variant="outline" onClick={() => onUse(a)}>
+              Use
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export default function LoginPage() {
-  const router = useRouter();
   const [values, setValues] = useState<Values>({ email: "", password: "", remember: true });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -32,11 +64,12 @@ export default function LoginPage() {
     setErrors({});
     setPending(true);
     try {
-      await signIn(parsed.data);
-      router.push("/today");
-    } catch {
-      setFormError("We could not sign you in. Check your email and password and try again.");
-    } finally {
+      const session = await signIn(parsed.data);
+      // A full load so the app starts fresh with this user's role and the replay clock of their screen.
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.assign(next && next.startsWith("/") && !next.startsWith("//") ? next : session.home);
+    } catch (err) {
+      setFormError(err instanceof AuthError ? err.message : "We could not sign you in. Check your email and password and try again.");
       setPending(false);
     }
   }
@@ -45,7 +78,7 @@ export default function LoginPage() {
     <Card>
       <CardHeader>
         <CardTitle className="text-xl">Sign in to SiteMate</CardTitle>
-        <CardDescription>Use the work email you registered with.</CardDescription>
+        <CardDescription>Use the work email your project admin gave you. You open on the screen for your role.</CardDescription>
       </CardHeader>
       <CardContent>
         <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4" aria-describedby={formError ? "login-form-error" : undefined}>
@@ -87,21 +120,27 @@ export default function LoginPage() {
               <input type="checkbox" className="size-4" checked={values.remember} onChange={(e) => set("remember", e.target.checked)} />
               Keep me signed in on this device
             </label>
-            {/* Password reset is not built yet. Shown as text so nobody follows a dead link. */}
-            <span className="text-muted-foreground" title="Password reset is not available yet">
-              Forgot password? (coming soon)
-            </span>
+            <Link href="/forgot-password" className="font-medium underline underline-offset-2">
+              Forgot password?
+            </Link>
           </div>
 
           <Button type="submit" size="touch" disabled={pending} className="w-full">
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+        <DevAccounts
+          onUse={(a) => {
+            setValues((v) => ({ ...v, email: a.email, password: a.password }));
+            setErrors({});
+            setFormError(null);
+          }}
+        />
       </CardContent>
-      <CardFooter className="justify-center text-sm text-muted-foreground">
-        New to SiteMate?&nbsp;
-        <Link href="/signup" className="font-medium text-foreground underline underline-offset-2">
-          Create an account
+      <CardFooter className="flex-col gap-1 text-center text-sm text-muted-foreground">
+        <span>Accounts are issued by your project admin.</span>
+        <Link href="/signup" className="text-xs underline underline-offset-2">
+          Request access
         </Link>
       </CardFooter>
     </Card>

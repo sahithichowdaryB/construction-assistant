@@ -34,6 +34,13 @@ def main():
             # The analyze route saves immutable analysis versions; nothing else is writable.
             cur.execute("""GRANT INSERT ON sitemate.incident_analyses, sitemate.analysis_hypotheses,
                            sitemate.analysis_evidence TO sitemate_reader""")
+            # Sign-in sessions (auth_schema.py) and the notice approval workflow, when present.
+            cur.execute("""DO $$ BEGIN
+                             IF to_regclass('sitemate.sessions') IS NOT NULL THEN
+                               GRANT SELECT ON sitemate.sessions TO sitemate_reader;
+                             END IF;
+                           END $$""")
+            cur.execute("GRANT SELECT ON sitemate.drafts, sitemate.draft_versions, sitemate.reviews TO sitemate_reader")
             # Document search calls pg_trgm functions that live in Supabase's `extensions` schema.
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")
