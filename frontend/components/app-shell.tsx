@@ -8,6 +8,7 @@ import { AskDrawer } from "@/components/ask-drawer";
 import { AsOfControl } from "@/components/as-of-control";
 import { EvidenceSheet } from "@/components/evidence-viewer";
 import { useApp } from "@/components/providers/app-context";
+import { Backdrop } from "@/components/backdrop";
 import { AccountMenu, initials, SessionSync, useIdentity } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { USE_FIXTURES } from "@/lib/endpoints";
@@ -66,11 +67,13 @@ function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-        active ? "bg-sidebar-accent text-foreground" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        active ? "bg-sidebar-accent text-foreground" : "text-muted-foreground hover:translate-x-0.5 hover:bg-sidebar-accent/60 hover:text-foreground",
       )}
     >
-      <Icon className={cn("size-[18px]", active && "text-foreground")} aria-hidden />
+      {/* yellow marker on the current page */}
+      <span aria-hidden className={cn("absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-all duration-300", active ? "opacity-100" : "h-0 opacity-0")} />
+      <Icon className={cn("size-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6", active && "text-primary")} aria-hidden />
       <span className="flex-1">{item.label}</span>
     </Link>
   );
@@ -137,6 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
+        <Backdrop />
         <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pt-2 pb-32 md:px-8 md:pt-4 md:pb-12">
           {children}
         </main>
@@ -168,7 +172,7 @@ function TabLink({ item, pathname }: { item: NavItem; pathname: string }) {
           active ? "font-semibold text-foreground" : "text-muted-foreground",
         )}
       >
-        <Icon className={cn("size-5", active && "stroke-[2.4]")} aria-hidden />
+        <Icon className={cn("size-5 transition-transform", active && "stroke-[2.4] text-primary motion-safe:animate-[tab-pop_350ms_ease-out]")} aria-hidden />
         {item.label}
       </Link>
     </li>
