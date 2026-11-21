@@ -35,8 +35,8 @@ function SearchInner() {
   return (
     <>
       <PageHeader
-        title="Search evidence"
-        description="Find the passage that answers a question. Only sources available at the selected time are searched."
+        title="Search records"
+        description="Find the part of a document that answers your question. Only records available at the time you are viewing are searched."
       />
       <form
         className="mb-4 flex flex-wrap gap-2"
@@ -77,7 +77,7 @@ function SearchInner() {
       ) : results.isError ? (
         <ErrorState error={results.error} onRetry={() => void results.refetch()} />
       ) : results.data.results.length === 0 ? (
-        <EmptyState title="No matching passages" description="Nothing available at this time matches. Try other words or move the clock forward." />
+        <EmptyState title="Nothing found" description="No record available at this time matches. Try other words, or look at a later time." />
       ) : (
         <section className="flex flex-col gap-3" aria-label="Search results">
           <p className="text-xs text-muted-foreground">

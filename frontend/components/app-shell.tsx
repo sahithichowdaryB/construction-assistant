@@ -9,12 +9,13 @@ import {
   Home,
   ListChecks,
   Menu,
-  MessageCircleQuestion,
   Mic,
   Settings,
   Siren,
+  Sparkles,
   TextSearch,
   TriangleAlert,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,29 +25,77 @@ import { AskDrawer } from "@/components/ask-drawer";
 import { EvidenceSheet } from "@/components/evidence-viewer";
 import { useApp } from "@/components/providers/app-context";
 import { RoleSwitcher } from "@/components/role-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { useAlerts, useProject } from "@/lib/queries";
+import { ROLE_LABEL, ROLE_PERSON } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
-const PRIMARY = [
-  { href: "/today", label: "Today", Icon: Home },
-  { href: "/capture", label: "Capture", Icon: Mic },
-  { href: "/alerts", label: "Alerts", Icon: TriangleAlert },
-  { href: "/documents", label: "Documents", Icon: FileText },
-  { href: "/drafts", label: "Drafts", Icon: FilePen },
-];
-const SECONDARY = [
-  { href: "/schedule", label: "Schedule", Icon: CalendarRange },
+type NavItem = { href: string; label: string; Icon: LucideIcon; badge?: "alerts" };
+
+const WORK: NavItem[] = [
+  { href: "/today", label: "Home", Icon: Home },
+  { href: "/capture", label: "Site notes", Icon: Mic },
+  { href: "/alerts", label: "Alerts", Icon: TriangleAlert, badge: "alerts" },
+  { href: "/drafts", label: "Notices", Icon: FilePen },
   { href: "/incidents", label: "Incidents", Icon: Siren },
-  { href: "/search", label: "Search", Icon: TextSearch },
-  { href: "/actions", label: "Actions", Icon: ListChecks },
-  { href: "/settings", label: "Settings", Icon: Settings },
 ];
+const RECORDS: NavItem[] = [
+  { href: "/schedule", label: "Programme", Icon: CalendarRange },
+  { href: "/documents", label: "Documents", Icon: FileText },
+  { href: "/actions", label: "Action items", Icon: ListChecks },
+  { href: "/search", label: "Search", Icon: TextSearch },
+];
+const SETTINGS: NavItem = { href: "/settings", label: "Settings", Icon: Settings };
+
+/** Mobile tab bar: four tabs around a raised capture button. */
+const TABS_LEFT: NavItem[] = [WORK[0], WORK[2]];
+const TABS_RIGHT: NavItem[] = [WORK[3]];
+const MOBILE_MORE: NavItem[] = [WORK[4], ...RECORDS, SETTINGS];
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function useAlertCount() {
+  const alerts = useAlerts();
+  return alerts.data?.length;
+}
+
+function Logo({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link href="/today" className="flex items-center gap-2.5 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+      <span className="flex size-8 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+        <HardHat className="size-[18px]" aria-hidden />
+      </span>
+      {!compact && <span className="text-[17px] font-bold tracking-tight">SiteMate</span>}
+    </Link>
+  );
+}
+
+function SideLink({ item, pathname, count }: { item: NavItem; pathname: string; count?: number }) {
+  const active = isActive(pathname, item.href);
+  const { Icon } = item;
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        active ? "bg-sidebar-accent text-foreground" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+      )}
+    >
+      <Icon className={cn("size-[18px]", active && "text-foreground")} aria-hidden />
+      <span className="flex-1">{item.label}</span>
+      {!!count && (
+        <span className="rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-semibold text-white tabular" aria-label={`${count} open`}>
+          {count}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 function AlertBell() {
@@ -54,15 +103,15 @@ function AlertBell() {
   const count = alerts.data?.length;
   const label = alerts.isError ? "Alerts (count unavailable)" : count === undefined ? "Alerts (loading)" : `${count} open alerts`;
   return (
-    <Button asChild variant="ghost" size="icon-touch" className="relative" aria-label={label}>
+    <Button asChild variant="ghost" size="icon-touch" className="relative rounded-xl" aria-label={label}>
       <Link href="/alerts">
         <Bell className="size-5" aria-hidden />
         {!!count && (
-          <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
+          <span className="absolute top-1 right-1 flex min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-4.5 font-semibold text-white ring-2 ring-background">
             {count}
           </span>
         )}
-        {alerts.isError && <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-amber-500" />}
+        {alerts.isError && <span className="absolute top-1 right-1 size-2 rounded-full bg-warning" />}
       </Link>
     </Button>
   );
@@ -71,7 +120,9 @@ function AlertBell() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const project = useProject();
-  const { setAskOpen } = useApp();
+  const alertCount = useAlertCount();
+  const { setAskOpen, role } = useApp();
+  const onCapture = isActive(pathname, "/capture");
 
   return (
     <div className="flex min-h-dvh">
@@ -80,69 +131,112 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r bg-sidebar md:flex">
-        <div className="flex items-center gap-2 px-4 py-4">
-          <HardHat className="size-6" aria-hidden />
-          <span className="text-lg font-semibold">SiteMate</span>
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-sidebar px-3 py-5 md:flex">
+        <div className="px-2 pb-6">
+          <Logo />
         </div>
-        <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 px-2">
-          {PRIMARY.map(({ href, label, Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={isActive(pathname, href) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                isActive(pathname, href) && "bg-sidebar-accent font-medium",
-              )}
-            >
-              <Icon className="size-4" aria-hidden /> {label}
-            </Link>
+        <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
+          {WORK.map((item) => (
+            <SideLink key={item.href} item={item} pathname={pathname} count={item.badge ? alertCount : undefined} />
           ))}
-          <p className="mt-4 mb-1 px-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">More</p>
-          {SECONDARY.map(({ href, label, Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={isActive(pathname, href) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                isActive(pathname, href) && "bg-sidebar-accent font-medium",
-              )}
-            >
-              <Icon className="size-4" aria-hidden /> {label}
-            </Link>
+          <p className="mt-5 mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Records</p>
+          {RECORDS.map((item) => (
+            <SideLink key={item.href} item={item} pathname={pathname} />
           ))}
+          <div className="mt-auto pt-4">
+            <SideLink item={SETTINGS} pathname={pathname} />
+          </div>
         </nav>
-        <p className="px-4 py-3 text-xs text-muted-foreground">{USE_FIXTURES ? "Data: fixtures" : "Data: live API + fixtures"}</p>
+        <div className="mt-3 rounded-2xl bg-sidebar-accent p-3">
+          <p className="text-[11px] font-medium text-muted-foreground">Project</p>
+          <p className="truncate text-sm font-semibold">{project.data?.name ?? "Riverside Office Block"}</p>
+          <div className="mt-3 flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-background text-xs font-semibold">
+              {ROLE_PERSON[role]
+                .split(" ")
+                .map((w) => w[0])
+                .slice(0, 2)
+                .join("")}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{ROLE_PERSON[role]}</span>
+              <span className="block text-xs text-muted-foreground">
+                {ROLE_LABEL[role]} · {USE_FIXTURES ? "demo data" : "live data"}
+              </span>
+            </span>
+          </div>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-          <div className="flex items-center gap-2 px-3 py-2 md:px-6">
-            <HardHat className="size-5 md:hidden" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold md:text-base">{project.data?.name ?? "Riverside Office Block"}</p>
-              <p className="hidden text-xs text-muted-foreground md:block">Project {project.data?.id ?? "RIV"} · {project.data?.timezone ?? "Europe/Vienna"}</p>
+        <header className="sticky top-0 z-30 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+          <div className="flex items-center gap-2 px-4 py-3 md:px-8">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 md:hidden">
+              <Logo compact />
+              <p className="truncate text-sm font-semibold">{project.data?.name ?? "Riverside Office Block"}</p>
             </div>
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="hidden flex-1 items-center gap-2 md:flex">
               <AsOfControl />
+            </div>
+            <button
+              type="button"
+              onClick={() => setAskOpen(true)}
+              className="hidden h-10 w-72 items-center gap-2.5 rounded-xl bg-card px-3.5 text-sm text-muted-foreground shadow-[0_1px_2px_rgba(17,18,20,0.04)] transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:flex"
+            >
+              <Sparkles className="size-4" aria-hidden />
+              Ask anything about the site…
+            </button>
+            <Button variant="ghost" size="icon-touch" className="rounded-xl lg:hidden" onClick={() => setAskOpen(true)} aria-label="Ask SiteMate">
+              <Sparkles className="size-5" aria-hidden />
+            </Button>
+            <div className="hidden md:block">
               <RoleSwitcher />
             </div>
-            <Button variant="outline" size="touch" onClick={() => setAskOpen(true)} aria-label="Ask SiteMate">
-              <MessageCircleQuestion aria-hidden />
-              <span className="hidden lg:inline">Ask SiteMate</span>
-            </Button>
+            <ThemeToggle />
             <AlertBell />
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 md:hidden">
+            <AsOfControl />
+            <RoleSwitcher />
+          </div>
+        </header>
+
+        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pt-2 pb-32 md:px-8 md:pt-4 md:pb-12">
+          {children}
+        </main>
+      </div>
+
+      {/* Mobile bottom tab bar with a raised capture button */}
+      <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 backdrop-blur-md md:hidden">
+        <ul className="grid grid-cols-5 items-end">
+          {TABS_LEFT.map((item) => (
+            <TabLink key={item.href} item={item} pathname={pathname} count={item.badge ? alertCount : undefined} />
+          ))}
+          <li className="flex justify-center">
+            <Link
+              href="/capture"
+              aria-label="Record a site note"
+              aria-current={onCapture ? "page" : undefined}
+              className="-mt-6 mb-1.5 flex flex-col items-center gap-1 text-[11px] font-semibold focus-visible:outline-none"
+            >
+              <span className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_18px_rgba(255,196,0,0.35)] ring-4 ring-background">
+                <Mic className="size-6" aria-hidden />
+              </span>
+              Record
+            </Link>
+          </li>
+          {TABS_RIGHT.map((item) => (
+            <TabLink key={item.href} item={item} pathname={pathname} />
+          ))}
+          <li>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-touch" className="md:hidden" aria-label="More pages">
-                  <Menu className="size-5" aria-hidden />
-                </Button>
+              <DropdownMenuTrigger className="flex min-h-15 w-full flex-col items-center justify-center gap-0.5 text-[11px] text-muted-foreground focus-visible:outline-none">
+                <Menu className="size-5" aria-hidden />
+                More
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {SECONDARY.map(({ href, label, Icon }) => (
-                  <DropdownMenuItem key={href} asChild className="min-h-11">
+              <DropdownMenuContent align="end" side="top" className="w-56 rounded-2xl p-1.5">
+                {MOBILE_MORE.map(({ href, label, Icon }) => (
+                  <DropdownMenuItem key={href} asChild className="min-h-11 rounded-xl">
                     <Link href={href}>
                       <Icon aria-hidden /> {label}
                     </Link>
@@ -150,44 +244,33 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2 md:hidden">
-            <AsOfControl />
-            <RoleSwitcher />
-          </div>
-        </header>
-
-        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-3 pt-4 pb-28 md:px-6 md:pb-10">
-          {children}
-        </main>
-      </div>
-
-      {/* Mobile bottom tab bar */}
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
-        <ul className="grid grid-cols-5">
-          {PRIMARY.map(({ href, label, Icon }) => {
-            const active = isActive(pathname, href);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] focus-visible:bg-muted focus-visible:outline-none",
-                    active ? "font-semibold text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <Icon className={cn("size-5", active && "stroke-[2.5]")} aria-hidden />
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
+          </li>
         </ul>
       </nav>
 
       <EvidenceSheet />
       <AskDrawer />
     </div>
+  );
+}
+
+function TabLink({ item, pathname, count }: { item: NavItem; pathname: string; count?: number }) {
+  const active = isActive(pathname, item.href);
+  const { Icon } = item;
+  return (
+    <li>
+      <Link
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative flex min-h-15 flex-col items-center justify-center gap-0.5 text-[11px] focus-visible:bg-muted focus-visible:outline-none",
+          active ? "font-semibold text-foreground" : "text-muted-foreground",
+        )}
+      >
+        <Icon className={cn("size-5", active && "stroke-[2.4]")} aria-hidden />
+        {item.label}
+        {!!count && <span className="absolute top-2 left-1/2 ml-2 size-2 rounded-full bg-destructive" aria-hidden />}
+      </Link>
+    </li>
   );
 }

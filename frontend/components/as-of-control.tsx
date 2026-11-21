@@ -29,9 +29,9 @@ export function AsOfControl() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="touch" className="font-normal" aria-label={`As of ${fmtDateTime(asOf)}. Change time`}>
+        <Button variant="outline" size="touch" className="font-normal" aria-label={`Showing the project as of ${fmtDateTime(asOf)}. Change time`}>
           <Clock aria-hidden />
-          <span className="hidden sm:inline">As of:</span>
+          <span className="hidden text-muted-foreground sm:inline">Showing</span>
           <span className="font-medium tabular-nums">
             <span className="sm:hidden">{fmtShort(asOf)}</span>
             <span className="hidden sm:inline">{fmtDateTime(asOf)}</span>
@@ -41,9 +41,9 @@ export function AsOfControl() {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Replay the project as of…</DialogTitle>
+          <DialogTitle>Look back in time</DialogTitle>
           <DialogDescription>
-            SiteMate shows only evidence available at this instant. Times are in {PROJECT_TZ}.
+            See the project as it stood at a chosen moment: only information recorded by then is shown. Times are in {PROJECT_TZ}. Incidents list every record unless you filter them.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -64,11 +64,11 @@ export function AsOfControl() {
             if (draft) apply(localToIso(`${draft}:00`));
           }}
         >
-          <Label htmlFor="as-of-input">Custom time ({PROJECT_TZ})</Label>
+          <Label htmlFor="as-of-input">Custom date and time</Label>
           <Input id="as-of-input" type="datetime-local" value={draft} onChange={(e) => setDraft(e.target.value)} className="h-11 md:h-9" />
           <DialogFooter>
             <Button type="submit" size="touch">
-              Apply
+              Show this time
             </Button>
           </DialogFooter>
         </form>

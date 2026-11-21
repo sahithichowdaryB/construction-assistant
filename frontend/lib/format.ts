@@ -1,4 +1,4 @@
-import type { Basis, EvidenceRef, NoticeType, SourceType } from "@/lib/types";
+import type { Basis, EvidenceRef, Incident, IncidentStatus, NoticeType, SourceType } from "@/lib/types";
 
 /** Never renders a missing number as 0 or blank. */
 export function fmtQty(value: number | null | undefined, unit?: string | null): string {
@@ -12,19 +12,33 @@ export function fmtPct(value: number | null | undefined): string {
   return `${Number.isInteger(value) ? value : value.toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 
+/** Plain-language name for where a number came from. */
 export function basisLabel(basis: Basis | null | undefined): string {
   switch (basis) {
     case "signed":
-      return "Signed";
+      return "Confirmed report";
     case "estimated":
     case "provisional":
-      return "Provisional";
+      return "Estimate";
     case "forecast":
       return "Forecast";
     default:
-      return "No reading";
+      return "No report";
   }
 }
+
+export const INCIDENT_TYPE_LABEL: Record<Incident["type"], string> = {
+  equipment_breakdown: "Equipment breakdown",
+  defect: "Defect",
+  delivery: "Delivery problem",
+  other: "Other",
+};
+
+export const INCIDENT_STATUS_LABEL: Record<IncidentStatus, string> = {
+  pending_confirmation: "Awaiting confirmation",
+  open: "Open",
+  resolved: "Resolved",
+};
 
 export function refLabel(ref: EvidenceRef): string {
   const parts = [ref.source_id];
