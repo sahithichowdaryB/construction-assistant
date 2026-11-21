@@ -1,13 +1,18 @@
 "use client";
 
 import { CheckCircle2, Save, Send, Trash2, Undo2 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { EmptyState } from "@/components/states";
+import { CategoryPicker } from "@/components/category-picker";
+import { EmptyState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentEvent, AgentQuestion, AgentResult, ReviewDecision, ReviewFact, ReviewGap } from "@/lib/agent";
+import type {
+  AddedEvent, AgentEvent, AgentQuestion, AgentResult, CategoryDecision, IncidentLinkResult, ReviewDecision, ReviewFact, ReviewGap,
+} from "@/lib/agent";
+import type { EventCategory } from "@/lib/types";
 import { isoToLocalInput, localToIso, PROJECT_TZ, toIsoWithOffset } from "@/lib/time";
 
 const label = (s: string) => s.replace(/_/g, " ");
@@ -38,6 +43,45 @@ function DateTimeField({ id, value, onChange, disabled }: { id: string; value: s
       </Button>
       {value && !valid && <span className="text-xs text-warning">Not a date: “{value}”. Pick one.</span>}
     </div>
+  );
+}
+
+const ordinal = (n: number) => {
+  const v = n % 100;
+  const suffix = ["th", "st", "nd", "rd"];
+  return `${n}${suffix[(v - 20) % 10] ?? suffix[v] ?? suffix[0]}`;
+};
+
+/** What happened to each event: opened a new incident, joined an existing one, or recorded an update. */
+function IncidentLinks({ links }: { links: IncidentLinkResult[] }) {
+  if (!links.length) return <p className="text-sm text-muted-foreground">Saved to the site diary. No incident was raised.</p>;
+  return (
+    <ul className="flex flex-col gap-1.5 text-sm">
+      {links.map((l) => {
+        const where = (
+          <Link className="font-semibold underline" href={`/incidents/${l.incident_id}`}>
+            {l.title}
+          </Link>
+        );
+        return (
+          <li key={l.event_index} className="rounded-2xl bg-muted/60 p-3">
+            {l.created ? (
+              <>Opened a new incident: {where}</>
+            ) : l.link_type === "resolution" ? (
+              <>Recorded as a repair update on {where}. It is now being monitored until a manager confirms.</>
+            ) : l.link_type === "update" ? (
+              <>Added an update to {where}</>
+            ) : (
+              <>
+                Linked to the existing incident {where} ({ordinal(l.report_count)} report from {l.reporter_count}{" "}
+                {l.reporter_count === 1 ? "person" : "people"})
+              </>
+            )}
+            <span className="ml-2 text-xs text-muted-foreground">Severity {l.severity}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -188,13 +232,17 @@ function FactsReview({
 /** Shows what the capture agent extracted, asks its follow-up questions, lets the speaker review, and confirms the save. */
 export function AgentReview({
   result,
+  categories,
   pending,
+  onConfirmCategories,
   onAnswer,
   onReview,
   onReset,
 }: {
   result: AgentResult;
+  categories: EventCategory[] | undefined;
   pending: boolean;
+  onConfirmCategories: (decisions: CategoryDecision[], added: AddedEvent[]) => void;
   onAnswer: (answers: { id: string; answer: string }[]) => void;
   onReview: (decision: ReviewDecision) => void;
   onReset: () => void;
@@ -221,6 +269,24 @@ export function AgentReview({
     return <EmptyState title="Note discarded" description="Nothing was saved." action={<Button size="touch" onClick={onReset}>Capture another</Button>} />;
   }
 
+  if (result.status === "needs_category") {
+    if (!categories) return <LoadingSkeleton rows={3} />;
+    return (
+      <div className="flex flex-col gap-3">
+        {result.photo_descriptions.length > 0 && (
+          <ul className="flex flex-col gap-1 rounded-2xl bg-muted/60 p-3 text-xs text-muted-foreground">
+            {result.photo_descriptions.map((p) => (
+              <li key={p.n}>
+                <span className="font-semibold text-foreground">Photo {p.n}:</span> {p.passage}
+              </li>
+            ))}
+          </ul>
+        )}
+        <CategoryPicker key={result.thread_id} events={result.events} categories={categories} pending={pending} onConfirm={onConfirmCategories} />
+      </div>
+    );
+  }
+
   if (result.status === "needs_review") {
     return <FactsReview key={result.thread_id} events={result.events} facts={result.facts} gaps={result.gaps} pending={pending} onSubmit={onReview} />;
   }
@@ -231,9 +297,10 @@ export function AgentReview({
         <EmptyState
           icon={<CheckCircle2 className="text-success" />}
           title="Saved to the project"
-          description={`${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} saved as ${result.source_id}. You can find it under Your recordings.`}
+          description={`${result.events.length} event${result.events.length === 1 ? "" : "s"} and ${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} saved as ${result.source_id}. You can find it under Your recordings.`}
           action={<Button size="touch" onClick={onReset}>Capture another</Button>}
         />
+        <IncidentLinks links={result.incident_links ?? []} />
         <Events events={result.events} />
         {result.gaps.length > 0 && (
           <p className="text-sm text-warning">Still missing: {result.gaps.map((g) => label(g.field_name)).join(", ")}</p>

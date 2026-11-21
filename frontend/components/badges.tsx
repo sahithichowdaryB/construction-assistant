@@ -1,6 +1,6 @@
 import { AlertOctagon, AlertTriangle, CheckCircle2, CircleDashed, Eye, FilePen, FileQuestion, HelpCircle, MinusCircle, RotateCcw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DraftStatus, JobStatus, Provenance, Severity } from "@/lib/types";
+import type { AlertStatus, DraftStatus, IncidentStatus, JobStatus, Provenance, Severity } from "@/lib/types";
 
 const base =
   "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&_svg]:size-3.5 [&_svg]:shrink-0";
@@ -22,6 +22,18 @@ export function SeverityBadge({
       </span>
     );
   switch (severity) {
+    case "critical":
+      return (
+        <span className={cn(base, "border-red-700 bg-red-700 text-white", className)}>
+          <AlertOctagon aria-hidden /> Critical
+        </span>
+      );
+    case "low":
+      return (
+        <span className={cn(base, "border-sky-300 bg-sky-50 text-sky-800", className)}>
+          <AlertTriangle aria-hidden /> Low
+        </span>
+      );
     case "high":
       return (
         <span className={cn(base, "border-red-300 bg-red-50 text-red-800", className)}>
@@ -109,4 +121,31 @@ export function JobStatusBadge({ status, className }: { status: JobStatus; class
       <j.Icon aria-hidden className={j.spin ? "animate-spin" : undefined} /> {j.label}
     </span>
   );
+}
+
+const INCIDENT_STATUS: Record<IncidentStatus, { label: string; cls: string }> = {
+  pending_confirmation: { label: "Pending confirmation", cls: "border-border bg-muted text-foreground" },
+  open: { label: "Open", cls: "border-amber-300 bg-amber-50 text-amber-900" },
+  monitoring: { label: "Monitoring", cls: "border-sky-300 bg-sky-50 text-sky-800" },
+  resolved: { label: "Resolved", cls: "border-emerald-300 bg-emerald-50 text-emerald-800" },
+  closed: { label: "Closed", cls: "border-border bg-muted text-muted-foreground" },
+};
+
+/** Every status is mapped explicitly; nothing silently falls back to "Open". */
+export function IncidentStatusBadge({ status, className }: { status: IncidentStatus; className?: string }) {
+  const s = INCIDENT_STATUS[status];
+  return <span className={cn(base, s.cls, className)}>{s.label}</span>;
+}
+
+const ALERT_STATUS: Record<AlertStatus, { label: string; cls: string }> = {
+  open: { label: "Open", cls: "border-red-300 bg-red-50 text-red-800" },
+  acknowledged: { label: "Acknowledged", cls: "border-amber-300 bg-amber-50 text-amber-900" },
+  in_progress: { label: "In progress", cls: "border-sky-300 bg-sky-50 text-sky-800" },
+  resolved: { label: "Resolved", cls: "border-emerald-300 bg-emerald-50 text-emerald-800" },
+  dismissed: { label: "Dismissed", cls: "border-border bg-muted text-muted-foreground" },
+};
+
+export function AlertStatusBadge({ status, className }: { status: AlertStatus; className?: string }) {
+  const s = ALERT_STATUS[status];
+  return <span className={cn(base, s.cls, className)}>{s.label}</span>;
 }

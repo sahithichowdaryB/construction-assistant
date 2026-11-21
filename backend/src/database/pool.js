@@ -10,14 +10,17 @@ const sslDisabled = url.searchParams.get("sslmode") === "disable";
 url.searchParams.delete("sslmode");
 const caPath = process.env.AGENT_DATABASE_CA_CERT; // Supabase: Settings → Database → SSL certificate
 
-export const pool = new pg.Pool({
-  connectionString: url.toString(),
-  max: 5,
+/** Same TLS settings for every pool (app queries and the LangGraph checkpointer). */
+export const makePool = (max = 10, connectionString = url.toString()) => new pg.Pool({
+  connectionString,
+  max,
   connectionTimeoutMillis: 10_000,
   ssl: sslDisabled ? false
     : caPath ? { ca: fs.readFileSync(caPath, "utf8"), rejectUnauthorized: true }
     : { rejectUnauthorized: false }, // encrypted but unverified; set AGENT_DATABASE_CA_CERT to verify
 });
+
+export const pool = makePool();
 
 export const query = (text, params) => pool.query(text, params).then((r) => r.rows);
 

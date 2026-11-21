@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { SeverityBadge } from "@/components/badges";
+import { IncidentAlertDetail } from "@/components/incident-alert-detail";
 import { CitationChip, CitationList } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { ProgressBar } from "@/components/progress-bar";
@@ -44,8 +45,8 @@ export default function AlertDetailPage() {
   const activities = useActivities();
   const alert = alerts.data?.find((a) => a.id === decodeURIComponent(id));
   const workDate = alert ? localDateOf(alert.checkpoint_at) : undefined;
-  const progress = useProgress(alert?.activity_code ?? null, workDate ?? null);
-  const context = useAlertContext(alert, workDate);
+  const progress = useProgress(alert?.kind === "incident" ? null : (alert?.activity_code ?? null), workDate ?? null);
+  const context = useAlertContext(alert?.kind === "incident" ? undefined : alert, workDate);
   const createDraft = useCreateDraft();
   const dismiss = useDismissAlert();
   const [dismissOpen, setDismissOpen] = useState(false);
@@ -67,6 +68,8 @@ export default function AlertDetailPage() {
         <EmptyState icon={<BellOff />} title="Alert not available" description={`This alert no longer exists or was closed by ${fmtDateTime(asOf)}.`} />
       </>
     );
+
+  if (alert.kind === "incident") return <>{back}<IncidentAlertDetail id={alert.id} /></>;
 
   const activity = activities.data?.find((a) => a.code === alert.activity_code);
   const draftReason = denyReason(role, "create_draft") ?? (alert.kind === "missing_report" ? "A delay notice needs a confirmed report first." : null);

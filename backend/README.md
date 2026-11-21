@@ -124,7 +124,7 @@ database ranking (the reranker pauses for 5 minutes after a 429 or 529).
 Write routes need the `contributor`, `manager` or `approver` role. The demo member is seeded as
 `manager`.
 
-## Voice capture agent (Node.js + LangChain + Claude)
+## Legacy: the previous Node.js capture agent (superseded, not used any more)
 
 `src/` is a Node.js service that turns a recorded voice note into reviewed project memory.
 It is a LangGraph pipeline over four LangChain tools in `src/agent/tools/`:
@@ -141,27 +141,72 @@ audio ─Whisper─▶ transcript ─fact_extraction (Claude fills JSON)─▶ e
 Facts are stored with `review_status='proposed'`; a person confirms them later. Each manager answer is
 stored as its own passage (`answer:<question id>`) so every fact cites where it came from.
 
-Setup (adds the `business_rules` table and a `sitemate_agent` role with SELECT + INSERT on capture tables):
+## Event pipeline: capture → event → incident → alert → action
 
-```powershell
-.venv/Scripts/python.exe -m alembic upgrade head
-.venv/Scripts/python.exe provision_agent.py     # needs AGENT_DATABASE_URL in .env
-npm install
-npm start                                       # http://127.0.0.1:4000
+```
+capture (voice | photos | text)
+  → perceive (Whisper, Claude vision)            Python  ai-agent/app/capture/pipeline.py, served by FastAPI (capture.py)
+  → classify: split into events, SUGGEST a category + type + rationale
+  → ⏸ person confirms the category (state saved in sitemate.captures, so it survives restarts)
+  → search DB → relationships → required-field questions (per category)
+  → ⏸ speaker reviews the extracted facts: edit, remove, fill gaps, or discard (nothing is saved before this)
+  → persist in ONE transaction: passages, events, then
+      correlation under an advisory lock (auto-link / LLM adjudicate / new incident),
+      severity (rule matrix + bounded LLM nudge), alert + revision, facts, debounced agent job
+  ⇒ worker (Python, backend/worker.py) claims agent_jobs:
+      reasoning  → analyze_incident (root cause)  → plan_actions (recommended actions, guardrailed)
+  → manager approves / edits / enacts actions on the Alerts page
 ```
 
-Endpoints (bearer token of a `contributor`, `manager` or `approver` member):
+Categories and event types live in `sitemate.event_categories` / `event_types` (seeded from `rules/event_taxonomy.json`;
+add a row with a `project_id` to override per project). Grouping weights and thresholds are in `src/config.js`.
 
-- `POST /projects/RIV/captures` — multipart `audio` file (or form/JSON field `transcript`), optional `recorded_at`
-  (ISO 8601 with offset). Returns `201 saved`, or `202 needs_input` with `thread_id` and `questions`.
-- `POST /projects/RIV/captures/{thread_id}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`.
-  Answer `unknown` to record a field as a gap.
+Setup and run (everything is Python except the web UI):
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" -F audio=@../data/riverside-demo/uploads/voice/V01.wav \
-     -F recorded_at=2026-11-10T10:05:00+01:00 http://127.0.0.1:4000/projects/RIV/captures
+.venv/bin/alembic upgrade head                  # includes 0005_event_pipeline, 0006_capture_state, 0007_capture_review
+.venv/bin/python provision_agent.py             # sitemate_agent: capture writes   (AGENT_DATABASE_URL)
+.venv/bin/python provision_reader.py            # sitemate_reader: read-only API   (DATABASE_URL)
+.venv/bin/python provision_ops.py               # sitemate_ops: manager actions + worker (OPS_DATABASE_URL)
+.venv/bin/python -m uvicorn main:app --port 8000   # API + capture pipeline (needs ANTHROPIC_API_KEY, AGENT_DATABASE_URL)
+.venv/bin/python worker.py                      # async reasoning / action planning / escalation / auto-resolve
+(cd ../frontend && npm run dev)                 # web UI on :3000
+.venv/bin/python seed_event_pipeline.py         # optional demo on project TST (see its docstring)
 ```
 
-Business rules are rows in `sitemate.business_rules` (seeded from `rules/business_rules.json`); edit rows to
-change what the agent requires or asks. Paused captures are held in memory and lost on restart; swap in
-`@langchain/langgraph-checkpoint-postgres` before production.
+The capture code lives in `ai-agent/app/capture/` (the incident cause analysis in `ai-agent/app/` is untouched) and is
+served by `backend/capture.py`. The Node service in `src/` is the previous implementation of the same pipeline; it is no
+longer needed or started, and can be deleted. The model is `CAPTURE_LLM_MODEL`, else `CLAUDE_MODEL`, else `LLM_MODEL`.
+
+Capture endpoints on FastAPI, port 8000 (bearer token of a `contributor`, `manager` or `approver` member):
+
+- `POST /projects/{pid}/captures` — multipart: `audio` (one file), `images` (up to 5, JPEG/PNG/WebP/GIF, 5 MB each),
+  `transcript`, optional `recorded_at`. Returns `202 needs_category` with `thread_id` and one suggestion per event.
+- `POST /projects/{pid}/captures/{thread}/categories` — `{"events":[{"index":0,"category":"equipment","event_type":"equipment_failure","keep":true}],"added":[{"summary","category","event_type"}]}`.
+  Events you do not mention keep the AI's suggestion; `keep:false` means "not an event".
+- `POST /projects/{pid}/captures/{thread}/review` — `{"edits":[{"index","value"}],"removed":[0],"additions":[{"event_index","field_name","value"}],"discard":false}`.
+  Only the person who recorded the note may review it; `discard` deletes the capture and its files; facts are saved as `confirmed` by that person.
+- `GET /projects/{pid}/captures` (this member's saved notes) and `GET /projects/{pid}/captures/{source}/audio` (their recording, Range requests supported).
+- `POST /projects/{pid}/captures/{thread}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`; answer `unknown` to record a gap.
+  The final `201 saved` response includes `incident_links` (new incident or which one it joined, report/reporter counts, severity).
+- `GET /projects/{pid}/event-categories` — categories with their types.
+
+FastAPI (`main.py` + `ops.py`): `GET /incidents` (severity, status, report/reporter counts), `GET /incidents/{id}/events`,
+`PATCH /incidents/{id}`, `POST /incidents/{id}/merge`, `POST /incidents/{id}/events/{eid}/unlink`,
+`GET /alerts?status&kind`, `GET /alerts/{id}`, `POST /alerts/{id}/{ack|assign|dismiss|resolve|reopen}`,
+`GET /alerts/{id}/actions`, `POST /alerts/{id}/actions/{aid}/{approve|reject|complete}`, `PATCH …/actions/{aid}`,
+`GET /capture-prompts`. Manager actions need a `manager` or `approver` token and `OPS_DATABASE_URL`.
+
+Notes: audio still needs `OPENAI_API_KEY` or `WHISPER_BASE_URL`; photos and audio are stored on local disk
+(`AGENT_IMAGE_DIR`, `AGENT_UPLOAD_DIR`) behind `src/services/storage.js`, so object storage can be swapped in.
+Grouping uses structured keys plus a word-overlap similarity and LLM adjudication; there are no embeddings and no
+`pg_trgm` dependency.
+
+Tests, from `backend/` (needs a migrated scratch database; never a shared one):
+`TEST_DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:54329/sm .venv/bin/pytest tests ../ai-agent/tests`.
+Add `TEST_AGENT_URL`, `TEST_READER_URL` and `TEST_OPS_URL` (the three provisioned roles) to run the suites under the real
+least-privilege logins. Without `TEST_DATABASE_URL` only the pure-logic tests run. The suites create and delete their own
+projects but toggle triggers on the history tables.
+
+Business rules are rows in `sitemate.business_rules` (seeded from `rules/business_rules.json`); categories without a
+type-specific rule use the category's `required_fields`.

@@ -37,7 +37,9 @@ export const INCIDENT_TYPE_LABEL: Record<Incident["type"], string> = {
 export const INCIDENT_STATUS_LABEL: Record<IncidentStatus, string> = {
   pending_confirmation: "Awaiting confirmation",
   open: "Open",
+  monitoring: "Being monitored",
   resolved: "Resolved",
+  closed: "Closed",
 };
 
 export function refLabel(ref: EvidenceRef): string {

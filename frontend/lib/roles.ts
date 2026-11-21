@@ -28,12 +28,16 @@ export type Action =
   | "approve"
   | "request_changes"
   | "export"
-  | "run_reasoning";
+  | "run_reasoning"
+  | "act_on_alert"
+  | "approve_action"
+  | "merge_incident";
 
 const PERMISSIONS: Record<Role, Action[]> = {
+  // Contributors capture and confirm categories; managers merge incidents and act on alerts; approvers approve actions.
   foreman: ["capture", "confirm_capture", "upload"],
-  site_manager: ["capture", "confirm_capture", "upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning"],
-  approver: ["ask", "approve", "request_changes", "export", "run_reasoning"],
+  site_manager: ["capture", "confirm_capture", "upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning", "act_on_alert", "approve_action", "merge_incident"],
+  approver: ["ask", "approve", "request_changes", "export", "run_reasoning", "act_on_alert", "approve_action"],
 };
 
 const WHO: Record<Action, string> = {
@@ -50,6 +54,9 @@ const WHO: Record<Action, string> = {
   request_changes: "an approver",
   export: "an approver",
   run_reasoning: "the site manager or approver",
+  act_on_alert: "the site manager or approver",
+  approve_action: "the site manager or approver",
+  merge_incident: "the site manager",
 };
 
 export function can(role: Role, action: Action): boolean {

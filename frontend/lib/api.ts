@@ -9,12 +9,16 @@ import * as fx from "@/lib/fixture-server";
 import {
   actionItemsSchema,
   actionUpdateSchema,
+  alertDetailSchema,
   alertsSchema,
+  capturePromptsSchema,
   evidenceSchema,
   healthSchema,
+  incidentEventsSchema,
   incidentReasoningSchema,
   incidentSchema,
   incidentsSchema,
+  okSchema,
   previewSchema,
   progressSchema,
   readingsSchema,
@@ -30,6 +34,9 @@ import type {
   Activity,
   Alert,
   AlertContext,
+  AlertDetail,
+  CapturePrompt,
+  IncidentEventLink,
   AskAnswer,
   Draft,
   DraftSummary,
@@ -157,7 +164,7 @@ export async function getAlerts(pid: string, asOf: string): Promise<Alert[]> {
 
 export async function getAlertContext(pid: string, alert: Alert, workDate: string): Promise<AlertContext> {
   void pid;
-  return fixture("alertContext", () => fx.fxAlertContext(alert.activity_code, workDate));
+  return fixture("alertContext", () => fx.fxAlertContext(alert.activity_code ?? "", workDate));
 }
 
 export async function dismissAlert(pid: string, id: string, reason: string, asOf: string) {
@@ -178,7 +185,7 @@ export async function getIncident(pid: string, id: string, asOf: string | null =
 }
 
 /** Latest cause reasoning for an incident (404 until the agent has run, or nothing was known at as_of). */
-export async function getIncidentReasoning(pid: string, id: string, asOf: string): Promise<IncidentReasoning> {
+export async function getIncidentReasoning(pid: string, id: string, asOf: string | null): Promise<IncidentReasoning> {
   return http(
     `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
     incidentReasoningSchema,
@@ -186,13 +193,90 @@ export async function getIncidentReasoning(pid: string, id: string, asOf: string
 }
 
 /** Runs the evidence agent now (database read + LLM calls) and stores the result. Callers refetch afterwards. */
-export async function runIncidentReasoning(pid: string, id: string, asOf: string) {
+export async function runIncidentReasoning(pid: string, id: string, asOf: string | null) {
   return http(
     `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
     z.object({ version: z.number(), reused: z.boolean() }).passthrough(),
     { method: "POST" },
   );
 }
+
+// ---------- event pipeline: incident sources, alert lifecycle, recommended actions ----------
+// These always come from the backend (database + agents); there are no fixtures for them.
+const proj = (pid: string) => `/projects/${encodeURIComponent(pid)}`;
+const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body ?? {}),
+});
+
+export async function getIncidentEvents(pid: string, id: string): Promise<IncidentEventLink[]> {
+  return http(`${proj(pid)}/incidents/${encodeURIComponent(id)}/events`, incidentEventsSchema);
+}
+
+export async function patchIncident(pid: string, id: string, status: "open" | "monitoring" | "resolved" | "closed") {
+  return http(`${proj(pid)}/incidents/${encodeURIComponent(id)}`, okSchema, json("PATCH", { status }));
+}
+
+export async function mergeIncident(pid: string, id: string, intoId: string) {
+  return http(`${proj(pid)}/incidents/${encodeURIComponent(id)}/merge`, okSchema, json("POST", { into_id: intoId }));
+}
+
+export async function unlinkIncidentEvent(pid: string, id: string, eventId: string, makeNewIncident: boolean) {
+  return http(
+    `${proj(pid)}/incidents/${encodeURIComponent(id)}/events/${encodeURIComponent(eventId)}/unlink`,
+    okSchema,
+    json("POST", { make_new_incident: makeNewIncident }),
+  );
+}
+
+export async function getAlertDetail(pid: string, id: string): Promise<AlertDetail> {
+  return http(`${proj(pid)}/alerts/${encodeURIComponent(id)}`, alertDetailSchema);
+}
+
+export type AlertTransition = "ack" | "assign" | "dismiss" | "resolve" | "reopen";
+export async function transitionAlert(
+  pid: string,
+  id: string,
+  action: AlertTransition,
+  body: { note?: string; assignee?: string; resolve_incident?: boolean } = {},
+) {
+  return http(`${proj(pid)}/alerts/${encodeURIComponent(id)}/${action}`, okSchema, json("POST", body));
+}
+
+export async function decideAction(
+  pid: string,
+  alertId: string,
+  actionId: string,
+  decision: "approve" | "reject" | "complete",
+  body: { assignee?: string } = {},
+) {
+  return http(
+    `${proj(pid)}/alerts/${encodeURIComponent(alertId)}/actions/${encodeURIComponent(actionId)}/${decision}`,
+    okSchema,
+    json("POST", body),
+  );
+}
+
+export async function editAction(
+  pid: string,
+  alertId: string,
+  actionId: string,
+  patch: { title?: string; rationale?: string; owner_role?: string; contractor_id?: string | null; priority?: string },
+) {
+  return http(
+    `${proj(pid)}/alerts/${encodeURIComponent(alertId)}/actions/${encodeURIComponent(actionId)}`,
+    okSchema,
+    json("PATCH", patch),
+  );
+}
+
+export async function getCapturePrompts(pid: string): Promise<CapturePrompt[]> {
+  return http(`${proj(pid)}/capture-prompts`, capturePromptsSchema);
+}
+
+/** URL of an incident photo, through the proxy. `url` is the backend path from the events response. */
+export const attachmentUrl = (url: string) => `/api/sm${url}`;
 
 // ---------- documents & evidence ----------
 const projectPath = (pid: string) => `/projects/${encodeURIComponent(pid)}`;

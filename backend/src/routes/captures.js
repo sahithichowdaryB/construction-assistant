@@ -1,191 +1,156 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { Command } from "@langchain/langgraph";
 import { Router } from "express";
 import multer from "multer";
-import { captureAgent } from "../agent/graph.js";
+import { sourceKind, setCaptureStatus } from "../agent/memory.js";
+import { getCaptureAgent } from "../agent/graph.js";
 import { config } from "../config.js";
-import { query } from "../database/pool.js";
+import { withTransaction } from "../database/pool.js";
 import { requireMember } from "../middleware/auth.js";
+import { audioStorage, imageStorage } from "../services/files.js";
 import { transcribe, transcriptionEnabled } from "../services/transcription.js";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const IMAGE_TYPES = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif" };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Claude's per-image limit
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 + config.maxImages } })
+  .fields([{ name: "audio", maxCount: 1 }, { name: "images", maxCount: config.maxImages }]);
 const canCapture = requireMember("contributor", "manager", "approver");
-const anyMember = requireMember();
-
-// sitemate.sources.author_role only allows a fixed set of values.
+// How a member's role is weighted as evidence by the root-cause agent (sources.author_role).
 const AUTHOR_ROLE = { contributor: "foreman", manager: "site_supervisor", approver: "site_supervisor" };
-// Date or date-time like 2026-11-21 or 2026-11-21T09:15:00+01:00 (Date.parse alone accepts junk such as "0").
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?(Z|[+-]\d{2}:?\d{2})?$/;
-const AUDIO_TYPES = { ".webm": "audio/webm", ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".aiff": "audio/aiff", ".ogg": "audio/ogg" };
-
-/** A member sees their own notes, plus older notes saved before authorship was recorded (author is null). */
-const VISIBLE = "kind = 'voice_note' AND (author = $2 OR author IS NULL)";
 export const captures = Router({ mergeParams: true });
 
-async function respond(res, threadId, output) {
-  const pending = output.__interrupt__?.[0];
-  if (pending?.value?.kind === "review") {
+const fail = (status, detail) => Object.assign(new Error(detail), { status, expose: true });
+
+/** Maps the graph output to the HTTP contract and keeps captures.status in step. */
+export async function respond(res, { projectId, captureId, threadId }, output) {
+  const pending = output.__interrupt__?.[0]?.value;
+  if (pending?.kind === "categories") {
+    await setCaptureStatus(projectId, captureId, "needs_category");
     return res.status(202).json({
-      status: "needs_review", thread_id: threadId, transcript: output.transcript, events: output.events,
-      facts: pending.value.facts, gaps: pending.value.gaps,
+      status: "needs_category", thread_id: threadId, capture_id: captureId, transcript: output.transcript,
+      photo_descriptions: output.perception ?? [], events: pending.events,
     });
   }
-  if (output.discarded) {
-    // Nothing was saved to the database; remove the uploaded recording too.
-    if (output.storagePath && output.storagePath !== "inline:transcript") {
-      await fs.rm(path.join(config.uploadDir, output.storagePath), { force: true });
-    }
-    return res.status(200).json({ status: "discarded" });
-  }
   if (pending) {
+    await setCaptureStatus(projectId, captureId, "needs_input");
     return res.status(202).json({
-      status: "needs_input", thread_id: threadId, transcript: output.transcript, events: output.events,
-      questions: pending.value.questions, round: pending.value.round,
+      status: "needs_input", thread_id: threadId, capture_id: captureId, transcript: output.transcript,
+      events: output.events, questions: pending.questions, round: pending.round,
     });
   }
   if (!output.result) {
-    console.log(`[capture ${output.sourceId}] no events extracted. Transcript: ${JSON.stringify(output.transcript)}`);
-    return res.status(200).json({ status: "no_events", transcript: output.transcript });
+    await setCaptureStatus(projectId, captureId, "no_events");
+    return res.status(200).json({ status: "no_events", capture_id: captureId, transcript: output.transcript });
   }
   return res.status(201).json({ status: "saved", thread_id: threadId, events: output.events, ...output.result });
 }
 
-/** POST /projects/:projectId/captures  — multipart `audio` file, or `transcript` text; optional `recorded_at`. */
-captures.post("/", canCapture, upload.single("audio"), async (req, res) => {
+/** Run or resume the graph; a failure marks the capture failed instead of leaving it 'processing'. */
+async function run(res, ids, invoke) {
+  try {
+    return await respond(res, ids, await invoke());
+  } catch (err) {
+    await setCaptureStatus(ids.projectId, ids.captureId, "failed").catch(() => {});
+    throw err;
+  }
+}
+
+/**
+ * POST /projects/:projectId/captures
+ * multipart: `audio` (one file), `images` (up to 5), `transcript` (text), optional `recorded_at`, `zone_hint`.
+ * Returns needs_category with the AI's suggestions; the person confirms via POST /:threadId/categories.
+ */
+captures.post("/", canCapture, upload, async (req, res) => {
   const recordedAt = req.body?.recorded_at ?? new Date().toISOString();
   if (Number.isNaN(Date.parse(recordedAt)) || !/(Z|[+-]\d\d:\d\d)$/.test(recordedAt)) {
-    return res.status(422).json({ detail: "recorded_at must be ISO 8601 with a time zone" });
+    throw fail(422, "recorded_at must be ISO 8601 with a time zone");
   }
   const { projectId } = req.params;
-  const sourceId = `VN-${randomUUID().slice(0, 8).toUpperCase()}`;
-  let transcript = req.body?.transcript?.trim();
-  let storagePath = "inline:transcript";
-
-  if (req.file && !transcriptionEnabled()) {
-    return res.status(422).json({ detail: "Audio transcription is not configured; send a `transcript` text field instead" });
+  const audio = req.files?.audio?.[0];
+  const images = req.files?.images ?? [];
+  let transcript = req.body?.transcript?.trim() || null;
+  for (const img of images) {
+    if (!IMAGE_TYPES[img.mimetype]) throw fail(422, "Photos must be JPEG, PNG, WebP or GIF");
+    if (img.size > MAX_IMAGE_BYTES) throw fail(422, "Each photo must be 5 MB or smaller");
   }
-  if (req.file) {
-    const ext = path.extname(req.file.originalname).replace(/[^.\w]/g, "") || ".webm";
-    storagePath = path.posix.join(projectId, `${sourceId}${ext}`);
-    await fs.mkdir(path.join(config.uploadDir, projectId), { recursive: true });
-    await fs.writeFile(path.join(config.uploadDir, storagePath), req.file.buffer);
-    transcript = await transcribe(req.file.buffer, req.file.originalname, req.file.mimetype);
+  if (audio && !transcriptionEnabled()) {
+    throw fail(422, "Audio transcription is not configured; send a `transcript` text field instead");
   }
-  if (!transcript) return res.status(422).json({ detail: "Send an `audio` file or a `transcript`" });
+  const spoken = audio ? await transcribe(audio.buffer, audio.originalname, audio.mimetype) : null;
+  transcript = [spoken, transcript].filter(Boolean).join("\n\n") || null;
+  if (!transcript && !images.length) throw fail(422, "Send an `audio` file, `images` or a `transcript`");
 
+  const sourceId = `CAP-${randomUUID().slice(0, 8).toUpperCase()}`;
   const threadId = randomUUID();
-  const output = await captureAgent.invoke(
-    { projectId, sourceId, storagePath, transcript, recordedAt, author: req.member.member_id, authorRole: AUTHOR_ROLE[req.member.role] ?? "unknown" },
-    { configurable: { thread_id: threadId } });
-  return respond(res, threadId, output);
+  const attachments = [];
+  if (audio) {
+    const ext = path.extname(audio.originalname).replace(/[^.\w]/g, "") || ".webm";
+    attachments.push({ kind: "audio", mime: audio.mimetype, ...(await audioStorage.put(projectId, `${sourceId}${ext}`, audio.buffer)) });
+  }
+  let n = 0;
+  for (const img of images) {
+    n += 1;
+    attachments.push({ kind: "image", n, mime: img.mimetype, locator: `image:${n}`,
+      ...(await imageStorage.put(projectId, `${sourceId}-${n}${IMAGE_TYPES[img.mimetype]}`, img.buffer)) });
+  }
+  const kinds = [audio && "voice", images.length && "photo", req.body?.transcript?.trim() && "text"].filter(Boolean);
+  const channel = kinds.length > 1 ? "mixed" : kinds[0];
+  const captureId = await withTransaction(async (db) => {
+    await db.query(
+      `INSERT INTO sitemate.sources (project_id, id, kind, path, available_at, author, author_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [projectId, sourceId, sourceKind({ audio: Boolean(audio), images: images.length > 0, text: Boolean(req.body?.transcript?.trim()) }),
+        attachments[0]?.key ?? "inline:transcript", recordedAt, req.member.member_id, AUTHOR_ROLE[req.member.role] ?? "unknown"]);
+    const { rows: [capture] } = await db.query(
+      `INSERT INTO sitemate.captures (project_id, source_id, thread_id, captured_by, channel, raw_text, transcript, recorded_at, zone_hint)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [projectId, sourceId, threadId, req.member.member_id, channel, req.body?.transcript?.trim() || null, spoken,
+        recordedAt, req.body?.zone_hint || null]);
+    for (const a of attachments) {
+      await db.query(
+        `INSERT INTO sitemate.capture_attachments (project_id, capture_id, source_id, kind, storage_key, mime, bytes, sha256, passage_locator)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [projectId, capture.id, sourceId, a.kind, a.key, a.mime, a.bytes, a.sha256, a.locator ?? null]);
+    }
+    return capture.id;
+  });
+
+  const agent = await getCaptureAgent();
+  const ids = { projectId, captureId, threadId };
+  return run(res, ids, () => agent.invoke(
+    { projectId, captureId, sourceId, capturedBy: req.member.member_id, transcript, recordedAt,
+      attachments: attachments.filter((a) => a.kind === "image").map((a) => ({ n: a.n, kind: "image", key: a.key, mime: a.mime })) },
+    { configurable: { thread_id: threadId } }));
+});
+
+/** Load a paused capture that belongs to this project and is waiting at `node`. */
+async function pausedCapture(req, node) {
+  const agent = await getCaptureAgent();
+  const runConfig = { configurable: { thread_id: req.params.threadId } };
+  const snapshot = await agent.getState(runConfig);
+  if (snapshot.values?.projectId !== req.params.projectId || !snapshot.next?.includes(node)) return null;
+  return { agent, runConfig, ids: { projectId: req.params.projectId, captureId: snapshot.values.captureId, threadId: req.params.threadId } };
+}
+
+/**
+ * POST /projects/:projectId/captures/:threadId/categories
+ * body { events: [{ index, category, event_type, keep }], added?: [{ summary, category, event_type }] }
+ */
+captures.post("/:threadId/categories", canCapture, async (req, res) => {
+  const paused = await pausedCapture(req, "confirmCategories");
+  if (!paused) throw fail(404, "No capture is waiting for category confirmation");
+  const body = {
+    events: Array.isArray(req.body?.events) ? req.body.events : [],
+    added: Array.isArray(req.body?.added) ? req.body.added : [],
+  };
+  return run(res, paused.ids, () => paused.agent.invoke(new Command({ resume: body }), paused.runConfig));
 });
 
 /** POST /projects/:projectId/captures/:threadId/answers  — body { answers: [{ id, answer }] } */
 captures.post("/:threadId/answers", canCapture, async (req, res) => {
-  const runConfig = { configurable: { thread_id: req.params.threadId } };
-  const snapshot = await captureAgent.getState(runConfig);
-  if (snapshot.values?.projectId !== req.params.projectId || !snapshot.next?.includes("askManager")) {
-    return res.status(404).json({ detail: "No capture is waiting for answers" });
-  }
+  const paused = await pausedCapture(req, "askManager");
+  if (!paused) throw fail(404, "No capture is waiting for answers");
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
-  const output = await captureAgent.invoke(new Command({ resume: { answers } }), runConfig);
-  return respond(res, req.params.threadId, output);
-});
-
-/**
- * POST /projects/:projectId/captures/:threadId/review
- * Body { edits: [{ index, value }], removed: [index], additions: [{ event_index, field_name, value }], discard: boolean }. The speaker's last look at the extracted
- * facts: corrected values replace the agent's, removed facts are dropped, "discard" saves nothing. Then the capture is saved.
- */
-captures.post("/:threadId/review", canCapture, async (req, res) => {
-  const runConfig = { configurable: { thread_id: req.params.threadId } };
-  const snapshot = await captureAgent.getState(runConfig);
-  if (snapshot.values?.projectId !== req.params.projectId || !snapshot.next?.includes("reviewFacts")) {
-    return res.status(404).json({ detail: "No capture is waiting for review" });
-  }
-  if (snapshot.values?.author !== req.member.member_id) {
-    return res.status(403).json({ detail: "Only the person who recorded this note can review it" });
-  }
-  const { edits, removed, additions, discard } = req.body ?? {};
-
-  // occurred_at becomes a timestamp in the database, so refuse anything that is not a date-time before resuming.
-  const facts = snapshot.values?.validation?.validated_facts ?? [];
-  const badTime = [
-    ...(Array.isArray(edits) ? edits.map((e) => ({ field: facts[e?.index]?.field_name, value: e?.value })) : []),
-    ...(Array.isArray(additions) ? additions.map((a) => ({ field: a?.field_name, value: a?.value })) : []),
-  ].find((x) => x.field === "occurred_at" && typeof x.value === "string" && x.value.trim() && !ISO_DATE.test(x.value.trim()));
-  if (badTime) {
-    return res.status(422).json({ detail: `"occurred at" must be a date and time, for example 2026-11-21T09:15:00+01:00 (got "${badTime.value}")` });
-  }
-  const output = await captureAgent.invoke(
-    new Command({ resume: { edits: Array.isArray(edits) ? edits : [], removed: Array.isArray(removed) ? removed : [],
-      additions: Array.isArray(additions) ? additions : [], discard: discard === true } }),
-    runConfig);
-  return respond(res, req.params.threadId, output);
-});
-
-/** GET /projects/:projectId/captures  — this member's saved notes with transcript, answers, facts and incident. */
-captures.get("/", anyMember, async (req, res) => {
-  const { projectId } = req.params;
-  const sources = await query(
-    `SELECT id, path, available_at, author, author_role FROM sitemate.sources
-     WHERE project_id = $1 AND ${VISIBLE} ORDER BY available_at DESC LIMIT 50`,
-    [projectId, req.member.member_id]);
-  if (!sources.length) return res.json({ recordings: [] });
-  const ids = sources.map((x) => x.id);
-
-  const [passages, allFacts] = await Promise.all([
-    query(`SELECT source_id, locator, excerpt FROM sitemate.source_passages
-           WHERE project_id = $1 AND source_id = ANY($2) AND (locator = 'transcript' OR locator LIKE 'answer:%')
-           ORDER BY source_id, locator`, [projectId, ids]),
-    query(`SELECT id, supersedes_id, source_id, incident_id, field_name, value, basis, review_status, reviewed_by, effective_at
-           FROM sitemate.capture_facts WHERE project_id = $1 AND source_id = ANY($2) ORDER BY effective_at, field_name, id`, [projectId, ids]),
-  ]);
-  // A fact that a later row supersedes is history, not current.
-  const superseded = new Set(allFacts.map((f) => f.supersedes_id).filter(Boolean));
-  const facts = allFacts.filter((f) => !superseded.has(f.id));
-  const incidentIds = [...new Set(facts.map((f) => f.incident_id).filter(Boolean))];
-  const incidents = incidentIds.length
-    ? await query(`SELECT id, kind, title, activity_code, occurred_at, resolved_at FROM sitemate.incidents
-                   WHERE project_id = $1 AND id = ANY($2)`, [projectId, incidentIds])
-    : [];
-  const incidentById = new Map(incidents.map((i) => [i.id, i]));
-
-  res.json({
-    recordings: sources.map((src) => {
-      const own = passages.filter((p) => p.source_id === src.id);
-      const myFacts = facts.filter((f) => f.source_id === src.id);
-      return {
-        id: src.id,
-        recorded_at: src.available_at,
-        has_audio: src.path !== "inline:transcript",
-        author: src.author,
-        author_role: src.author_role,
-        transcript: own.find((p) => p.locator === "transcript")?.excerpt ?? null,
-        answers: own.filter((p) => p.locator.startsWith("answer:")).map((p) => p.excerpt),
-        facts: myFacts.map((f) => ({
-          field_name: f.field_name, value: f.value, basis: f.basis, review_status: f.review_status,
-          reviewed_by: f.reviewed_by, incident_id: f.incident_id,
-        })),
-        incidents: [...new Set(myFacts.map((f) => f.incident_id).filter(Boolean))].map((id) => incidentById.get(id)).filter(Boolean),
-      };
-    }),
-  });
-});
-
-/** GET /projects/:projectId/captures/:sourceId/audio  — the stored recording (supports Range requests for seeking). */
-captures.get("/:sourceId/audio", anyMember, async (req, res) => {
-  const [src] = await query(
-    `SELECT path FROM sitemate.sources WHERE project_id = $1 AND id = $3 AND ${VISIBLE}`,
-    [req.params.projectId, req.member.member_id, req.params.sourceId]);
-  if (!src || src.path === "inline:transcript") return res.status(404).json({ detail: "No recording for this note" });
-  const file = path.resolve(config.uploadDir, src.path);
-  if (!file.startsWith(path.resolve(config.uploadDir) + path.sep)) return res.status(404).json({ detail: "No recording for this note" });
-  res.sendFile(file, {
-    headers: { "Content-Type": AUDIO_TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "private, max-age=300" },
-  }, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ detail: "Recording file is missing" });
-  });
+  return run(res, paused.ids, () => paused.agent.invoke(new Command({ resume: { answers } }), paused.runConfig));
 });

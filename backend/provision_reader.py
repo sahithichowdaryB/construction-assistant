@@ -30,7 +30,12 @@ def main():
                            sitemate.incident_analyses, sitemate.analysis_hypotheses,
                            sitemate.analysis_evidence, sitemate.activity_dependencies,
                            sitemate.ingestion_jobs, sitemate.document_summaries,
-                           sitemate.action_items TO sitemate_reader""")
+                           sitemate.action_items,
+                           sitemate.captures, sitemate.capture_attachments, sitemate.events,
+                           sitemate.incident_events, sitemate.incident_severity_history,
+                           sitemate.alert_activity,
+                           sitemate.event_categories, sitemate.event_types,
+                           sitemate.agent_jobs, sitemate.agent_runs TO sitemate_reader""")
             # The analyze route saves immutable analysis versions; nothing else is writable.
             cur.execute("""GRANT INSERT ON sitemate.incident_analyses, sitemate.analysis_hypotheses,
                            sitemate.analysis_evidence TO sitemate_reader""")

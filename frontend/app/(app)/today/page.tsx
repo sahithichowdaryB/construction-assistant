@@ -74,7 +74,7 @@ function buildTasks(t: TodayBriefing, byCode: Map<string, Activity>, known: Inci
     });
   }
   for (const a of [...t.open_alerts].sort((x, y) => (x.severity === "high" ? -1 : 0) - (y.severity === "high" ? -1 : 0))) {
-    const act = byCode.get(a.activity_code);
+    const act = byCode.get(a.activity_code ?? "");
     tasks.push({
       key: `a-${a.id}`,
       href: `/alerts/${encodeURIComponent(a.id)}`,
