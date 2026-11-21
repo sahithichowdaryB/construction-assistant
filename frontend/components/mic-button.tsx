@@ -2,6 +2,7 @@
 
 import { Mic, RotateCcw, Square, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RecordingAudio } from "@/components/recording-audio";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -190,9 +191,7 @@ export function MicButton({ onSubmit, disabled, disabledReason }: { onSubmit: (r
       {state === "recorded" && recording && (
         <div className="flex w-full flex-col items-center gap-2">
           {previewUrl && (
-            <audio controls src={previewUrl} className="w-full max-w-sm rounded-full">
-              <track kind="captions" />
-            </audio>
+            <RecordingAudio src={previewUrl} className="w-full max-w-sm rounded-full" />
           )}
           <div className="flex flex-wrap justify-center gap-2">
             <Button

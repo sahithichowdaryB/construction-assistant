@@ -203,7 +203,9 @@ def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
                 seen.add((f["source_id"], f["locator"]))
                 refs.append({"source_id": f["source_id"], "locator": f["locator"],
                              "passage_id": f"{f['source_id']}:{f['locator']}"})
-        workers = [int(f["value"]["count"]) for f in mine if f["field_name"] == "workers_affected"]
+        # Seeded facts store {"count": n}; the capture agent stores a bare number.
+        workers = [int(f["value"]["count"] if isinstance(f["value"], dict) else f["value"])
+                   for f in mine if f["field_name"] == "workers_affected"]
         reported = mine[0]["available_at"] if mine else r["occurred_at"]
         equipment = conn.execute(text("""
             SELECT equipment_id FROM sitemate.equipment_assignments
@@ -216,7 +218,8 @@ def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
                           "passage_id": f"{f['source_id']}:{f['locator']}"}]}
                     for n, f in enumerate(mine)]
         out.append({"id": r["id"], "activity_code": r["activity_code"],
-                    "type": "equipment_breakdown" if r["kind"] == "equipment_failure" else "other",
+                    "type": {"equipment_failure": "equipment_breakdown", "delivery_delay": "delivery",
+                             "quality_observation": "defect"}.get(r["kind"], "other"),
                     "title": r["title"], "occurred_at": r["occurred_at"], "reported_at": reported,
                     "resolved_at": resolved, "status": "resolved" if resolved else "open",
                     "affected_workers": max(workers) if workers else None,

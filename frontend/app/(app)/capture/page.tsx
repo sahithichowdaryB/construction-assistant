@@ -1,18 +1,19 @@
 "use client";
 
 import { Camera, CheckCircle2, Keyboard, Mic, Paperclip, RefreshCw, Send, ShieldCheck, Sparkles } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AgentReview } from "@/components/agent-review";
 import { JobStatusBadge } from "@/components/badges";
 import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
+import { RECORDINGS_KEY, RecordingsList } from "@/components/recordings-list";
 import { ReviewForm } from "@/components/review-form";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { answerQuestions, submitNote, type AgentResult } from "@/lib/agent";
+import { answerQuestions, submitAudio, submitNote, submitReview, type AgentResult, type ReviewDecision } from "@/lib/agent";
 import type { UploadInput } from "@/lib/api";
 import { useJob, useProposals, useUpload } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
@@ -23,26 +24,54 @@ const DEMO_NOTES = [
   { id: "V03", label: "V03 duplicate", text: "Same machine at Zone B. Three of us are still waiting on the excavator." },
 ];
 
+type NoteInput = { text: string } | { rec: Recording };
+
+// Recordings need a speech-to-text service behind the agent (OPENAI_API_KEY or WHISPER_BASE_URL in backend/.env).
+// Until then the mic is disabled and notes are typed or dictated. Set NEXT_PUBLIC_VOICE_TRANSCRIPTION=true to enable it.
+const VOICE_READY = process.env.NEXT_PUBLIC_VOICE_TRANSCRIPTION === "true";
+const VOICE_OFF_REASON = "Voice recording isn't set up. Tap “Type instead” and dictate (Mac: press the dictation key).";
+
 export default function CapturePage() {
   const { role, projectId } = useApp();
   const blocked = denyReason(role, "capture");
-  const [typing, setTyping] = useState(false);
+  const micBlocked = blocked ?? (VOICE_READY ? null : VOICE_OFF_REASON);
+  const [typing, setTyping] = useState(!VOICE_READY);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [lastInput, setLastInput] = useState<UploadInput | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
-  const [lastText, setLastText] = useState("");
+  const [lastNote, setLastNote] = useState<NoteInput | null>(null);
+  const showResult = (r: AgentResult) => {
+    setAgentResult(r);
+    if (r.status === "saved") void queryClient.invalidateQueries({ queryKey: RECORDINGS_KEY(projectId) });
+  };
 
-  // Typed notes go to the capture agent (Claude + database); photos/files still use the fixture flow.
-  const note = useMutation({ mutationFn: (t: string) => submitNote(projectId, t), onSuccess: setAgentResult });
+  // Typed and recorded notes go to the capture agent (Claude + database); photos/files still use the fixture flow.
+  const note = useMutation({
+    mutationFn: (n: NoteInput) => ("text" in n ? submitNote(projectId, n.text) : submitAudio(projectId, n.rec.blob, `note.${n.rec.mimeType.includes("mp4") ? "m4a" : "webm"}`)),
+    onSuccess: showResult,
+  });
+  const sendNote = (n: NoteInput) => {
+    setLastNote(n);
+    note.mutate(n);
+  };
   const answers = useMutation({
     mutationFn: (a: { id: string; answer: string }[]) => {
       if (agentResult?.status !== "needs_input") throw new Error("No capture is waiting for answers");
       return answerQuestions(projectId, agentResult.thread_id, a);
     },
-    onSuccess: setAgentResult,
+    onSuccess: showResult,
+  });
+  // The speaker's last look at the extracted facts, just before anything is saved.
+  const review = useMutation({
+    mutationFn: (d: ReviewDecision) => {
+      if (agentResult?.status !== "needs_review") throw new Error("No capture is waiting for review");
+      return submitReview(projectId, agentResult.thread_id, d);
+    },
+    onSuccess: showResult,
   });
   const agentActive = !!agentResult || note.isPending || note.isError;
 
@@ -57,8 +86,7 @@ export default function CapturePage() {
     upload.mutate(input, { onSuccess: (j) => setJobId(j.id) });
   };
 
-  const submitRecording = (rec: Recording) =>
-    send({ type: "voice", file: rec.blob, filename: `note.${rec.mimeType.includes("mp4") ? "m4a" : "webm"}` });
+  const submitRecording = (rec: Recording) => sendNote({ rec });
 
   const reset = () => {
     setJobId(null);
@@ -68,9 +96,11 @@ export default function CapturePage() {
     setAgentResult(null);
     note.reset();
     answers.reset();
+    review.reset();
     upload.reset();
   };
 
+  const quoteText = agentResult && "transcript" in agentResult ? agentResult.transcript : lastNote && "text" in lastNote ? lastNote.text : "";
   const busy = note.isPending || upload.isPending || (!!jobId && !indexedSource && job.data?.status !== "failed");
   const reviewing = !!agentResult || !!indexedSource;
   const saved = !!done || agentResult?.status === "saved";
@@ -95,7 +125,7 @@ export default function CapturePage() {
             <p className="mt-1 text-sm text-hero-muted">Say what, where, when, and who was affected. Any language is fine.</p>
           </div>
 
-          <MicButton onSubmit={submitRecording} disabled={!!blocked || upload.isPending} disabledReason={blocked} />
+          <MicButton onSubmit={submitRecording} disabled={!!micBlocked || upload.isPending || note.isPending} disabledReason={micBlocked} />
 
           <div className="flex flex-wrap justify-center gap-2">
             <Button
@@ -141,8 +171,7 @@ export default function CapturePage() {
                 e.preventDefault();
                 if (!text.trim()) return;
                 if (file) return send({ type: file.type.startsWith("image/") ? "photo" : "diary", text, file, filename: file.name });
-                setLastText(text);
-                note.mutate(text);
+                sendNote({ text });
               }}
             >
               <Label htmlFor="note-text" className="sr-only">
@@ -209,12 +238,18 @@ export default function CapturePage() {
             note.isPending ? (
               <Working text="Reading your note and picking out the details… this can take up to a minute." />
             ) : note.isError ? (
-              <ErrorState error={note.error} onRetry={() => note.mutate(lastText)} />
+              <ErrorState error={note.error} onRetry={() => lastNote && note.mutate(lastNote)} />
             ) : agentResult ? (
               <div className="flex flex-col gap-3">
-                {lastText && <Quote text={lastText} />}
-                {answers.isError && <ErrorState error={answers.error} />}
-                <AgentReview result={agentResult} pending={answers.isPending} onAnswer={(a) => answers.mutate(a)} onReset={reset} />
+                {quoteText && agentResult.status !== "no_events" && <Quote text={quoteText} label={lastNote && "rec" in lastNote ? "What was heard" : "Your note"} />}
+                {(answers.isError || review.isError) && <ErrorState error={answers.error ?? review.error} />}
+                <AgentReview
+                  result={agentResult}
+                  pending={answers.isPending || review.isPending}
+                  onAnswer={(a) => answers.mutate(a)}
+                  onReview={(d) => review.mutate(d)}
+                  onReset={reset}
+                />
               </div>
             ) : null
           ) : done ? (
@@ -254,6 +289,8 @@ export default function CapturePage() {
           )}
         </section>
       </div>
+
+      <RecordingsList projectId={projectId} />
     </div>
   );
 }
@@ -269,10 +306,10 @@ function Working({ text }: { text: string }) {
   );
 }
 
-function Quote({ text }: { text: string }) {
+function Quote({ text, label }: { text: string; label: string }) {
   return (
     <blockquote className="rounded-2xl bg-muted/60 p-4 text-sm leading-relaxed">
-      <span className="mb-1 block text-xs font-semibold text-muted-foreground">Your note</span>
+      <span className="mb-1 block text-xs font-semibold text-muted-foreground">{label}</span>
       &ldquo;{text}&rdquo;
     </blockquote>
   );
