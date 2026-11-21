@@ -84,7 +84,7 @@ const SOURCE_TYPE_ALIASES: Record<string, string> = {
 };
 const sourceType = z.preprocess(
   (v) => (typeof v === "string" ? (SOURCE_TYPE_ALIASES[v] ?? v) : v),
-  z.enum(["schedule", "register", "project", "email", "minutes", "daily_report", "voice", "photo", "diary"]),
+  z.enum(["schedule", "register", "project", "email", "minutes", "daily_report", "voice", "photo", "diary", "text", "plan"]),
 );
 const jobStatus = z.enum(["uploaded", "extracting", "indexed", "failed"]);
 const ref = evidenceRef;

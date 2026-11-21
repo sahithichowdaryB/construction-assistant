@@ -72,4 +72,6 @@ export const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
   voice: "Voice note",
   photo: "Photo",
   diary: "Diary",
+  text: "Typed note",
+  plan: "Drawing",
 };

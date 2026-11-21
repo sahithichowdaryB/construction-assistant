@@ -49,7 +49,9 @@ export type SourceType =
   | "daily_report"
   | "voice"
   | "photo"
-  | "diary";
+  | "diary"
+  | "text"
+  | "plan";
 
 export type JobStatus = "uploaded" | "extracting" | "indexed" | "failed";
 
