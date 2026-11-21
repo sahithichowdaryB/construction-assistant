@@ -80,6 +80,9 @@ function writeSet(key: string, set: Set<string>) {
   }
 }
 
+/** A live "today so far" story is tracked apart from the finished recap of the same day. */
+export const seenKey = (recap: DayRecap) => (recap.live ? `${recap.work_date}:live` : recap.work_date);
+
 export const readSeen = () => readSet(SEEN_KEY);
 export function markSeen(workDate: string) {
   const s = readSet(SEEN_KEY);

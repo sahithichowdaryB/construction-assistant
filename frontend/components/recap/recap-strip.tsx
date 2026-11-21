@@ -3,7 +3,7 @@
 import { ChevronRight, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { dayLong, MOOD, readSeen } from "@/components/recap/recap-meta";
+import { dayLong, MOOD, readSeen, seenKey } from "@/components/recap/recap-meta";
 import { StoryRail } from "@/components/recap/story-rail";
 import { StoryViewer } from "@/components/recap/story-viewer";
 import { useRecaps } from "@/lib/queries";
@@ -18,7 +18,8 @@ const AUTO_KEY = "sitemate-recap-autoplayed";
 export function RecapStrip() {
   const recaps = useRecaps();
   const [open, setOpen] = useState<string | null>(null);
-  const latest = recaps.data?.[0];
+  // Auto-play and the headline use the newest finished day; the live "today" story is one tap away.
+  const latest = recaps.data?.find((r) => !r.live) ?? recaps.data?.[0];
 
   useEffect(() => {
     if (!latest) return;
@@ -28,7 +29,7 @@ export function RecapStrip() {
     } catch {
       /* storage blocked */
     }
-    if (played === latest.work_date || readSeen().has(latest.work_date)) return;
+    if (latest.live || played === latest.work_date || readSeen().has(seenKey(latest))) return;
     try {
       window.sessionStorage.setItem(AUTO_KEY, latest.work_date);
     } catch {

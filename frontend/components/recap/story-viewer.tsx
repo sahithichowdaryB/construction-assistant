@@ -2,7 +2,7 @@
 
 import { Bookmark, ChevronLeft, ChevronRight, HardHat, Pause, Play, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CHAPTERS, cardKey, chapterCount, dayShort, markSeen, readSaved, toggleSaved } from "@/components/recap/recap-meta";
+import { CHAPTERS, cardKey, chapterCount, dayShort, markSeen, readSaved, seenKey, toggleSaved } from "@/components/recap/recap-meta";
 import { StoryCard } from "@/components/recap/story-card";
 import type { DayRecap } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,7 @@ export function StoryViewer({
   }, []);
 
   useEffect(() => {
-    if (day) markSeen(day.work_date);
+    if (day) markSeen(seenKey(day));
   }, [day]);
 
   const go = useCallback(
@@ -127,8 +127,13 @@ export function StoryViewer({
                 i === dayIdx ? "bg-white text-[#111214]" : "bg-white/8 text-white/70 hover:bg-white/15",
               )}
             >
-              {dayShort(d.work_date)}
-              {i === days.length - 1 ? " · latest" : ""}
+              {d.live ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-1.5 animate-pulse rounded-full bg-destructive" aria-hidden /> Today · live
+                </span>
+              ) : (
+                dayShort(d.work_date)
+              )}
             </button>
           ))}
         </div>

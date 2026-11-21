@@ -495,6 +495,7 @@ export const recapsSchema = z.array(
   z.object({
     work_date: z.string(),
     available_at: z.string(),
+    live: z.boolean().optional(),
     mood: z.enum(["on_plan", "minor", "disrupted", "weather"]),
     mood_label: z.string(),
     short_label: z.string(),

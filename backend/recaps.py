@@ -64,8 +64,12 @@ def _item_card(row, chapter, tone, kicker, at, tz, card_id):
             "refs": [_ref(row)], "action": {"label": "Open action items", "href": "/actions"}}
 
 
-def build_recaps(rows, tz, cutoff):
-    """Pure function: action item rows -> DayRecap list (newest first). Rows carry UTC-aware datetimes."""
+def build_recaps(rows, tz, cutoff, include_today=True):
+    """Pure function: action item rows -> DayRecap list (newest first). Rows carry UTC-aware datetimes.
+
+    Finished days are published at 06:00 the next morning. With include_today, the current day comes
+    first as a live recap ("live": true) covering everything up to `cutoff`.
+    """
     local_day = lambda dt: dt.astimezone(tz).date()  # noqa: E731
     raised, done, overdue = defaultdict(list), defaultdict(list), defaultdict(list)
     for r in rows:
@@ -76,22 +80,28 @@ def build_recaps(rows, tz, cutoff):
         if due and due <= cutoff and not (r["completed_at"] and r["completed_at"] <= due):
             overdue[local_day(due)].append(r)
 
+    def open_at(moment):
+        return sorted((r for r in rows if r["available_at"] < moment
+                       and not (r["completed_at"] and r["completed_at"] < moment)),
+                      key=lambda r: (r["due_at"] is None, r["due_at"] or moment))
+
     recaps = []
+    if include_today:
+        # Today is still happening: a live story of what has happened so far, rebuilt on every read.
+        today = local_day(cutoff)
+        recaps.append(_day_recap(today, cutoff, raised.get(today, []), done.get(today, []),
+                                 overdue.get(today, []), open_at(cutoff), cutoff, tz, live=True))
     for day in sorted(set(raised) | set(done) | set(overdue), reverse=True):
         publish = datetime.combine(day + timedelta(days=1), PUBLISH_AT, tz)
         if publish > cutoff:
             continue
         end_of_day = datetime.combine(day + timedelta(days=1), time(0, 0), tz)
-        open_items = sorted(
-            (r for r in rows if r["available_at"] < end_of_day
-             and not (r["completed_at"] and r["completed_at"] < end_of_day)),
-            key=lambda r: (r["due_at"] is None, r["due_at"] or end_of_day))
         new, closed, late = raised.get(day, []), done.get(day, []), overdue.get(day, [])
-        recaps.append(_day_recap(day, publish, new, closed, late, open_items, end_of_day, tz))
+        recaps.append(_day_recap(day, publish, new, closed, late, open_at(end_of_day), end_of_day, tz))
     return recaps
 
 
-def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz):
+def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz, live=False):
     if len(late) >= 2:
         mood, mood_label, short = "disrupted", f"{_plural(len(late), 'item')} overdue", f"{len(late)} overdue"
     elif late:
@@ -100,10 +110,15 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
         mood, mood_label = "on_plan", "On track"
         short = f"{len(closed)} done" if closed else f"{len(new)} new"
 
+    if live:
+        short = "so far"
+        mood_label = "Today so far · " + ("on track" if mood == "on_plan" else mood_label)
     if late:
         headline = f"{_plural(len(late), 'action')} went overdue"
     elif closed:
         headline = f"{_plural(len(closed), 'action')} closed"
+    elif live and not new:
+        headline = "Nothing new yet today"
     else:
         headline = f"{_plural(len(new), 'new action')} from the records"
 
@@ -114,7 +129,8 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
             day_refs.append(_ref(r))
     overview = {
         "id": f"{day}-overview", "chapter": "overview", "title": headline,
-        "kicker": f"{WEEKDAY[day.weekday()]} {day.day} {MONTH[day.month - 1]}",
+        "kicker": f"{WEEKDAY[day.weekday()]} {day.day} {MONTH[day.month - 1]}"
+                  + (f" · so far, up to {end_of_day.astimezone(tz):%H:%M}" if live else ""),
         "tone": "bad" if len(late) >= 2 else "warn" if late else "good", "cover": "meeting",
         "stats": [
             {"value": str(len(new)), "label": "New actions", "tone": "info"},
@@ -136,8 +152,8 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
         carried = open_items[:5]
         cards.append({
             "id": f"{day}-today", "chapter": "today",
-            "title": f"{_plural(len(open_items), 'action')} still open",
-            "kicker": "Carried into the next day", "tone": "neutral",
+            "title": f"{_plural(len(open_items), 'action')} " + ("open right now" if live else "still open"),
+            "kicker": "Still to do today" if live else "Carried into the next day", "tone": "neutral",
             "done": [(f"{_owner(r)}: " if _owner(r) else "") + _title(r["description"], 70)
                      + (" (overdue)" if r["due_at"] and r["due_at"] < end_of_day else "") for r in carried],
             "refs": [_ref(r) for r in carried],
@@ -146,7 +162,7 @@ def _day_recap(day: date, publish, new, closed, late, open_items, end_of_day, tz
 
     kinds = [r["source_type"] for r in new]
     return {
-        "work_date": day.isoformat(), "available_at": publish.isoformat(), "mood": mood,
+        "work_date": day.isoformat(), "available_at": publish.isoformat(), "live": live, "mood": mood,
         "mood_label": mood_label, "short_label": short, "cover": "meeting",
         "inputs": {"voice": kinds.count("voice"), "photo": kinds.count("photo"),
                    "document": sum(k in DOC_KINDS for k in kinds), "report": sum(k in REPORT_KINDS for k in kinds)},

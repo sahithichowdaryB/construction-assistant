@@ -740,6 +740,8 @@ export interface RecapCard {
 export interface DayRecap {
   work_date: string; // project-local YYYY-MM-DD
   available_at: IsoInstant;
+  /** The current day, still in progress: rebuilt on every read ("Today so far"). */
+  live?: boolean;
   mood: RecapMood;
   mood_label: string;
   short_label: string;
