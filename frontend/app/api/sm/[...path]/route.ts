@@ -52,7 +52,8 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       cache: "no-store",
       // POST may run the LLM (reasoning, uploads, capture chains several calls); reranked search and PATCH are slower than plain reads.
       signal: AbortSignal.timeout(
-        method === "POST" ? 150_000 : method === "PATCH" || joined.endsWith("/search") ? 60_000 : 15_000,
+        method === "POST" ? 150_000 : method === "PATCH" || joined.endsWith("/search") || /\/(performance|daily-evaluations)(\/|$)/.test(joined)
+          ? 60_000 : 15_000,
       ),
     });
   } catch {

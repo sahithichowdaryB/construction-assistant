@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
-BASE = "http://127.0.0.1:8000"
+BASE = os.environ.get("SITEMATE_API", "http://127.0.0.1:8000")
 
 
 def fetch(path, *, authorize=True):

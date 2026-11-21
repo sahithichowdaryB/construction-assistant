@@ -1,10 +1,12 @@
 """Shared request dependencies: database connection, project membership and time cutoffs."""
 
 import hashlib
+import time
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from database import engine_for
 
@@ -13,8 +15,21 @@ WRITER_ROLES = ("contributor", "manager", "approver")
 
 
 def connection():
-    with engine_for().connect() as conn:
+    # The shared Supabase session pooler refuses connections when its client limit is reached; other clients free
+    # theirs quickly, so a short retry turns most of those refusals into a slightly slower answer, not a 500.
+    engine = engine_for()
+    for attempt in range(4):
+        try:
+            conn = engine.connect()
+            break
+        except OperationalError:
+            if attempt == 3:
+                raise
+            time.sleep(0.4 * (attempt + 1))
+    try:
         yield conn
+    finally:
+        conn.close()
 
 
 def current_member(project_id: str, credentials: HTTPAuthorizationCredentials = Depends(bearer),

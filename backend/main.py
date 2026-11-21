@@ -58,7 +58,10 @@ def check_incident_id(incident_id: str):
 @app.get("/projects/{project_id}/alerts", dependencies=[Depends(check_member)])
 def alerts(project_id: str, as_of: datetime | None = None, status: str | None = None, kind: str | None = None,
            conn=Depends(connection)):
-    """Shortfall alerts and incident alerts. `kind=incident` / `kind=shortfall`, and `status`, narrow the list."""
+    """Shortfall alerts and incident alerts. `kind=incident` / `kind=shortfall`, and `status`, narrow the list.
+
+    Performance alerts (late_start, equipment_idle, missing_report, quality_hold) are listed with `kind=performance`,
+    their own kind, or `kind=all`; the default list keeps its previous content."""
     check_cutoff(as_of)
     rows = conn.execute(text("""
         SELECT a.id, a.activity_code, a.kind, a.checkpoint_at, a.status, a.title, a.assigned_to,
@@ -76,9 +79,11 @@ def alerts(project_id: str, as_of: datetime | None = None, status: str | None = 
         LEFT JOIN sitemate.incidents i ON (i.project_id, i.id) = (a.project_id, a.incident_id)
         WHERE a.project_id=:project
           AND (CAST(:status AS text) IS NULL OR a.status = CAST(:status AS text))
-          AND (CAST(:kind AS text) IS NULL
-               OR (CAST(:kind AS text) = 'incident' AND a.kind = 'incident')
-               OR (CAST(:kind AS text) = 'shortfall' AND a.kind <> 'incident'))
+          AND (((CAST(:kind AS text) IS NULL OR CAST(:kind AS text) = 'shortfall') AND a.kind = 'shortfall')
+               OR ((CAST(:kind AS text) IS NULL OR CAST(:kind AS text) = 'incident') AND a.kind = 'incident')
+               OR (CAST(:kind AS text) = 'performance' AND a.kind NOT IN ('shortfall', 'incident'))
+               OR CAST(:kind AS text) = 'all'
+               OR (CAST(:kind AS text) NOT IN ('shortfall', 'incident', 'performance', 'all') AND a.kind = CAST(:kind AS text)))
         ORDER BY a.checkpoint_at DESC, a.activity_code, a.id
     """), {"project": project_id, "cutoff": as_of, "status": status, "kind": kind})
     return [dict(row) for row in rows.mappings()]
@@ -290,6 +295,8 @@ def incident(project_id: str, incident_id: str, as_of: datetime | None = None, c
 
 from capture import router as capture_router  # noqa: E402
 from ops import router as ops_router  # noqa: E402  (manager actions: alerts, actions, incident corrections)
+from performance.routes import router as performance_router  # noqa: E402  (baselines, daily and overall evaluation)
 
 app.include_router(ops_router)
 app.include_router(capture_router)
+app.include_router(performance_router)

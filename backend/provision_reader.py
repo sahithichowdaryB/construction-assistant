@@ -46,6 +46,15 @@ def main():
                              END IF;
                            END $$""")
             cur.execute("GRANT SELECT ON sitemate.drafts, sitemate.draft_versions, sitemate.reviews TO sitemate_reader")
+            # Performance evaluation (migration 0009_performance), read-only like everything else here.
+            cur.execute("""DO $$ BEGIN
+                             IF to_regclass('sitemate.plan_baselines') IS NOT NULL THEN
+                               GRANT SELECT ON sitemate.plan_baselines, sitemate.activity_plan, sitemate.milestones,
+                                 sitemate.performance_settings, sitemate.daily_evaluations,
+                                 sitemate.daily_activity_results, sitemate.performance_ledger,
+                                 sitemate.performance_snapshots TO sitemate_reader;
+                             END IF;
+                           END $$""")
             # Document search calls pg_trgm functions that live in Supabase's `extensions` schema.
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")
