@@ -96,6 +96,13 @@ const titles = {
   E04: "Email: packing slip footer for review",
   V10: "Voice note V10: Foundations Zone B pour",
   R12: "Daily site report R12, 12 Nov",
+  V11: "Voice note: west wing pump inspection hold",
+  E05: "Email: pump inspection register checked",
+  V12: "Voice note: Zone B spacers missing",
+  E06: "Email: estimated arrival for Zone B spacers",
+  G13: "Gate diary: spacer delivery docket",
+  E07: "Email: gate docket confirmed",
+  V13: "Voice note: survey tablet stopped saving",
 };
 const mimeOf = (p) =>
   ({
@@ -108,7 +115,7 @@ const mimeOf = (p) =>
     jpg: "image/jpeg",
     txt: "text/plain",
   })[p.split(".").pop()];
-const pages = { R8: 1, R9: 1, R10: 2, R11: 1, R12: 1 };
+const pages = { R8: 1, R9: 1, R10: 2, R11: 1, R12: 1, G13: 1 };
 const sources = index.records.map((r) => ({
   id: r.id,
   project_id: "RIV",
@@ -292,6 +299,14 @@ addPassage("E01", "body", body("E01-service.eml"));
 addPassage("E02", "body", body("E02-handover.eml"));
 addPassage("E03", "body", body("E03-delivery.eml"));
 addPassage("E04", "body", body("E04-footer.eml"));
+// Match the locators returned by the live incidents API while evidence lookup uses fixtures.
+for (const id of ["V11", "V12", "V13"]) {
+  transcript(id).split(/(?<=[.!?])\s+/).forEach((sentence, i) => addPassage(id, `seg:${i + 1}`, sentence));
+}
+for (const id of ["E05", "E06", "E07"]) {
+  addPassage(id, "para:1", body(`${id}.eml`).replace(/=\r?\n/g, ""));
+}
+addPassage("G13", "page:1", "Truck checked in at the site gate at 10:45. No reason supplied by the driver.", 1);
 addPassage("D10", "handover", readFileSync(join(pack, "uploads/diary/2026-11-10.txt"), "utf8").trim().split(/\r?\n/).slice(2).join(" "));
 addPassage("M07", "discussion", "The Zone B excavation shift starts tomorrow. Access to the north haul route is available from 07:00.");
 addPassage("M07", "actions", "GroundWorks will provide Sam with a backup excavator plan by 10 November at 12:00. CraneCo will confirm the TC-01 inspection booking by 12 November at 12:00.");

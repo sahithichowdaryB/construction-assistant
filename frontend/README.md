@@ -50,9 +50,11 @@ The source of truth is `lib/endpoints.ts`. Settings lists the same table at runt
 | `GET /projects/{pid}/alerts?as_of` | **Real** |
 | `GET /projects/{pid}/activities/{code}/progress?date&as_of` | **Real** |
 | `GET /projects/{pid}/sources/{sid}/file` | **Real** (demo pack fallback in fixture mode) |
-| Documents and search: `GET /sources?as_of`, `GET /sources/{id}` (with passages), `GET`/`POST /sources/{id}/summary`, `GET /evidence/{passage_id}`, `GET /sources/{id}/readings`, `POST /sources` (Documents upload), `GET /jobs/{id}` (document jobs), `GET /search`, `GET`/`PATCH /action-items` | **Real** (`backend/documents`) |
+| Documents and search: `GET /sources?as_of`, `GET /sources/{id}` (with passages), `GET`/`POST /sources/{id}/summary`, `GET /evidence/{passage_id}`, `GET /sources/{id}/readings`, `GET /sources/{id}/preview`, `GET /sources/{id}/storage`, `POST /sources` (Documents upload), `GET /jobs/{id}` (document jobs), `GET /search`, `GET`/`PATCH /action-items` | **Real** (`backend/documents`) |
+| `GET /projects/{pid}/incidents?as_of`, `GET /projects/{pid}/incidents/{id}?as_of` | **Real** (built from `incidents`, `capture_facts`, `fact_evidence`) |
+| `GET /projects/{pid}/incidents/{id}/reasoning?as_of`, `POST …/reasoning` | **Real only, no fixtures**. The cause-and-evidence agent (see `../ai-agent/README.md`). Needs `NEXT_PUBLIC_USE_FIXTURES=false` |
 | `GET /today`, `POST /ask`, `POST /sources` + `GET /jobs/{id}` from Capture (typed or voice notes), `GET /sources/{id}/proposals`, `POST /sources/{id}/confirm`, `POST /drafts`, `GET`/`PATCH /drafts/{id}`, `POST /drafts/{id}/versions/{v}/review`, `POST …/export` | Planned. Fixtures |
-| `GET /projects/{pid}`, `GET /activities`, `GET /incidents?as_of`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
+| `GET /projects/{pid}`, `GET /activities`, `GET /alerts/{id}/context`, `POST /alerts/{id}/dismiss`, `GET /drafts?as_of` | Proposed by the frontend. Fixtures |
 
 Documents pages in live mode: **Documents** (upload with job status and review notes), **Document detail** (original,
 extracted report quantities, cited summary with provisional values and quoted external text, regenerate, passages),
@@ -71,6 +73,15 @@ Capture confirmations are not persisted.
 2. Set `implemented: true` for its key in `lib/endpoints.ts`.
 3. In `lib/api.ts`, give its function a `servedFromFixtures(key)` branch that calls `http(path, schema)`, like `getAlerts`, and add a zod schema in `lib/schemas.ts`.
 4. Run with `NEXT_PUBLIC_USE_FIXTURES=false`. Pages and hooks don't change; query keys already include project id and `as_of`.
+
+## Cause & evidence panel
+
+`components/incident-reasoning.tsx` renders on `/incidents/[id]`: status, confidence meter, the agent's reasoning, quotes from
+the supervisor-side records that state the cause (role chip, source, time stated), outside-party claims shown separately as
+context, candidate causes with the code's score next to the LLM's choice, and what is still unknown. "Analyse cause" /
+"Re-run reasoning" (site manager or approver) calls `POST …/reasoning`, which runs the agent on the backend (database + LLM), then refetches. With `NEXT_PUBLIC_USE_FIXTURES=false` the
+Riverside incident id is a UUID from the database. To browse the dummy agent cases set `NEXT_PUBLIC_PROJECT_ID=TST` and use the
+`TST_DEMO_TOKEN` value as `SITEMATE_API_TOKEN`.
 
 ## The as-of clock
 

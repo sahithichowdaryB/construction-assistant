@@ -495,3 +495,66 @@ export interface HealthStatus {
   database: string | null;
   detail: string | null;
 }
+
+// ---------- incident cause analysis (ai-agent) ----------
+export type AnalysisStatus = "established" | "probable" | "unconfirmed" | "undetermined" | "needs_review";
+export type AuthorRole =
+  | "site_supervisor"
+  | "foreman"
+  | "signed_report"
+  | "contractor_internal"
+  | "external"
+  | "client"
+  | "system"
+  | "unknown";
+
+export interface AnalysisEvidence {
+  source_id: string;
+  locator: string;
+  quote: string;
+  author_role: AuthorRole;
+  stance: "states_cause" | "speculates" | "context_only" | "contradicts";
+  weight: number;
+  stated_at: IsoInstant | null;
+  hypothesis_id?: string | null;
+}
+
+export interface AnalysisHypothesis {
+  id: string;
+  statement: string;
+  level: "proximate" | "root";
+  /** Advisory score computed by code from who said it */
+  score: number;
+  /** True for the cause the LLM chose */
+  llm_selected: boolean;
+}
+
+export interface AnalysisScoreCard {
+  hypothesis_id: string;
+  score: number;
+  supervisor_backed: boolean;
+  external_only: boolean;
+  independent_sources: number;
+  contradicted_by_supervisor: boolean;
+  flags: string[];
+}
+
+export interface IncidentReasoning {
+  id: string;
+  version: number;
+  as_of: IsoInstant;
+  status: AnalysisStatus;
+  /** The LLM's final confidence (0-1) that headline_cause is the real cause */
+  confidence: number;
+  headline_cause: string | null;
+  reasoning: string;
+  hypotheses: AnalysisHypothesis[];
+  score_cards: AnalysisScoreCard[];
+  factual_evidence: AnalysisEvidence[];
+  external_claims: AnalysisEvidence[];
+  gaps: string[];
+  guardrail_flags: string[];
+  model: string;
+  created_at: IsoInstant;
+  stale?: boolean;
+}

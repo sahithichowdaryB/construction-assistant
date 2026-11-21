@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CitationList } from "@/components/citation-chip";
+import { IncidentReasoning } from "@/components/incident-reasoning";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Timeline, TimelineStages } from "@/components/timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,6 +70,9 @@ export default function IncidentDetailPage() {
           </CardHeader>
           <CardContent>{i.timeline.length ? <Timeline events={i.timeline} /> : <EmptyState title="No events yet" />}</CardContent>
         </Card>
+      </div>
+      <div className="mt-4">
+        <IncidentReasoning incidentId={i.id} />
       </div>
     </>
   );

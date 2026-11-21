@@ -42,8 +42,10 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       headers,
       body: method === "GET" ? undefined : await req.arrayBuffer(),
       cache: "no-store",
-      // Uploads and reranked search can take longer than plain reads.
-      signal: AbortSignal.timeout(method === "GET" && !joined.endsWith("/search") ? 15_000 : 60_000),
+      // POST may run the LLM (reasoning, uploads); reranked search and PATCH are slower than plain reads.
+      signal: AbortSignal.timeout(
+        method === "POST" ? 120_000 : method === "PATCH" || joined.endsWith("/search") ? 60_000 : 15_000,
+      ),
     });
   } catch {
     return Response.json(

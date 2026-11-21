@@ -23,12 +23,18 @@ def main():
             cur.execute("""GRANT SELECT ON sitemate.project_members, sitemate.projects,
                            sitemate.activities, sitemate.sources, sitemate.source_passages,
                            sitemate.plan_targets, sitemate.observations,
-                           sitemate.alerts, sitemate.alert_revisions, sitemate.contractors,
-                           sitemate.equipment, sitemate.equipment_assignments,
-                           sitemate.activity_dependencies, sitemate.ingestion_jobs,
-                           sitemate.document_summaries, sitemate.action_items,
-                           sitemate.diary_entries TO sitemate_reader""")
-            # Search calls pg_trgm functions that live in Supabase's `extensions` schema.
+                           sitemate.alerts, sitemate.alert_revisions,
+                           sitemate.incidents, sitemate.capture_facts, sitemate.fact_evidence,
+                           sitemate.diary_entries, sitemate.contractors, sitemate.equipment,
+                           sitemate.equipment_assignments, sitemate.business_rules,
+                           sitemate.incident_analyses, sitemate.analysis_hypotheses,
+                           sitemate.analysis_evidence, sitemate.activity_dependencies,
+                           sitemate.ingestion_jobs, sitemate.document_summaries,
+                           sitemate.action_items TO sitemate_reader""")
+            # The analyze route saves immutable analysis versions; nothing else is writable.
+            cur.execute("""GRANT INSERT ON sitemate.incident_analyses, sitemate.analysis_hypotheses,
+                           sitemate.analysis_evidence TO sitemate_reader""")
+            # Document search calls pg_trgm functions that live in Supabase's `extensions` schema.
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")
 

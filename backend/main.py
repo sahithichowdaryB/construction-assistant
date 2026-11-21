@@ -1,5 +1,7 @@
+import sys
 from datetime import date as WorkDate, datetime
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,14 +10,26 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import engine_for
-from deps import check_cutoff, check_member, connection
+from deps import check_cutoff, check_member, connection, current_member
 from documents import storage
 from documents.routes import mime_for, router as documents_router
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ai-agent"))
+from app import persist as analysis_store  # noqa: E402  (ai-agent/app: the incident evidence agent)
+from app.llm import LLMError, get_llm  # noqa: E402
+from app.orchestrator import IncidentNotFound, analyze_incident, input_digest  # noqa: E402
+from app.tools import SqlEvidenceStore, default_as_of  # noqa: E402
 
 app = FastAPI(title="SiteMate API")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
                    allow_methods=["GET", "POST", "PATCH"], allow_headers=["Authorization", "Content-Type"])
 app.include_router(documents_router)
+
+
+def check_manager(member=Depends(current_member)):
+    if member["role"] not in ("manager", "approver"):
+        raise HTTPException(403, "A manager or approver role is required")
+    return member
 
 
 @app.get("/health/db")
@@ -26,6 +40,13 @@ def health():
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
     return {"database": "connected"}
+
+
+def check_incident_id(incident_id: str):
+    try:
+        UUID(incident_id)
+    except ValueError:
+        raise HTTPException(404, "Incident not found") from None
 
 
 @app.get("/projects/{project_id}/alerts", dependencies=[Depends(check_member)])
@@ -117,3 +138,104 @@ def original(project_id: str, source_id: str, as_of: datetime | None = None, dow
     name = Path(row.filename or path.name).name
     return FileResponse(path, media_type=media, filename=name,
                         content_disposition_type="attachment" if download else "inline")
+
+
+@app.post("/projects/{project_id}/incidents/{incident_id}/reasoning", dependencies=[Depends(check_manager)])
+def run_reasoning(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    """Find and cite what the records say caused an incident, with a confidence score (new immutable version)."""
+    check_cutoff(as_of)
+    check_incident_id(incident_id)
+    when = as_of or default_as_of()
+    try:
+        llm = get_llm()
+        result = analyze_incident(SqlEvidenceStore(conn, project_id, when), llm, incident_id, when)
+    except IncidentNotFound:
+        raise HTTPException(404, "Incident not found at this time") from None
+    except LLMError as exc:
+        raise HTTPException(502, f"Reasoning model unavailable: {exc}") from None
+    saved = analysis_store.save_analysis(conn, project_id, result)
+    return {**saved, **result.model_dump(mode="json")}
+
+
+@app.get("/projects/{project_id}/incidents/{incident_id}/reasoning", dependencies=[Depends(check_member)])
+def latest_reasoning(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    check_cutoff(as_of)
+    check_incident_id(incident_id)
+    found = analysis_store.load_analysis(conn, project_id, incident_id, as_of)
+    if found is None:
+        raise HTTPException(404, "No reasoning for this incident yet")
+    # stale = the records available at this time differ from what the saved reasoning was based on
+    store = SqlEvidenceStore(conn, project_id, as_of or default_as_of())
+    incident = store.get_incident(incident_id)
+    saved_digest = found.pop("input_digest")
+    found["stale"] = bool(incident) and input_digest(incident_id, store.candidate_passages(incident)) != saved_digest
+    return found
+
+
+def incident_rows(conn, project_id: str, as_of, incident_id: str | None = None):
+    """Incidents in the shape the web app expects, derived from incidents + capture_facts + evidence links."""
+    params = {"p": project_id, "cutoff": as_of, "i": incident_id}
+    rows = conn.execute(text("""
+        SELECT i.id::text AS id, i.activity_code, i.kind, i.title, i.occurred_at, i.resolved_at,
+               (i.occurred_at AT TIME ZONE p.timezone)::date AS local_day
+        FROM sitemate.incidents i JOIN sitemate.projects p ON p.id=i.project_id
+        WHERE i.project_id=:p AND (CAST(:i AS uuid) IS NULL OR i.id=CAST(:i AS uuid))
+          AND i.occurred_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
+        ORDER BY i.occurred_at DESC, i.id
+    """), params).mappings().all()
+    if not rows:
+        return []
+    facts = conn.execute(text("""
+        SELECT cf.incident_id::text AS incident_id, cf.field_name, cf.value, fe.source_id, fe.locator, s.available_at
+        FROM sitemate.capture_facts cf
+        JOIN sitemate.fact_evidence fe ON (fe.project_id,fe.fact_id)=(cf.project_id,cf.id)
+        JOIN sitemate.sources s ON (s.project_id,s.id)=(fe.project_id,fe.source_id)
+        WHERE cf.project_id=:p AND cf.incident_id IS NOT NULL AND cf.review_status<>'rejected'
+          AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
+        ORDER BY s.available_at, fe.source_id, fe.locator
+    """), params).mappings().all()
+    out = []
+    for r in rows:
+        mine = [f for f in facts if f["incident_id"] == r["id"]]
+        refs, seen = [], set()
+        for f in mine:
+            if (f["source_id"], f["locator"]) not in seen:
+                seen.add((f["source_id"], f["locator"]))
+                refs.append({"source_id": f["source_id"], "locator": f["locator"],
+                             "passage_id": f"{f['source_id']}:{f['locator']}"})
+        workers = [int(f["value"]["count"]) for f in mine if f["field_name"] == "workers_affected"]
+        reported = mine[0]["available_at"] if mine else r["occurred_at"]
+        equipment = conn.execute(text("""
+            SELECT equipment_id FROM sitemate.equipment_assignments
+            WHERE project_id=:p AND activity_code=:a AND work_date=:d
+        """), {"p": project_id, "a": r["activity_code"], "d": r["local_day"]}).scalars().all()
+        resolved = r["resolved_at"] if r["resolved_at"] and (as_of is None or r["resolved_at"] <= as_of) else None
+        timeline = [{"kind": "reported" if n == 0 else "evidence", "at": f["available_at"],
+                     "label": f"{f['source_id']} {f['locator']}", "refs": [
+                         {"source_id": f["source_id"], "locator": f["locator"],
+                          "passage_id": f"{f['source_id']}:{f['locator']}"}]}
+                    for n, f in enumerate(mine)]
+        out.append({"id": r["id"], "activity_code": r["activity_code"],
+                    "type": "equipment_breakdown" if r["kind"] == "equipment_failure" else "other",
+                    "title": r["title"], "occurred_at": r["occurred_at"], "reported_at": reported,
+                    "resolved_at": resolved, "status": "resolved" if resolved else "open",
+                    "affected_workers": max(workers) if workers else None,
+                    "equipment_id": equipment[0] if len(equipment) == 1 else None,
+                    "refs": refs, "timeline": timeline})
+    return out
+
+
+@app.get("/projects/{project_id}/incidents", dependencies=[Depends(check_member)])
+def incidents(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    check_cutoff(as_of)
+    return incident_rows(conn, project_id, as_of)
+
+
+@app.get("/projects/{project_id}/incidents/{incident_id}", dependencies=[Depends(check_member)])
+def incident(project_id: str, incident_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    check_cutoff(as_of)
+    check_incident_id(incident_id)
+    found = incident_rows(conn, project_id, as_of, incident_id)
+    if not found:
+        raise HTTPException(404, "Incident not found at this time")
+    return found[0]

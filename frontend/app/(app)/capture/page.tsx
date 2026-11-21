@@ -1,7 +1,9 @@
 "use client";
 
 import { CheckCircle2, Keyboard, Paperclip, RefreshCw, Send } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { AgentReview } from "@/components/agent-review";
 import { JobStatusBadge } from "@/components/badges";
 import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
@@ -11,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { answerQuestions, submitNote, type AgentResult } from "@/lib/agent";
 import type { UploadInput } from "@/lib/api";
 import { useJob, useProposals, useUpload } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
@@ -22,7 +25,7 @@ const DEMO_NOTES = [
 ];
 
 export default function CapturePage() {
-  const { role } = useApp();
+  const { role, projectId } = useApp();
   const blocked = denyReason(role, "capture");
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
@@ -30,6 +33,19 @@ export default function CapturePage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [lastInput, setLastInput] = useState<UploadInput | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
+  const [lastText, setLastText] = useState("");
+
+  // Typed notes go to the capture agent (Claude + database); photos/files still use the fixture flow.
+  const note = useMutation({ mutationFn: (t: string) => submitNote(projectId, t), onSuccess: setAgentResult });
+  const answers = useMutation({
+    mutationFn: (a: { id: string; answer: string }[]) => {
+      if (agentResult?.status !== "needs_input") throw new Error("No capture is waiting for answers");
+      return answerQuestions(projectId, agentResult.thread_id, a);
+    },
+    onSuccess: setAgentResult,
+  });
+  const agentActive = !!agentResult || note.isPending || note.isError;
 
   const upload = useUpload();
   const job = useJob(jobId);
@@ -50,6 +66,9 @@ export default function CapturePage() {
     setText("");
     setFile(null);
     setDone(null);
+    setAgentResult(null);
+    note.reset();
+    answers.reset();
     upload.reset();
   };
 
@@ -96,7 +115,10 @@ export default function CapturePage() {
                 className="flex flex-col gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (text.trim()) send({ type: "voice", text, file, filename: file?.name });
+                  if (!text.trim()) return;
+                  if (file) return send({ type: "voice", text, file, filename: file.name });
+                  setLastText(text);
+                  note.mutate(text);
                 }}
               >
                 <Label htmlFor="note-text">Site note</Label>
@@ -109,7 +131,7 @@ export default function CapturePage() {
                     </Button>
                   ))}
                 </div>
-                <Button type="submit" size="touch" disabled={!!blocked || !text.trim() || upload.isPending} className="self-end">
+                <Button type="submit" size="touch" disabled={!!blocked || !text.trim() || upload.isPending || note.isPending} className="self-end">
                   <Send aria-hidden /> Submit note
                 </Button>
               </form>
@@ -128,7 +150,21 @@ export default function CapturePage() {
             {job.data && <JobStatusBadge status={job.data.status} />}
           </CardHeader>
           <CardContent>
-            {done ? (
+            {agentActive ? (
+              note.isPending ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-muted-foreground">Reading your note and extracting fields… this can take up to a minute.</p>
+                  <LoadingSkeleton rows={3} />
+                </div>
+              ) : note.isError ? (
+                <ErrorState error={note.error} onRetry={() => note.mutate(lastText)} />
+              ) : agentResult ? (
+                <div className="flex flex-col gap-3">
+                  {answers.isError && <ErrorState error={answers.error} />}
+                  <AgentReview result={agentResult} pending={answers.isPending} onAnswer={(a) => answers.mutate(a)} onReset={reset} />
+                </div>
+              ) : null
+            ) : done ? (
               <EmptyState
                 icon={<CheckCircle2 className="text-emerald-600" />}
                 title="Captured"

@@ -3,7 +3,7 @@
  * servedFromFixtures() in lib/endpoints.ts. Real calls go to the server-side proxy at /api/sm/*,
  * which attaches the bearer token; the browser never talks to FastAPI directly.
  */
-import type { z } from "zod";
+import { z } from "zod";
 import { servedFromFixtures, type EndpointKey } from "@/lib/endpoints";
 import * as fx from "@/lib/fixture-server";
 import {
@@ -12,12 +12,15 @@ import {
   alertsSchema,
   evidenceSchema,
   healthSchema,
+  incidentReasoningSchema,
+  incidentSchema,
+  incidentsSchema,
+  previewSchema,
   progressSchema,
   readingsSchema,
   searchSchema,
   sourceDetailSchema,
   sourcesSchema,
-  previewSchema,
   storageSchema,
   summarySchema,
   uploadJobSchema,
@@ -34,6 +37,7 @@ import type {
   Gap,
   HealthStatus,
   Incident,
+  IncidentReasoning,
   NoticeType,
   Passage,
   Progress,
@@ -163,13 +167,30 @@ export async function dismissAlert(pid: string, id: string, reason: string, asOf
 
 // ---------- incidents ----------
 export async function getIncidents(pid: string, asOf: string): Promise<Incident[]> {
-  void pid;
-  return fixture("incidents", () => fx.fxIncidents(asOf));
+  if (servedFromFixtures("incidents")) return fixture("incidents", () => fx.fxIncidents(asOf));
+  return http(`/projects/${encodeURIComponent(pid)}/incidents${qs({ as_of: asOf })}`, incidentsSchema);
 }
 
 export async function getIncident(pid: string, id: string, asOf: string): Promise<Incident> {
-  void pid;
-  return fixture("incidents", () => fx.fxIncident(id, asOf));
+  if (servedFromFixtures("incident")) return fixture("incident", () => fx.fxIncident(id, asOf));
+  return http(`/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}${qs({ as_of: asOf })}`, incidentSchema);
+}
+
+/** Latest cause reasoning for an incident (404 until the agent has run, or nothing was known at as_of). */
+export async function getIncidentReasoning(pid: string, id: string, asOf: string): Promise<IncidentReasoning> {
+  return http(
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
+    incidentReasoningSchema,
+  );
+}
+
+/** Runs the evidence agent now (database read + LLM calls) and stores the result. Callers refetch afterwards. */
+export async function runIncidentReasoning(pid: string, id: string, asOf: string) {
+  return http(
+    `/projects/${encodeURIComponent(pid)}/incidents/${encodeURIComponent(id)}/reasoning${qs({ as_of: asOf })}`,
+    z.object({ version: z.number(), reused: z.boolean() }).passthrough(),
+    { method: "POST" },
+  );
 }
 
 // ---------- documents & evidence ----------

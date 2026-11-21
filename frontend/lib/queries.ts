@@ -18,6 +18,7 @@ export const keys = {
   progress: (pid: string, code: string, date: string, asOf: string) => ["sm", pid, "progress", code, date, asOf] as const,
   incidents: (pid: string, asOf: string) => ["sm", pid, "incidents", asOf] as const,
   incident: (pid: string, id: string, asOf: string) => ["sm", pid, "incident", id, asOf] as const,
+  reasoning: (pid: string, id: string, asOf: string) => ["sm", pid, "reasoning", id, asOf] as const,
   sources: (pid: string, asOf: string) => ["sm", pid, "sources", asOf] as const,
   source: (pid: string, sid: string, asOf: string) => ["sm", pid, "source", sid, asOf] as const,
   summary: (pid: string, sid: string, asOf: string) => ["sm", pid, "summary", sid, asOf] as const,
@@ -83,6 +84,25 @@ export function useIncidents() {
 export function useIncident(id: string) {
   const { projectId, asOf } = useApp();
   return useQuery({ queryKey: keys.incident(projectId, id, asOf), queryFn: () => api.getIncident(projectId, id, asOf) });
+}
+
+export function useIncidentReasoning(id: string) {
+  const { projectId, asOf } = useApp();
+  return useQuery({
+    queryKey: keys.reasoning(projectId, id, asOf),
+    queryFn: () => api.getIncidentReasoning(projectId, id, asOf),
+    retry: false,
+  });
+}
+
+/** Calls the reasoning agent on the backend (LLM). Slow by design; the button shows progress. */
+export function useRunReasoning(id: string) {
+  const { projectId, asOf } = useApp();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.runIncidentReasoning(projectId, id, asOf),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sm", projectId, "reasoning", id] }),
+  });
 }
 
 export function useSources() {

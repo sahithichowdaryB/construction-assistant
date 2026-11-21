@@ -114,9 +114,54 @@ database ranking (the reranker pauses for 5 minutes after a 429 or 529).
 | `GET /action-items?as_of=&include_completed=` | Open actions with owner, due date, `overdue` and citation |
 | `PATCH /action-items/{id}` | `{"completed": true}` |
 | `GET /search?q=&as_of=&limit=&rerank=` | Project-scoped evidence search; results carry `untrusted` |
-| `POST /sources` (multipart `file`, `source_id`, `kind`, `available_at`) | Store privately, hash, queue parse and summary. Same file again is a no-op; a different file under an existing ID returns 409. |
+| `GET /sources/{id}/preview` | Structured preview of Word, CSV, email and text originals, with passage locators |
+| `GET /sources/{id}/storage` | Where the original is stored and every row (all columns) derived from it |
+| `GET /sources/{id}/file?download=true` | The original; inline by default, as an attachment with its original name when `download=true` |
+| `POST /sources` (multipart `file`, `source_id`, `kind`, `available_at`) | Store privately, hash, queue parse and summary. `available_at` defaults to the real upload time and is returned. Same file again is a no-op; a different file under an existing ID returns 409. |
 | `POST /sources/{id}/ingest?summarize=` | Retry or re-run parsing (idempotent) |
 | `GET /jobs/{job_id}` | Job status, attempts, error, review reasons and proposals |
 
 Write routes need the `contributor`, `manager` or `approver` role. The demo member is seeded as
 `manager`.
+
+## Voice capture agent (Node.js + LangChain + Claude)
+
+`src/` is a Node.js service that turns a recorded voice note into reviewed project memory.
+It is a LangGraph pipeline over four LangChain tools in `src/agent/tools/`:
+
+```
+audio ─Whisper─▶ transcript ─fact_extraction (Claude fills JSON)─▶ events
+  ─database_search (SQL: activities, equipment, progress, incidents, passages as of recording time)─▶ matches
+  ─relationship_matching (dependencies, contractors, shared equipment, open alerts)─▶ relationships
+  ─question_generation (Claude + sitemate.business_rules)─▶ validated facts / missing fields / questions
+  ─[pause: ask manager ─▶ answers ─▶ question_generation]* (max AGENT_MAX_QUESTION_ROUNDS)
+  ─▶ update project memory: sources, source_passages, incidents, capture_facts (proposed), fact_evidence
+```
+
+Facts are stored with `review_status='proposed'`; a person confirms them later. Each manager answer is
+stored as its own passage (`answer:<question id>`) so every fact cites where it came from.
+
+Setup (adds the `business_rules` table and a `sitemate_agent` role with SELECT + INSERT on capture tables):
+
+```powershell
+.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe provision_agent.py     # needs AGENT_DATABASE_URL in .env
+npm install
+npm start                                       # http://127.0.0.1:4000
+```
+
+Endpoints (bearer token of a `contributor`, `manager` or `approver` member):
+
+- `POST /projects/RIV/captures` — multipart `audio` file (or form/JSON field `transcript`), optional `recorded_at`
+  (ISO 8601 with offset). Returns `201 saved`, or `202 needs_input` with `thread_id` and `questions`.
+- `POST /projects/RIV/captures/{thread_id}/answers` — `{"answers":[{"id":"q1","answer":"EX-02"}]}`.
+  Answer `unknown` to record a field as a gap.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -F audio=@../data/riverside-demo/uploads/voice/V01.wav \
+     -F recorded_at=2026-11-10T10:05:00+01:00 http://127.0.0.1:4000/projects/RIV/captures
+```
+
+Business rules are rows in `sitemate.business_rules` (seeded from `rules/business_rules.json`); edit rows to
+change what the agent requires or asks. Paused captures are held in memory and lost on restart; swap in
+`@langchain/langgraph-checkpoint-postgres` before production.

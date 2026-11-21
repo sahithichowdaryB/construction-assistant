@@ -44,7 +44,11 @@ export const ENDPOINTS = {
   // Proposed by the frontend (not yet in the workplan): list and context reads the screens need
   project: { route: "GET /projects/{pid}", implemented: false },
   activities: { route: "GET /projects/{pid}/activities", implemented: false },
-  incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: false },
+  incidents: { route: "GET /projects/{pid}/incidents?as_of", implemented: true },
+  incident: { route: "GET /projects/{pid}/incidents/{id}?as_of", implemented: true },
+  // Reasoning always comes from the backend (database + LLM); there are no fixtures for it.
+  reasoning: { route: "GET /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
+  runReasoning: { route: "POST /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
   alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: false },
   dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: false },
   drafts: { route: "GET /projects/{pid}/drafts?as_of", implemented: false },
@@ -58,4 +62,5 @@ export function servedFromFixtures(key: EndpointKey): boolean {
   return USE_FIXTURES || !ENDPOINTS[key].implemented;
 }
 
-export const PROJECT_ID = "RIV";
+// Set NEXT_PUBLIC_PROJECT_ID=TST (with the TST token in SITEMATE_API_TOKEN) to browse the dummy agent cases.
+export const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID || "RIV";

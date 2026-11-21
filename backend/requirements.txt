@@ -1,3 +1,4 @@
+-r ../ai-agent/requirements.txt
 fastapi==0.165.0
 uvicorn==0.54.0
 SQLAlchemy==2.1.9
