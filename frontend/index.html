@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiteMate Capture</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#d8d8d8; --accent:#c2410c; --card:#f6f6f4; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --muted:#999; --line:#333; --card:#202020; } }
+  body { font:16px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg); max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; } label { display:block; margin:12px 0 4px; font-weight:600; font-size:.9rem; }
+  input, textarea { width:100%; box-sizing:border-box; padding:8px; font:inherit; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+  textarea { min-height:110px; }
+  button { font:inherit; padding:8px 14px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.rec { border-color:#dc2626; color:#dc2626; } button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:12px; }
+  .muted { color:var(--muted); font-size:.85rem; } .err { color:#dc2626; }
+  pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:.8rem; }
+</style>
+</head>
+<body>
+<h1>SiteMate voice capture</h1>
+
+<label for="api">Backend URL</label>
+<input id="api" value="http://localhost:4000">
+<label for="project">Project ID</label>
+<input id="project" value="RIV">
+<label for="token">Bearer token (RIVERSIDE_DEMO_TOKEN)</label>
+<input id="token" type="password" autocomplete="off" placeholder="paste token; kept only in this tab">
+
+<label for="transcript">Voice note transcript</label>
+<textarea id="transcript" placeholder="Press Record and speak, or type here."></textarea>
+<div class="row">
+  <button id="rec" type="button">Record</button>
+  <button id="send" class="primary" type="button">Send capture</button>
+  <span id="status" class="muted"></span>
+</div>
+<p id="support" class="muted"></p>
+
+<div id="out"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const setStatus = (t, isErr) => { $("status").textContent = t; $("status").className = isErr ? "err" : "muted"; };
+let threadId = null;
+
+// ---- Speech to text in the browser (Web Speech API; works in Chrome/Edge/Safari on localhost or https) ----
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false, base = "";
+if (!SR) {
+  $("rec").disabled = true;
+  $("support").textContent = "Speech recognition is not supported in this browser. Use Chrome, Edge or Safari, or type the transcript.";
+} else {
+  rec = new SR();
+  rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
+  rec.onresult = (e) => {
+    let text = "";
+    for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+    $("transcript").value = (base + " " + text).trim();
+  };
+  rec.onend = () => { listening = false; $("rec").textContent = "Record"; $("rec").classList.remove("rec"); };
+  rec.onerror = (e) => setStatus("Microphone error: " + e.error, true);
+  $("rec").onclick = () => {
+    if (listening) return rec.stop();
+    base = $("transcript").value.trim();
+    rec.start(); listening = true;
+    $("rec").textContent = "Stop"; $("rec").classList.add("rec"); setStatus("Listening...");
+  };
+}
+
+// ---- Backend calls ----
+async function call(path, body) {
+  const res = await fetch($("api").value.replace(/\/$/, "") + "/projects/" + encodeURIComponent($("project").value) + "/captures" + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + $("token").value.trim() },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 202) throw new Error(data.detail || ("HTTP " + res.status));
+  return data;
+}
+
+function render(data) {
+  const out = $("out"); out.replaceChildren();
+  const add = (title, content) => {
+    const card = document.createElement("div"); card.className = "card";
+    const h = document.createElement("strong"); h.textContent = title;
+    const pre = document.createElement("pre"); pre.textContent = content;
+    card.append(h, pre); out.append(card); return card;
+  };
+  if (data.events?.length) add("Extracted events", data.events.map((e, i) => `${i + 1}. [${e.event_type}] ${e.summary}`).join("\n"));
+  if (data.status === "needs_input") {
+    threadId = data.thread_id;
+    const card = document.createElement("div"); card.className = "card";
+    const h = document.createElement("strong"); h.textContent = "Questions (round " + data.round + ")"; card.append(h);
+    for (const q of data.questions) {
+      const l = document.createElement("label"); l.textContent = q.question;
+      const inp = document.createElement("input"); inp.dataset.qid = q.id;
+      inp.placeholder = q.options?.length ? "e.g. " + q.options.join(" / ") : "answer, or 'unknown'";
+      card.append(l, inp);
+    }
+    const b = document.createElement("button"); b.className = "primary"; b.textContent = "Submit answers"; b.style.marginTop = "12px";
+    b.onclick = submitAnswers; card.append(b); out.append(card);
+    setStatus("Waiting for your answers");
+  } else if (data.status === "saved") {
+    threadId = null; add("Saved", JSON.stringify(data, null, 2)); setStatus("Saved to the database");
+  } else {
+    threadId = null; add("Result", JSON.stringify(data, null, 2)); setStatus(data.status || "done");
+  }
+}
+
+async function run(fn) {
+  $("send").disabled = true; setStatus("Working (this can take up to a minute)...");
+  try { render(await fn()); } catch (e) { setStatus(e.message, true); } finally { $("send").disabled = false; }
+}
+$("send").onclick = () => {
+  if (listening) rec.stop();
+  const transcript = $("transcript").value.trim();
+  if (!transcript) return setStatus("Record or type a transcript first", true);
+  run(() => call("", { transcript, recorded_at: new Date().toISOString() }));
+};
+function submitAnswers() {
+  const answers = [...document.querySelectorAll("#out input[data-qid]")]
+    .map((i) => ({ id: i.dataset.qid, answer: i.value.trim() || "unknown" }));
+  run(() => call("/" + threadId + "/answers", { answers }));
+}
+</script>
+</body>
+</html>
