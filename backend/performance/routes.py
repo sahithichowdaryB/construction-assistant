@@ -358,19 +358,46 @@ def get_day(project_id: str, work_date: str, as_of: datetime | None = None, vers
     (input digest), a new version is computed from code only (no model call); POST .../recompute adds the summary."""
     check_cutoff(as_of)
     day = _day(work_date)
-    if version is None:
-        with writer_engine().begin() as w:
-            try:
-                daily.evaluate_day(w, project_id, day, as_of, use_llm=False, trigger="on_demand")
-            except LookupError:
-                raise HTTPException(404, "Unknown project") from None
-        with writer_engine().connect() as w:
-            view = daily.daily_view(w, project_id, day, as_of=as_of)
-    else:
-        view = daily.daily_view(conn, project_id, day, version=version, as_of=as_of)
+    view = _current_day(project_id, day, as_of) if version is None else \
+        daily.daily_view(conn, project_id, day, version=version, as_of=as_of)
     if view is None:
         raise HTTPException(404, "No evaluation for this day at this time")
     return view
+
+
+def _current_day(project_id, day, as_of):
+    """The day's evaluation as known at as_of, computed from code first when it is missing or out of date."""
+    with writer_engine().begin() as w:
+        try:
+            daily.evaluate_day(w, project_id, day, as_of, use_llm=False, trigger="on_demand")
+        except LookupError:
+            raise HTTPException(404, "Unknown project") from None
+    with writer_engine().connect() as w:
+        return daily.daily_view(w, project_id, day, as_of=as_of)
+
+
+@router.get("/daily-reports/{work_date}/report.{fmt}")
+def daily_report(project_id: str, work_date: str, fmt: Literal["pdf", "docx"], as_of: datetime | None = None,
+                 member=Depends(check_member), conn=Depends(connection)):
+    """The generated daily site report for one work date: figures, cited summary, incidents and records received.
+    No model call; the written sections are those of the day's evaluation (POST .../recompute adds them)."""
+    from . import daily_report as dr
+    check_cutoff(as_of)
+    day = _day(work_date)
+    view = _current_day(project_id, day, as_of)
+    if view is None:
+        raise HTTPException(404, "No evaluation for this day at this time")
+    project = dict(conn.execute(text("SELECT name, timezone FROM sitemate.projects WHERE id=:p"),
+                                {"p": project_id}).mappings().one())
+    records = dr.day_records(conn, project_id, day, as_of, project["timezone"])
+    delayed = {a["code"] for a in view["activities"] if a["status"] in ("behind", "late_start")} | \
+        {i["activity_code"] for i in records["incidents"] if i.get("activity_code")} | \
+        {i["activity_code"] for i in (view.get("indicators") or {}).get("equipment_idle") or [] if i.get("activity_code")}
+    impact = dr.project_impact(conn, project_id, day, _stamp(as_of), delayed)
+    data, mime = dr.render(fmt, project, view, records, member, datetime.now(timezone.utc), impact)
+    return Response(data, media_type=mime, headers={
+        "Content-Disposition": f'attachment; filename="daily-report-{project_id}-{day}.{fmt}"',
+        "Cache-Control": "private, no-store"})
 
 
 @router.post("/daily-evaluations/{work_date}/recompute", status_code=202)

@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, FilePen, Gauge, RefreshCw, Wrench } from "lucide-react";
+import { Clock, Download, FilePen, Gauge, RefreshCw, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CitationList } from "@/components/citation-chip";
@@ -10,6 +10,7 @@ import { useApp } from "@/components/providers/app-context";
 import { ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import {
+  dailyReportUrl,
   deadlineLabel,
   NOTICE_TEXT,
   toRefs,
@@ -54,6 +55,7 @@ function SuggestionCard({ s, clockDate }: { s: Suggestion; clockDate: string }) 
 
 export function DayPerformance({ d, clockDate }: { d: DailyEvaluation; clockDate: string }) {
   const recompute = useRecomputeDay();
+  const { projectId, asOf } = useApp();
   const flagged = d.activities.filter((a) => a.planned > 0 || (a.actual ?? 0) > 0 || a.status === "late_start");
   const upcoming = d.activities.filter((a) => a.status === "not_started_ok");
   const idle = d.indicators.equipment_idle;
@@ -131,6 +133,11 @@ export function DayPerformance({ d, clockDate }: { d: DailyEvaluation; clockDate
           <p className="text-xs text-muted-foreground">Suggestions only. Nothing is drafted or sent until you choose to.</p>
         </div>
       )}
+      <div className="flex flex-wrap items-center gap-2 border-t pt-4" aria-label="Download daily report">
+        <p className="mr-auto text-sm font-semibold">Daily report</p>
+        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "pdf")} download><Download aria-hidden /> PDF</a></Button>
+        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "docx")} download><Download aria-hidden /> Word</a></Button>
+      </div>
       <p className="text-xs text-muted-foreground">
         v{d.version} · {d.disclaimer} · <Link className="underline" href="/performance">Overall performance</Link>
       </p>
