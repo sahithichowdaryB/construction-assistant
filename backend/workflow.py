@@ -24,6 +24,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+import mailer
 from database import writer_engine
 from documents.notice_export import pdf_letter, word_letter
 from deps import check_cutoff, check_member, connection, require_roles
@@ -859,6 +860,45 @@ def download_notice(project_id: str, draft_id: str, version: int, format: Litera
         "Content-Disposition": f'attachment; filename="notice-{draft_id}-v{version}.{format}"',
         "Cache-Control": "private, no-store",
     })
+
+
+@router.get("/mail/status", dependencies=[Depends(check_member)])
+def mail_status(project_id: str):
+    return mailer.status()
+
+
+class SendIn(BaseModel):
+    to: list[str] = Field(min_length=1, max_length=mailer.MAX_RECIPIENTS)
+    cc: list[str] = Field(default_factory=list, max_length=mailer.MAX_RECIPIENTS)
+
+
+@router.post("/drafts/{draft_id}/versions/{version}/send")
+def send_notice(project_id: str, draft_id: str, version: int, body: SendIn,
+                member=Depends(require_roles("manager", "approver")), conn=Depends(connection)):
+    """Email an approved email draft through the server's SMTP account."""
+    row = conn.execute(text("""
+        SELECT v.body, r.decision, d.notice_type FROM sitemate.draft_versions v
+        JOIN sitemate.drafts d ON (d.project_id, d.id) = (v.project_id, v.draft_id)
+        LEFT JOIN sitemate.reviews r ON (r.project_id, r.draft_id, r.version) = (v.project_id, v.draft_id, v.version)
+        WHERE v.project_id=:p AND v.draft_id=CAST(:d AS uuid) AND v.version=:v
+    """), {"p": project_id, "d": _uuid(draft_id), "v": version}).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(404, "Notice version not found")
+    if row["notice_type"] != "email":
+        raise HTTPException(409, "Only email drafts can be sent by email")
+    if row["decision"] != "approved":
+        raise HTTPException(409, "Approve this version before sending it")
+    if MISSING.search(row["body"]):
+        raise HTTPException(409, "Fill in the missing fields before sending")
+    try:
+        to, cc = mailer.clean_addresses(body.to), mailer.clean_addresses(body.cc)
+        subject, text_body = mailer.split_draft(row["body"])
+        mailer.send(to, cc, subject, text_body, member["display_name"])
+    except mailer.MailError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+    mailer.log.info("Sent draft %s v%s from project %s by %s to %d recipient(s)",
+                    draft_id, version, project_id, member["member_id"], len(to) + len(cc))
+    return {"sent": True, "to": to, "cc": cc, "subject": subject}
 
 
 @router.post("/drafts/{draft_id}/versions", status_code=201)

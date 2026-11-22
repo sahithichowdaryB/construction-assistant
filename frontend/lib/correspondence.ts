@@ -239,3 +239,25 @@ export function useExampleRates() {
 export function money(value: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(value);
 }
+
+const mailStatusSchema = z.object({ configured: z.boolean(), from: z.string().nullable() });
+const sentSchema = z.object({ sent: z.boolean(), to: z.array(z.string()), cc: z.array(z.string()), subject: z.string() });
+
+/** Whether the server has an SMTP account, so the Send button is only offered when it can work. */
+export function useMailStatus() {
+  const { base, projectId } = useBase();
+  return useQuery({
+    queryKey: ["sm", projectId, "mail-status"],
+    queryFn: () => call(`${base}/mail/status`, mailStatusSchema),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useSendEmail() {
+  const { base } = useBase();
+  return useMutation({
+    mutationFn: (input: { id: string; version: number; to: string[]; cc: string[] }) =>
+      call(`${base}/drafts/${input.id}/versions/${input.version}/send`, sentSchema, send("POST", { to: input.to, cc: input.cc })),
+  });
+}
