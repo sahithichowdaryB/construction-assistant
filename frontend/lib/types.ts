@@ -49,7 +49,9 @@ export type SourceType =
   | "daily_report"
   | "voice"
   | "photo"
-  | "diary";
+  | "diary"
+  | "text"
+  | "plan";
 
 export type JobStatus = "uploaded" | "extracting" | "indexed" | "failed";
 
@@ -76,6 +78,10 @@ export interface Source {
   summary_status?: string | null;
   /** Live API only: false for records captured in the app (no original file to show or download) */
   has_file?: boolean;
+  /** Live API only: the record has a file, but it is not stored on (or retrievable by) this server */
+  file_missing?: boolean;
+  /** What the record is about, for records that only have a file name as title */
+  headline?: string | null;
 }
 
 export interface Passage {

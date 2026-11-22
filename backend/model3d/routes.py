@@ -1,6 +1,6 @@
 """HTTP routes for the 3D progress model (plan section 10). All under /projects/{project_id}, bearer token.
 
-Upload and edits are manager actions; reads are for every member. Progress is read from the database on every
+The 3D model is a site-manager tool: upload, edits and reads all need the manager role. Progress is read from the database on every
 call (observations, events, sources, passages) and the pour states are stored as a new version in
 element_progress when the records changed. No model call happens on a GET.
 """
@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import writer_engine
-from deps import check_cutoff, check_member, connection, require_roles
+from deps import check_cutoff, connection, require_roles
 
 from . import generator, progress, store
 from .spec import blocking, parse_day, validate
@@ -192,7 +192,7 @@ def retry_extraction(project_id: str, model_id: str, background: BackgroundTasks
 
 # ------------------------------------------------------------------ reads
 
-@router.get("/models", dependencies=[Depends(check_member)])
+@router.get("/models", dependencies=[Depends(require_roles("manager"))])
 def list_models(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
     check_cutoff(as_of)
     _installed(conn)
@@ -213,7 +213,7 @@ def _model_view(row: dict, geo: dict) -> dict:
     }
 
 
-@router.get("/models/active", dependencies=[Depends(check_member)])
+@router.get("/models/active", dependencies=[Depends(require_roles("manager"))])
 def get_active(project_id: str, conn=Depends(connection)):
     """The active model with its elements (geometry, metres) and pours. Geometry is static: cache it."""
     _installed(conn)
@@ -236,7 +236,7 @@ def _progress_inputs(conn, project_id, as_of, date_):
     return row, geo, day, inputs
 
 
-@router.get("/models/active/progress", dependencies=[Depends(check_member)])
+@router.get("/models/active/progress", dependencies=[Depends(require_roles("manager"))])
 def get_progress(project_id: str, date_: str | None = Query(None, alias="date"), as_of: datetime | None = None,
                  conn=Depends(connection)):
     """Pour states on the date (default: today at the As of clock), read from the database: actual, planned and
@@ -255,7 +255,7 @@ def get_progress(project_id: str, date_: str | None = Query(None, alias="date"),
     return result
 
 
-@router.get("/models/active/timeline", dependencies=[Depends(check_member)])
+@router.get("/models/active/timeline", dependencies=[Depends(require_roles("manager"))])
 def get_timeline(project_id: str, date_: str | None = Query(None, alias="date"), as_of: datetime | None = None,
                  conn=Depends(connection)):
     """Per-day planned/actual/forecast m3, the pour states at each date the records changed, and the planned and
@@ -264,7 +264,7 @@ def get_timeline(project_id: str, date_: str | None = Query(None, alias="date"),
     return progress.timeline(row["spec"] or {}, geo["pours"], inputs, day, row["deadline"]) | {"model_id": row["id"]}
 
 
-@router.get("/models/{model_id}", dependencies=[Depends(check_member)])
+@router.get("/models/{model_id}", dependencies=[Depends(require_roles("manager"))])
 def get_model(project_id: str, model_id: str, conn=Depends(connection)):
     """A model revision with its spec and, while it is a draft, a preview of the generated elements."""
     _installed(conn)

@@ -7,6 +7,8 @@ import {
   Mail,
   Mic,
   NotebookPen,
+  PencilRuler,
+  StickyNote,
   Table2,
   Users,
   type LucideIcon,
@@ -24,6 +26,8 @@ const ICONS: Record<SourceType, LucideIcon> = {
   register: Table2,
   schedule: CalendarRange,
   project: Building2,
+  text: StickyNote,
+  plan: PencilRuler,
 };
 
 const TONES: Record<SourceType, string> = {
@@ -36,6 +40,8 @@ const TONES: Record<SourceType, string> = {
   register: "bg-slate-100 text-slate-700 ring-slate-200",
   schedule: "bg-indigo-50 text-indigo-800 ring-indigo-200",
   project: "bg-stone-100 text-stone-700 ring-stone-200",
+  text: "bg-stone-100 text-stone-700 ring-stone-200",
+  plan: "bg-red-50 text-red-800 ring-red-200",
 };
 
 /** Square tile with an icon for the document type, used in lists and headers. */

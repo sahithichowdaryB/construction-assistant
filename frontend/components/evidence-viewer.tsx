@@ -47,6 +47,14 @@ function hasNoFile(source: Source) {
   return isFixtureUpload(source) || source.has_file === false;
 }
 
+/** The record had a file, but the server that received it is not this one. */
+function missingFileText(source: Source) {
+  if (!source.file_missing) return null;
+  return source.type === "voice"
+    ? "This voice note's audio file is not stored on this server, so it can't be played here."
+    : "The original file is not stored on this server.";
+}
+
 /** "Open" and "Download" buttons for the original file. */
 export function OriginalActions({ source, className }: { source: Source; className?: string }) {
   const { projectId, asOf } = useApp();
@@ -318,11 +326,13 @@ export function OriginalEmbed({
           locator={locator}
           tall={tall}
         />
-        <p className="text-xs text-muted-foreground">Captured in SiteMate, so there is no original file. Showing the recorded text.</p>
+        <p className="text-xs text-muted-foreground">{missingFileText(source) ?? "Captured in SiteMate, so there is no original file."} Showing the recorded text.</p>
       </div>
     );
   }
   if (noFile) {
+    const missing = missingFileText(source);
+    if (missing) return <EmptyState title={source.type === "voice" ? "Recording unavailable" : "File unavailable"} description={missing} />;
     return isFixtureUpload(source) ? (
       <EmptyState title="Original not stored" description="Files uploaded in this session are not persisted in fixture mode." />
     ) : (
@@ -355,7 +365,7 @@ export function OriginalEmbed({
         <audio controls src={url} className="w-full">
           <track kind="captions" />
         </audio>
-        <p className="mt-2 text-xs text-muted-foreground">The transcript is listed under Indexed passages.</p>
+        <p className="mt-2 text-xs text-muted-foreground">The transcript is listed under Passages.</p>
       </div>
     );
   } else if (mode === "structured" && preview.isPending) {
@@ -381,7 +391,7 @@ export function OriginalEmbed({
       <EmptyState
         icon={<FileQuestion />}
         title="No inline preview for this file"
-        description="Download the original to view it. Its text is listed under Indexed passages."
+        description={`Download the original to view it. Its text is listed under ${source.type === "voice" ? "Transcript" : "Indexed passages"}.`}
         action={<OriginalActions source={source} />}
       />
     );

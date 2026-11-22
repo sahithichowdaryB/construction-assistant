@@ -441,6 +441,11 @@ export function reportUrl(projectId: string, date: string, asOf: string, fmt: "p
   return `/api/sm/projects/${encodeURIComponent(projectId)}/performance/report.${fmt}?date=${date}&as_of=${encodeURIComponent(asOf)}`;
 }
 
+/** The generated daily site report for one work date (PDF or Word), as known at the As of clock. */
+export function dailyReportUrl(projectId: string, date: string, asOf: string, fmt: "pdf" | "docx") {
+  return `/api/sm/projects/${encodeURIComponent(projectId)}/daily-reports/${date}/report.${fmt}?as_of=${encodeURIComponent(asOf)}`;
+}
+
 // ---------- baselines
 
 export function useBaselines() {

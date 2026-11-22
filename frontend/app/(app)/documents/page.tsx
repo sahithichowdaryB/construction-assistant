@@ -1,24 +1,32 @@
 "use client";
 
-import { ChevronRight, Clock, FileUp, FolderOpen, RefreshCw, Search, Upload, X } from "lucide-react";
+import { ChevronRight, ClipboardList, Clock, FileUp, FolderOpen, Image as ImageIcon, Mail, Mic, PencilRuler, RefreshCw, Search, StickyNote, Upload, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { JobStatusBadge } from "@/components/badges";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
-import { SourceIcon } from "@/components/source-icon";
-import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
+import { EmptyState, ErrorState, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { sourceFileUrl } from "@/lib/api";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { SOURCE_TYPE_LABEL } from "@/lib/format";
+import { sourceTitle } from "@/lib/source-title";
 import { useDocumentJob, useInvalidateOnJobDone, useSources, useUploadDocument } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
-import { fmtDateTime } from "@/lib/time";
-import type { SourceType } from "@/lib/types";
+import { fmtDateTime, fmtTime, localDateOf } from "@/lib/time";
+import type { Source, SourceType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtShortDate = (iso: string) => {
+  const d = localDateOf(iso);
+  return `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
+};
 
 const UPLOAD_TYPES: SourceType[] = ["daily_report", "diary", "minutes", "email", "photo", "voice", "register"];
 
@@ -201,138 +209,209 @@ function UploadPanel() {
   );
 }
 
+// ---------- picture library ----------
+
+type Group = { key: string; label: string; types: SourceType[]; Icon: LucideIcon; tile: string; ink: string };
+
+const GROUPS: Group[] = [
+  { key: "voice", label: "Voice", types: ["voice"], Icon: Mic, tile: "bg-violet-50 dark:bg-violet-500/10", ink: "text-violet-700 dark:text-violet-300" },
+  { key: "reports", label: "Reports", types: ["daily_report"], Icon: ClipboardList, tile: "bg-sky-50 dark:bg-sky-500/10", ink: "text-sky-800 dark:text-sky-300" },
+  { key: "notes", label: "Notes", types: ["text", "diary"], Icon: StickyNote, tile: "bg-stone-100 dark:bg-white/5", ink: "text-stone-700 dark:text-stone-300" },
+  { key: "photos", label: "Photos", types: ["photo"], Icon: ImageIcon, tile: "bg-emerald-50 dark:bg-emerald-500/10", ink: "text-emerald-800 dark:text-emerald-300" },
+  { key: "emails", label: "Emails", types: ["email"], Icon: Mail, tile: "bg-amber-50 dark:bg-amber-500/10", ink: "text-amber-800 dark:text-amber-300" },
+  { key: "more", label: "Plans & more", types: ["plan", "minutes", "register", "schedule", "project"], Icon: PencilRuler, tile: "bg-red-50 dark:bg-red-500/10", ink: "text-red-800 dark:text-red-300" },
+];
+const groupOf = (t: SourceType) => GROUPS.find((g) => g.types.includes(t))!;
+
+/** Records captured in the app are named after their file; show what was said or seen instead. */
+const displayTitle = (s: Source) => sourceTitle(s);
+
+/** Same id, same bars: a decorative waveform for voice notes. */
+function Wave({ seed }: { seed: string }) {
+  let h = 0;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 9973;
+  return (
+    <span className="flex h-8 items-center gap-[3px]" aria-hidden>
+      {Array.from({ length: 22 }, (_, i) => (
+        <i key={i} className="block w-[3px] rounded-full bg-violet-500/80" style={{ height: `${6 + Math.round((Math.sin(i * 1.7 + h) + 1) * 9 + ((i * 7 + h) % 5))}px` }} />
+      ))}
+    </span>
+  );
+}
+
+function Sheet({ accent }: { accent: string }) {
+  return (
+    <svg viewBox="0 0 80 100" className="h-[78%] drop-shadow-md" aria-hidden>
+      <rect width="80" height="100" rx="4" fill="#fff" />
+      <rect x="8" y="9" width="38" height="6" rx="2" className={accent} />
+      {[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x="8" y={23 + i * 9} width={64 - (i % 3) * 12} height="3.5" rx="1.5" fill="#d6d2c8" />)}
+      <rect x="8" y="80" width="64" height="12" rx="2" fill="#f1efe9" />
+    </svg>
+  );
+}
+
+function Envelope() {
+  return (
+    <svg viewBox="0 0 90 62" className="h-[58%] drop-shadow-md" aria-hidden>
+      <rect width="90" height="62" rx="6" fill="#fff" />
+      <path d="M4 6 L45 36 L86 6" fill="none" stroke="#e8cf9c" strokeWidth="3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Visual({ s }: { s: Source }) {
+  const { projectId, asOf } = useApp();
+  const [failed, setFailed] = useState(false);
+  const g = groupOf(s.type);
+  if (s.type === "photo" && s.has_file !== false && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={sourceFileUrl(projectId, s.id, asOf)} alt="" loading="lazy" onError={() => setFailed(true)}
+           className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
+    );
+  }
+  const body =
+    s.type === "voice" ? <Wave seed={s.id} />
+      : s.type === "email" ? <Envelope />
+      : (s.type === "text" || s.type === "diary") && displayTitle(s) !== SOURCE_TYPE_LABEL[s.type] ? (
+        <span className="line-clamp-3 px-3 text-left text-[11.5px] leading-snug font-medium text-foreground/80">“{displayTitle(s)}”</span>
+      )
+      : s.type === "text" || s.type === "diary" ? <StickyNote className="size-8 text-stone-500/60" aria-hidden />
+      : s.type === "photo" ? <ImageIcon className="size-8 text-emerald-700/50" aria-hidden />
+      : <Sheet accent={s.type === "plan" ? "fill-red-700" : s.type === "daily_report" ? "fill-sky-800" : "fill-stone-500"} />;
+  return <span className={cn("flex size-full items-center justify-center", g.tile)}>{body}</span>;
+}
+
+function DocCard({ s, today, index }: { s: Source; today: string; index: number }) {
+  const g = groupOf(s.type);
+  const when = localDateOf(s.available_at) === today ? fmtTime(s.available_at) : fmtShortDate(s.available_at);
+  // App captures stay "uploaded" for good; only a file being read, or one that failed, gets a badge.
+  const busy = s.status === "extracting" || s.status === "failed";
+  return (
+    <li className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-safe:fill-mode-both"
+        style={{ animationDelay: `${Math.min(index, 14) * 35}ms` }}>
+      <Link href={`/documents/${s.id}`}
+            className="group flex h-full flex-col overflow-hidden rounded-2xl bg-card shadow-xs transition duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <span className="relative block h-20 overflow-hidden">
+          <Visual s={s} />
+          {busy && (
+            <span className={cn("absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold",
+              s.status === "failed" ? "bg-red-600 text-white" : "bg-black/60 text-white")}>
+              {s.status === "failed" ? "Failed" : "Processing"}
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-1.5 px-2.5 py-2">
+          <g.Icon className={cn("size-3.5 shrink-0", g.ink)} aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-xs font-semibold">{displayTitle(s)}</span>
+          <span className="shrink-0 text-[11px] font-semibold text-muted-foreground tabular">{when}</span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+const PAGE = 10;
+
+/** Page numbers around the current page, with the first and last always shown. */
+function Pager({ page, pages, total, onPage }: { page: number; pages: number; total: number; onPage: (p: number) => void }) {
+  if (pages <= 1) return null;
+  const nums = [...new Set([0, page - 1, page, page + 1, pages - 1])].filter((n) => n >= 0 && n < pages).sort((a, b) => a - b);
+  const btn = "flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-semibold tabular transition";
+  return (
+    <nav aria-label="Pages" className="flex items-center justify-center gap-1">
+      <button type="button" className={cn(btn, "hover:bg-muted disabled:opacity-30")} disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Previous page">‹</button>
+      {nums.map((n, i) => (
+        <span key={n} className="flex items-center gap-1">
+          {i > 0 && n - nums[i - 1] > 1 && <span className="px-1 text-muted-foreground">…</span>}
+          <button type="button" aria-current={n === page ? "page" : undefined} onClick={() => onPage(n)}
+                  className={cn(btn, n === page ? "bg-foreground text-background" : "hover:bg-muted")}>{n + 1}</button>
+        </span>
+      ))}
+      <button type="button" className={cn(btn, "hover:bg-muted disabled:opacity-30")} disabled={page === pages - 1} onClick={() => onPage(page + 1)} aria-label="Next page">›</button>
+      <span className="ml-3 text-xs text-muted-foreground tabular">{page * PAGE + 1}–{Math.min(total, page * PAGE + PAGE)} of {total}</span>
+    </nav>
+  );
+}
+
 export default function DocumentsPage() {
   const sources = useSources();
-  const [type, setType] = useState<"all" | SourceType>("all");
+  const { asOf } = useApp();
+  const today = localDateOf(asOf);
+  const [group, setGroup] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
+  const [page, setPage] = useState(0);
   const list = sources.data ?? [];
-  const counts = list.reduce<Partial<Record<SourceType, number>>>((acc, s) => ({ ...acc, [s.type]: (acc[s.type] ?? 0) + 1 }), {});
-  const types = (Object.keys(SOURCE_TYPE_LABEL) as SourceType[]).filter((t) => counts[t]);
   const ql = q.trim().toLowerCase();
+  const inGroup = (s: Source) => group === "all" || groupOf(s.type).key === group;
   const shown = list
-    .filter(
-      (s) =>
-        (type === "all" || s.type === type) &&
-        (!ql || s.id.toLowerCase().includes(ql) || s.title.toLowerCase().includes(ql) || s.filename.toLowerCase().includes(ql)),
-    )
+    .filter((s) => inGroup(s) && (!ql || [s.id, s.title, s.filename, displayTitle(s)].some((v) => v.toLowerCase().includes(ql))))
     .sort((a, b) => b.available_at.localeCompare(a.available_at));
+  const count = (g: Group) => list.filter((s) => g.types.includes(s.type)).length;
+  const fresh = (g: Group) => list.filter((s) => g.types.includes(s.type) && localDateOf(s.available_at) === today).length;
 
   return (
     <>
-      <PageHeader title="Documents" description="Every document SiteMate can refer to, as it stood at the time you are viewing." />
+      <PageHeader title="Documents" description={`${list.length} records · newest first`} />
+      <div className="flex flex-col gap-6">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7" aria-label="Document types">
+          <li>
+            <button type="button" aria-pressed={group === "all"} onClick={() => { setGroup("all"); setPage(0); }}
+                    className={cn("flex h-full w-full flex-col gap-3 rounded-[18px] bg-hero p-4 text-left text-hero-foreground transition", group === "all" ? "ring-2 ring-primary" : "hover:-translate-y-0.5")}>
+              <FolderOpen className="size-5 text-primary" aria-hidden />
+              <span><span className="block text-3xl leading-none font-bold tabular">{list.length}</span><span className="text-xs font-bold">All</span></span>
+            </button>
+          </li>
+          {GROUPS.filter((g) => count(g) > 0).map((g) => {
+            const n = fresh(g);
+            return (
+              <li key={g.key}>
+                <button type="button" aria-pressed={group === g.key} onClick={() => { setGroup(g.key); setPage(0); }}
+                        className={cn("relative flex h-full w-full flex-col gap-3 rounded-[18px] p-4 text-left transition", g.tile, g.ink, group === g.key ? "ring-2 ring-foreground" : "hover:-translate-y-0.5")}>
+                  {n > 0 && <span className="absolute top-3 right-3 rounded-full bg-destructive px-2 text-[10px] leading-5 font-bold text-white">{n} new</span>}
+                  <g.Icon className="size-5" aria-hidden />
+                  <span><span className="block text-3xl leading-none font-bold tabular">{count(g)}</span><span className="text-xs font-bold">{g.label}</span></span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
-      <div className="flex flex-col gap-5">
-        {/* Search and type filters */}
-        <div className="flex flex-col gap-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              aria-label="Search documents"
-              placeholder="Search by ID, title or file name"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="h-11 rounded-xl pl-9 shadow-xs"
-            />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input aria-label="Search documents" placeholder="Search reports, notes, photos…" value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }}
+                   className="h-11 rounded-xl border-0 bg-card pl-10 shadow-xs" />
             {q && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setQ("")}
-                className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
+              <button type="button" aria-label="Clear search" onClick={() => setQ("")}
+                      className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
                 <X className="size-4" aria-hidden />
               </button>
             )}
           </div>
-          <div role="group" aria-label="Filter by type" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-            {(["all", ...types] as const).map((t) => {
-              const active = type === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setType(t)}
-                  className={cn(
-                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    active ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted",
-                  )}
-                >
-                  {t === "all" ? "All" : SOURCE_TYPE_LABEL[t]}
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 text-[11px] tabular-nums",
-                      active ? "bg-background/20 text-background" : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {t === "all" ? list.length : counts[t]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <Button className="h-11 rounded-xl" aria-expanded={showUpload} onClick={() => setShowUpload((v) => !v)}>
+            {showUpload ? <X aria-hidden /> : <Upload aria-hidden />} {showUpload ? "Close" : "Upload"}
+          </Button>
         </div>
 
-        <UploadPanel />
+        {showUpload && <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"><UploadPanel /></div>}
 
-        {/* Document list */}
         {sources.isPending ? (
-          <LoadingSkeleton rows={6} />
+          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">{Array.from({ length: 10 }, (_, i) => <li key={i}><Skeleton className="h-28 rounded-2xl" /></li>)}</ul>
         ) : sources.isError ? (
           <ErrorState error={sources.error} onRetry={() => void sources.refetch()} />
         ) : !list.length ? (
-          <EmptyState icon={<FolderOpen />} title="No documents yet" description="Upload the first document above." />
+          <EmptyState icon={<FolderOpen />} title="No documents yet" description="Use Upload to add the first one." />
         ) : !shown.length ? (
-          <EmptyState title="No documents match" description="Try another search or type." />
+          <EmptyState title="Nothing matches" description="Try another search or type." />
         ) : (
-          <section aria-label="Documents" className="overflow-hidden rounded-2xl border bg-card shadow-xs">
-            <div className="hidden grid-cols-[minmax(0,1fr)_9rem_11rem_8rem_1.25rem] gap-4 border-b bg-muted/40 px-4 py-2.5 text-xs font-medium tracking-wide text-muted-foreground uppercase md:grid">
-              <span>Document</span>
-              <span>Type</span>
-              <span>Received</span>
-              <span>Status</span>
-              <span />
-            </div>
-            <ul className="divide-y">
-              {shown.map((s) => (
-                <li key={s.id}>
-                  <Link
-                    href={`/documents/${s.id}`}
-                    className="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted focus-visible:outline-none md:grid-cols-[minmax(0,1fr)_9rem_11rem_8rem_1.25rem]"
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <SourceIcon type={s.type} />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium group-hover:underline group-hover:underline-offset-2">
-                          {s.title}
-                        </span>
-                        <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                          <span className="shrink-0 rounded bg-muted px-1.5 py-px font-mono text-[11px] text-foreground">{s.id}</span>
-                          <span className="truncate">{s.filename}</span>
-                        </span>
-                        {s.note && <span className="mt-1 block truncate text-xs text-amber-800">{s.note}</span>}
-                        <span className="mt-1 block text-xs text-muted-foreground md:hidden">
-                          {SOURCE_TYPE_LABEL[s.type]} · {fmtDateTime(s.available_at)}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="hidden text-sm text-muted-foreground md:block">{SOURCE_TYPE_LABEL[s.type]}</span>
-                    <span className="hidden text-sm text-muted-foreground tabular-nums md:block">{fmtDateTime(s.available_at)}</span>
-                    <span className="hidden md:block">
-                      <JobStatusBadge status={s.status} />
-                    </span>
-                    <ChevronRight
-                      className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
-                      aria-hidden
-                    />
-                  </Link>
-                </li>
-              ))}
+          <>
+            <ul key={`${group}-${page}`} className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Documents">
+              {shown.slice(page * PAGE, page * PAGE + PAGE).map((s, i) => <DocCard key={s.id} s={s} today={today} index={i} />)}
             </ul>
-            <p className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-              {shown.length} of {list.length} documents · newest first
-            </p>
-          </section>
+            <Pager page={page} pages={Math.ceil(shown.length / PAGE)} total={shown.length} onPage={setPage} />
+          </>
         )}
       </div>
     </>

@@ -50,10 +50,10 @@ export default function CapturePage() {
   const { role, projectId } = useApp();
   const session = useSession();
   const canCapture = AUTH_REQUIRED
-    ? session.data?.memberships.some((m) => m.project_id === projectId && m.role === "contributor")
-    : role === "foreman";
+    ? session.data?.memberships.some((m) => m.project_id === projectId && (m.role === "contributor" || m.role === "manager"))
+    : role === "foreman" || role === "site_manager";
   if (AUTH_REQUIRED && session.isPending) return <LoadingSkeleton rows={2} />;
-  if (!canCapture) return <p>Only foremen can add site notes.</p>;
+  if (!canCapture) return <p>Only foremen and site managers can add site notes.</p>;
   return <ForemanCapture />;
 }
 

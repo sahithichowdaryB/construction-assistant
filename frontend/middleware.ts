@@ -25,7 +25,10 @@ export function middleware(req: NextRequest) {
     const workspace = roleHomes.find((route) => pathname === route || pathname.startsWith(route + "/"));
     const oldNotices = pathname === "/drafts" || pathname.startsWith("/drafts/");
     const sharedHub = ["/today", "/alerts", "/incidents", "/schedule", "/documents", "/actions", "/search", "/settings"].includes(pathname);
-    const outsideWorkspace = (sharedHub && home !== ROLE_HOME.site_manager) || (pathname === "/capture" && home !== ROLE_HOME.foreman);
+    // 3D progress is a site-manager tool (the API enforces the same rule).
+    const managerOnly = pathname === "/model" || pathname.startsWith("/model/");
+    const outsideWorkspace = (sharedHub && home !== ROLE_HOME.site_manager) || (pathname === "/capture" && home !== ROLE_HOME.foreman && home !== ROLE_HOME.site_manager) ||
+      (managerOnly && home !== ROLE_HOME.site_manager);
     if (home && roleHomes.includes(home) && (pathname === "/" || isAuthPage || oldNotices || outsideWorkspace || (workspace && workspace !== home))) {
       const url = req.nextUrl.clone();
       url.pathname = home;

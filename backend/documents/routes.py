@@ -36,7 +36,10 @@ MAX_UPLOAD = 25 * 1024 * 1024
 LOCATOR_ALIASES = {"image": "caption", "photo": "caption", "contract": "contract_reference"}
 MIME = {".eml": "text/plain", ".csv": "text/csv", ".json": "application/json", ".txt": "text/plain",
         ".wav": "audio/wav", ".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+        ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+        # in-app recordings (browser MediaRecorder: webm, Safari/iOS: m4a)
+        ".webm": "audio/webm", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".aiff": "audio/aiff",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 
 
 # ------------------------------------------------------------------ shaping helpers
@@ -58,6 +61,17 @@ def ref(source_id, locator, page=None):
 
 SOURCE_SELECT = f"""
     SELECT s.id, s.project_id, s.kind, s.title, s.path, s.available_at, s.sha256, s.meta, s.ingested_at,
+           -- A short line saying what the record is about: the site event read from it, else what was said or
+           -- typed when it was captured, else its first passage.
+           coalesce(
+             (SELECT e.summary FROM sitemate.events e
+               WHERE e.project_id=s.project_id AND e.source_id=s.id AND e.summary IS NOT NULL
+               ORDER BY e.recorded_at LIMIT 1),
+             (SELECT coalesce(nullif(c.transcript, ''), nullif(c.raw_text, '')) FROM sitemate.captures c
+               WHERE c.project_id=s.project_id AND c.source_id=s.id ORDER BY c.created_at LIMIT 1),
+             (SELECT sp.excerpt FROM sitemate.source_passages sp
+               WHERE sp.project_id=s.project_id AND sp.source_id=s.id
+               ORDER BY sp.page NULLS FIRST, length(sp.locator), sp.locator LIMIT 1)) AS headline,
            (SELECT status FROM sitemate.ingestion_jobs j
              WHERE j.project_id=s.project_id AND j.source_id=s.id AND j.stage='parse') AS parse_status,
            (SELECT status FROM sitemate.ingestion_jobs j
@@ -87,12 +101,17 @@ def source_view(row):
             f"{TYPE_LABEL.get(kind, 'Record')} {row['id']}"
         return _view(row, meta, kind, title, filename, "text/plain", has_file=False)
     filename = meta.get("filename") or Path(row["path"]).name
-    return _view(row, meta, kind, row["title"] or filename, filename, mime_for(filename), has_file=True)
+    # The database is shared but files live on the disk of the server that received them: check it is really here.
+    present = storage.resolve(row["project_id"], row["path"]) is not None
+    return _view(row, meta, kind, row["title"] or filename, filename, mime_for(filename), has_file=present,
+                 file_missing=not present)
 
 
-def _view(row, meta, kind, title, filename, mime, has_file):
+def _view(row, meta, kind, title, filename, mime, has_file, file_missing=False):
     reasons = meta.get("review_reasons") or []
     notes = []
+    if file_missing:
+        notes.append("The recording is not stored on this server" if kind == "voice" else "The original file is not stored on this server")
     if meta.get("scanned_pages"):
         notes.append("Scanned page, text read by OCR")
     if row["parse_status"] == "needs_review":
@@ -108,9 +127,22 @@ def _view(row, meta, kind, title, filename, mime, has_file):
         # backend extras
         "sha256": row["sha256"], "passage_count": row["passage_count"],
         "summary_version": row["summary_version"], "parse_status": row["parse_status"],
-        "summary_status": row["summary_status"], "review_reasons": reasons, "has_file": has_file,
+        "summary_status": row["summary_status"], "review_reasons": reasons, "has_file": has_file, "file_missing": file_missing,
         "file_url": f"/projects/{row['project_id']}/sources/{row['id']}/file" if has_file else None,
+        "headline": _headline(row.get("headline")),
     }
+
+
+def _headline(text, limit=90):
+    """First sentence of a record's text, cut at a word, for titling records that only have a file name."""
+    if not text:
+        return None
+    first = " ".join(str(text).split())
+    for stop in (". ", "; ", "! ", "? "):
+        if stop in first:
+            first = first.split(stop)[0]
+    first = first.rstrip(".;")
+    return first if len(first) <= limit else first[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
 def passage_view(row):

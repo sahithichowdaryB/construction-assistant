@@ -84,7 +84,7 @@ const SOURCE_TYPE_ALIASES: Record<string, string> = {
 };
 const sourceType = z.preprocess(
   (v) => (typeof v === "string" ? (SOURCE_TYPE_ALIASES[v] ?? v) : v),
-  z.enum(["schedule", "register", "project", "email", "minutes", "daily_report", "voice", "photo", "diary"]),
+  z.enum(["schedule", "register", "project", "email", "minutes", "daily_report", "voice", "photo", "diary", "text", "plan"]),
 );
 const jobStatus = z.enum(["uploaded", "extracting", "indexed", "failed"]);
 const ref = evidenceRef;
@@ -108,6 +108,7 @@ export const sourceSchema = z.object({
   summary_status: z.string().nullish(),
   /** False for records captured in the app (typed or transcribed): there is no original file */
   has_file: z.boolean().optional(),
+  file_missing: z.boolean().optional(),
 });
 /** One malformed record must not hide the whole document list: skip it and say so in the console. */
 export const sourcesSchema = z.array(z.unknown()).transform((items) =>

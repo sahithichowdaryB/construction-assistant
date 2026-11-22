@@ -170,3 +170,190 @@
     transform: scaleX(1);
   }
 }
+
+/* Performance chart: the actual line draws in, shaded areas fade in */
+@keyframes chart-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes chart-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Write with SiteMate: lined paper, a pen that glides, ink lines that draw, letters that write in */
+.paper-lines {
+  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, color-mix(in oklab, var(--info) 22%, transparent) 31px 32px);
+  background-position: 0 14px;
+}
+@keyframes ink-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes pen-glide {
+  0% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  45% {
+    transform: translate(calc(var(--pen-x, 220px)), 6px) rotate(4deg);
+  }
+  50% {
+    transform: translate(calc(var(--pen-x, 220px)), 34px) rotate(-6deg);
+  }
+  95% {
+    transform: translate(0, 40px) rotate(-8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+}
+@keyframes ink-reveal {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes pen-down {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* Page change: the new page rises in and a thin bar runs across the top */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes page-bar {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  70% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+/* Background decoration */
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-40px, 30px) scale(1.08);
+  }
+}
+@keyframes crane-swing {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes tab-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes hook-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(46px);
+  }
+}
+@keyframes blink {
+  to {
+    opacity: 0.15;
+  }
+}
+@keyframes window-glow {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes drive {
+  from {
+    transform: translateX(-360px);
+  }
+  to {
+    transform: translateX(110vw);
+  }
+}
+@keyframes dig {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(16deg);
+  }
+}
+@keyframes dust {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  20% {
+    opacity: 0.18;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(1.8);
+  }
+}
+@keyframes stripe-slide {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 40px 0;
+  }
+}

@@ -3,7 +3,8 @@
 import { CheckCircle2, Circle, Download, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { DayNav } from "@/components/day-nav";
-import { BandChip, OverallChip, StatusChip } from "@/components/performance/chips";
+import { StatusChip } from "@/components/performance/chips";
+import { PerformanceOverview } from "@/components/performance/overview";
 import { PerfTabs } from "@/components/performance/perf-tabs";
 import { SCurveChart } from "@/components/performance/s-curve-chart";
 import { VarianceBar } from "@/components/performance/variance-bar";
@@ -12,37 +13,10 @@ import { EmptyState, ErrorState, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { reportUrl, useDailyEvaluation, usePerformance, type DailyEvaluation, type Snapshot } from "@/lib/performance";
+import { reportUrl, useDailyEvaluation, usePerformance, type DailyEvaluation } from "@/lib/performance";
 import { fmtLocalDate, localDateOf } from "@/lib/time";
 
 const card = "rounded-[22px] bg-card p-5 md:p-6";
-
-function Kpi({ label, value, sub, chip }: { label: string; value: string; sub?: string; chip?: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[22px] bg-card p-4 md:p-5">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="text-2xl font-semibold tabular">{value}</p>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">{chip}{sub}</div>
-    </div>
-  );
-}
-
-function KpiRow({ s }: { s: Snapshot }) {
-  const m = s.metrics;
-  const v = m.completion_variance_days;
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Kpi label="Progress, actual / planned" value={`${m.weighted_actual_pct ?? "–"}% / ${m.weighted_planned_pct ?? "–"}%`}
-           chip={<BandChip band={m.cumulative_band} label={`${m.points_behind} pts behind`} />} />
-      <Kpi label="Schedule performance (SPI)" value={m.spi === null ? "–" : String(m.spi)} chip={<BandChip band={m.spi_band} />} />
-      <Kpi label="Forecast completion" value={m.forecast_completion ? fmtLocalDate(m.forecast_completion) : "–"}
-           chip={<OverallChip status={m.overall_status} />}
-           sub={v === null ? undefined : v === 0 ? "on the planned date" : `${Math.abs(v)} working day${Math.abs(v) === 1 ? "" : "s"} ${v > 0 ? "late" : "early"}`} />
-      <Kpi label="Score to date" value={`${m.score > 0 ? "+" : ""}${m.score}`}
-           sub={`${m.ledger_counts.accepted ?? 0} accepted · ${m.ledger_counts.disputed ?? 0} disputed`} />
-    </div>
-  );
-}
 
 function KpiSkeleton() {
   return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Loading metrics">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-[22px]" />)}</div>;
@@ -112,10 +86,10 @@ export default function PerformancePage() {
           <RefreshCw className={cn(refreshing && "animate-spin")} aria-hidden /> {refreshing ? "Refreshing…" : "Refresh"}
         </Button>
       </div>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
         {snap.isPending ? <KpiSkeleton /> : snap.isError ? <ErrorState error={snap.error} onRetry={() => void snap.refetch()} /> : (
           <>
-            <KpiRow s={snap.data} />
+            <PerformanceOverview snapshot={snap.data} day={day.data} />
             <section className={card} aria-label="S-curve">
               <h2 className="text-base font-bold">Progress over time</h2>
               <SCurveChart points={snap.data.s_curve} today={date} />

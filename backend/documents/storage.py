@@ -1,10 +1,17 @@
 """Private file locations. Demo packs are read-only; uploads go to STORAGE_ROOT."""
 
 import hashlib
+import mimetypes
 import os
+import sys
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
+if str(BACKEND.parent / "ai-agent") not in sys.path:  # main.py adds it; standalone scripts may not
+    sys.path.insert(0, str(BACKEND.parent / "ai-agent"))
+
+from app.capture import mirror  # noqa: E402  (shared Supabase bucket, so uploads reach every machine)
+
 PACKS = {"RIV": BACKEND.parent / "data/riverside-demo"}
 STORAGE_ROOT = Path(os.environ.get("SITEMATE_STORAGE") or BACKEND / "storage").resolve()
 UPLOAD_PREFIX = "storage/"
@@ -25,12 +32,38 @@ def resolve(project_id: str, stored_path: str) -> Path | None:
     if stored_path.startswith(UPLOAD_PREFIX):
         root = (STORAGE_ROOT / project_id).resolve()
         path = (root / stored_path[len(UPLOAD_PREFIX):]).resolve()
+        if path.is_relative_to(root) and (path.is_file() or mirror.fetch_to(_remote_name(project_id, path), path)):
+            return path
     elif project_id in PACKS:
         root = (PACKS[project_id] / "uploads").resolve()
         path = (PACKS[project_id] / stored_path).resolve()
-    else:
+        if path.is_relative_to(root) and path.is_file():
+            return path
+    return _captured_media(project_id, stored_path)
+
+
+def _captured_media(project_id: str, key: str) -> Path | None:
+    """Voice notes and photos captured in the app keep sources.path = '<project>/<file>', a key in the capture stores."""
+    if not key.startswith(f"{project_id}/"):
         return None
-    return path if path.is_relative_to(root) and path.is_file() else None
+    for store in _capture_stores():
+        try:
+            path = store.path(key)
+        except ValueError:
+            continue
+        if path.is_file():
+            return path
+    return None
+
+
+def _remote_name(project_id: str, path: Path) -> str:
+    return f"uploads/{project_id}/{path.name}"
+
+
+def _capture_stores():
+    from app.capture.storage import audio_storage, image_storage
+
+    return audio_storage(), image_storage()
 
 
 def transcript_for(project_id: str, source_id: str) -> Path | None:
@@ -49,4 +82,5 @@ def save_upload(project_id: str, data: bytes, suffix: str) -> tuple[str, str]:
     target = folder / f"{digest}{suffix}"
     if not target.exists():
         target.write_bytes(data)
+        mirror.upload(_remote_name(project_id, target), data, mimetypes.guess_type(target.name)[0] or "application/octet-stream")
     return f"{UPLOAD_PREFIX}{target.name}", digest
