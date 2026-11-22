@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { reportUrl, useDailyEvaluation, usePerformance, type DailyEvaluation } from "@/lib/performance";
+import { downloadOnAndroid } from "@/lib/download";
 import { fmtLocalDate, localDateOf } from "@/lib/time";
 
 const card = "rounded-[22px] bg-card p-5 md:p-6";
@@ -100,8 +101,8 @@ export default function PerformancePage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-bold">Tasks to complete on {fmtLocalDate(date)}</h2>
             <div className="flex gap-2">
-              <Button asChild size="sm" variant="outline"><a href={reportUrl(projectId, date, asOf, "pdf")}><Download aria-hidden /> PDF</a></Button>
-              <Button asChild size="sm" variant="outline"><a href={reportUrl(projectId, date, asOf, "docx")}><Download aria-hidden /> Word</a></Button>
+              <Button asChild size="sm" variant="outline"><a href={reportUrl(projectId, date, asOf, "pdf")} download={`performance-${projectId}-${date}.pdf`} onClick={downloadOnAndroid}><Download aria-hidden /> PDF</a></Button>
+              <Button asChild size="sm" variant="outline"><a href={reportUrl(projectId, date, asOf, "docx")} download={`performance-${projectId}-${date}.docx`} onClick={downloadOnAndroid}><Download aria-hidden /> Word</a></Button>
             </div>
           </div>
           {day.isPending ? (

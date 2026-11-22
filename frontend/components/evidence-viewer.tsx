@@ -2,13 +2,16 @@
 
 import { AlertTriangle, Download, ExternalLink, FileQuestion, FileText, Paperclip, Quote } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { PdfOriginal } from "@/components/pdf-original";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { sourceFileUrl } from "@/lib/api";
+import { downloadOnAndroid } from "@/lib/download";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { passageIdOf, refLabel, SOURCE_TYPE_LABEL } from "@/lib/format";
 import { useEvidence, useSource, useSourcePreview } from "@/lib/queries";
@@ -69,7 +72,7 @@ export function OriginalActions({ source, className }: { source: Source; classNa
         </Button>
       )}
       <Button asChild variant="outline" size="sm">
-        <a href={sourceFileUrl(projectId, source.id, asOf, { download: true })} download={source.filename}>
+        <a href={sourceFileUrl(projectId, source.id, asOf, { download: true })} download={source.filename} onClick={downloadOnAndroid}>
           <Download aria-hidden /> Download
         </a>
       </Button>
@@ -315,6 +318,10 @@ export function OriginalEmbed({
 }) {
   const { projectId, asOf } = useApp();
   const mode = modeOf(source);
+  const [renderPdf, setRenderPdf] = useState(false);
+  useEffect(() => {
+    setRenderPdf(Capacitor.getPlatform() === "android" || navigator.pdfViewerEnabled === false);
+  }, []);
   const noFile = hasNoFile(source);
   const preview = useSourcePreview(source.id, mode === "structured" && !noFile);
 
@@ -344,7 +351,7 @@ export function OriginalEmbed({
 
   let body: ReactNode;
   if (mode === "pdf") {
-    body = (
+    body = renderPdf ? <PdfOriginal key={`${url}:${page ?? 1}`} url={url} initialPage={page ?? 1} title={source.title} /> : (
       <iframe
         key={page ?? 1}
         title={`${source.title}${page ? `, page ${page}` : ""}`}

@@ -4,4 +4,5 @@
     <string name="title_activity_main">SiteMate</string>
     <string name="package_name">de.sitemate.demo</string>
     <string name="custom_url_scheme">de.sitemate.demo</string>
+    <string name="download_saved">Saved %1$s</string>
 </resources>
