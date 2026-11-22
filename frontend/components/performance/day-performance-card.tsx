@@ -9,6 +9,7 @@ import { VarianceBar } from "@/components/performance/variance-bar";
 import { useApp } from "@/components/providers/app-context";
 import { ErrorState, LoadingSkeleton } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { downloadOnAndroid } from "@/lib/download";
 import {
   dailyReportUrl,
   deadlineLabel,
@@ -135,8 +136,8 @@ export function DayPerformance({ d, clockDate }: { d: DailyEvaluation; clockDate
       )}
       <div className="flex flex-wrap items-center gap-2 border-t pt-4" aria-label="Download daily report">
         <p className="mr-auto text-sm font-semibold">Daily report</p>
-        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "pdf")} download><Download aria-hidden /> PDF</a></Button>
-        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "docx")} download><Download aria-hidden /> Word</a></Button>
+        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "pdf")} download={`daily-report-${projectId}-${d.work_date}.pdf`} onClick={downloadOnAndroid}><Download aria-hidden /> PDF</a></Button>
+        <Button asChild size="sm" variant="outline"><a href={dailyReportUrl(projectId, d.work_date, asOf, "docx")} download={`daily-report-${projectId}-${d.work_date}.docx`} onClick={downloadOnAndroid}><Download aria-hidden /> Word</a></Button>
       </div>
       <p className="text-xs text-muted-foreground">
         v{d.version} · {d.disclaimer} · <Link className="underline" href="/performance">Overall performance</Link>
