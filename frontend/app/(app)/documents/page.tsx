@@ -1,17 +1,17 @@
 "use client";
 
-import { ChevronRight, ClipboardList, Clock, FileUp, FolderOpen, Image as ImageIcon, Mail, Mic, PencilRuler, RefreshCw, Search, StickyNote, Upload, X, type LucideIcon } from "lucide-react";
+import { ChevronRight, ClipboardList, Clock, FileUp, FolderOpen, Image as ImageIcon, Loader2, Mail, Mic, PencilRuler, RefreshCw, Search, StickyNote, Upload, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { JobStatusBadge } from "@/components/badges";
 import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
+import { DocumentsGridSkeleton, DocumentTilesSkeleton } from "@/components/route-skeletons";
 import { EmptyState, ErrorState, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { sourceFileUrl } from "@/lib/api";
 import { USE_FIXTURES } from "@/lib/endpoints";
 import { SOURCE_TYPE_LABEL } from "@/lib/format";
@@ -353,8 +353,12 @@ export default function DocumentsPage() {
 
   return (
     <>
-      <PageHeader title="Documents" description={`${list.length} records · newest first`} />
+      <PageHeader
+        title="Documents"
+        description={sources.isPending ? <span className="inline-flex items-center gap-2"><Loader2 className="size-3.5 animate-spin text-primary" aria-hidden /> Loading records…</span> : `${list.length} records · newest first`}
+      />
       <div className="flex flex-col gap-6">
+        {sources.isPending ? <DocumentTilesSkeleton /> : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7" aria-label="Document types">
           <li>
             <button type="button" aria-pressed={group === "all"} onClick={() => { setGroup("all"); setPage(0); }}
@@ -377,6 +381,7 @@ export default function DocumentsPage() {
             );
           })}
         </ul>
+        )}
 
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -398,7 +403,7 @@ export default function DocumentsPage() {
         {showUpload && <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"><UploadPanel /></div>}
 
         {sources.isPending ? (
-          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">{Array.from({ length: 10 }, (_, i) => <li key={i}><Skeleton className="h-28 rounded-2xl" /></li>)}</ul>
+          <DocumentsGridSkeleton />
         ) : sources.isError ? (
           <ErrorState error={sources.error} onRetry={() => void sources.refetch()} />
         ) : !list.length ? (

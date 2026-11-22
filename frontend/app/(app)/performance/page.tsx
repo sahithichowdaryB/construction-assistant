@@ -12,16 +12,13 @@ import { useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ChartCardSkeleton, InsightCardsSkeleton, KpiTilesSkeleton, LoadingNote } from "@/components/route-skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { reportUrl, useDailyEvaluation, usePerformance, type DailyEvaluation } from "@/lib/performance";
 import { downloadOnAndroid } from "@/lib/download";
 import { fmtLocalDate, localDateOf } from "@/lib/time";
 
 const card = "rounded-[22px] bg-card p-5 md:p-6";
-
-function KpiSkeleton() {
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="status" aria-label="Loading metrics">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-[22px]" />)}</div>;
-}
 
 /** The day as a task list: what the plan says must be completed, and how far each task got. */
 function DaySummary({ d }: { d: DailyEvaluation }) {
@@ -88,7 +85,7 @@ export default function PerformancePage() {
         </Button>
       </div>
       <div className="flex flex-col gap-6">
-        {snap.isPending ? <KpiSkeleton /> : snap.isError ? <ErrorState error={snap.error} onRetry={() => void snap.refetch()} /> : (
+        {snap.isPending ? <><LoadingNote>Loading performance figures…</LoadingNote><KpiTilesSkeleton /><InsightCardsSkeleton /><ChartCardSkeleton label="Loading progress chart" /></> : snap.isError ? <ErrorState error={snap.error} onRetry={() => void snap.refetch()} /> : (
           <>
             <PerformanceOverview snapshot={snap.data} day={day.data} />
             <section className={card} aria-label="S-curve">
@@ -107,9 +104,9 @@ export default function PerformancePage() {
           </div>
           {day.isPending ? (
             <div className="flex flex-col gap-3" role="status" aria-label="Loading the day">
+              <LoadingNote>Loading tasks for the day…</LoadingNote>
               <Skeleton className="h-4 w-2/3" />
-              <div className="grid grid-cols-3 gap-3"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
-              <Skeleton className="h-12" /><Skeleton className="h-12" />
+              <Skeleton className="h-14" /><Skeleton className="h-14" />
             </div>
           ) : day.isError ? <ErrorState error={day.error} onRetry={() => void day.refetch()} /> : <DaySummary d={day.data} />}
         </section>

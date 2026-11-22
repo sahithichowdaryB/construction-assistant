@@ -1,12 +1,14 @@
 "use client";
 
-import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
-import Link from "next/link";
+import { BadgeCheck, Clapperboard, Loader2, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AskDrawer } from "@/components/ask-drawer";
 import { AsOfControl } from "@/components/as-of-control";
 import { EvidenceSheet } from "@/components/evidence-viewer";
+import { FetchProgress, LoadingBar } from "@/components/loading-bar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/components/providers/app-context";
 import { Backdrop } from "@/components/backdrop";
 import { AccountMenu, initials, SessionSync, useIdentity } from "@/components/account-menu";
@@ -59,6 +61,30 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/** Inside a Link: a spinner (and a top bar) from the click until the next page is ready. */
+function LinkPending({ className }: { className?: string }) {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <>
+      <Loader2 aria-label="Opening" className={cn("size-4 animate-spin text-primary", className)} />
+      <LoadingBar />
+    </>
+  );
+}
+
+function NavSkeleton({ mobile = false }: { mobile?: boolean }) {
+  return mobile ? (
+    <li className="flex min-h-15 items-center justify-center gap-6" aria-hidden>
+      {[0, 1, 2].map((i) => <Skeleton key={i} className="h-8 w-14 rounded-lg" />)}
+    </li>
+  ) : (
+    <div className="flex flex-col gap-1" role="status" aria-label="Loading menu">
+      {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+    </div>
+  );
+}
+
 function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = isActive(pathname, item.href);
   const { Icon } = item;
@@ -75,6 +101,7 @@ function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
       <span aria-hidden className={cn("absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-all duration-300", active ? "opacity-100" : "h-0 opacity-0")} />
       <Icon className={cn("size-[18px] transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6", active && "text-primary")} aria-hidden />
       <span className="flex-1">{item.label}</span>
+      <LinkPending />
     </Link>
   );
 }
@@ -85,6 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { role } = useApp();
   const identity = useIdentity();
   const items = AUTH_REQUIRED && !identity.memberRole ? [] : NAV[identity.memberRole ?? role];
+  const menuLoading = AUTH_REQUIRED && !identity.memberRole;
   const showClock = pathname !== "/approver" && pathname !== "/foreman/reports";
 
   return (
@@ -100,7 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           <p className="mb-1.5 px-3 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">My work</p>
-          {items.map((item) => <SideLink key={item.href} item={item} pathname={pathname} />)}
+          {menuLoading ? <NavSkeleton /> : items.map((item) => <SideLink key={item.href} item={item} pathname={pathname} />)}
         </nav>
         <div className="mt-3 rounded-2xl bg-sidebar-accent p-3">
           <p className="text-[11px] font-medium text-muted-foreground">Project</p>
@@ -148,10 +176,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 md:hidden">
         <ul className="grid auto-cols-fr grid-flow-col">
-          {items.map((item) => <TabLink key={item.href} item={item} pathname={pathname} />)}
+          {menuLoading ? <NavSkeleton mobile /> : items.map((item) => <TabLink key={item.href} item={item} pathname={pathname} />)}
         </ul>
       </nav>
 
+      <FetchProgress />
       <EvidenceSheet />
       <AskDrawer />
       <SessionSync />
@@ -174,6 +203,7 @@ function TabLink({ item, pathname }: { item: NavItem; pathname: string }) {
       >
         <Icon className={cn("size-5 transition-transform", active && "stroke-[2.4] text-primary motion-safe:animate-[tab-pop_350ms_ease-out]")} aria-hidden />
         {item.label}
+        <LinkPending className="absolute top-1.5 right-1/4 size-3.5" />
       </Link>
     </li>
   );

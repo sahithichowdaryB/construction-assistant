@@ -13,6 +13,7 @@ import { NoticeDownloads } from "@/components/notice-downloads";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { fmtQty, SOURCE_TYPE_LABEL } from "@/lib/format";
@@ -393,6 +394,7 @@ export default function ManagerPage() {
       />
       {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
       {!inboxNotice && <div className="mb-5"><DayPerformanceCard date={date} /></div>}
+      {!inboxNotice && notices.isPending && <Skeleton className="mb-5 h-24 w-full rounded-2xl" role="status" aria-label="Loading shortfalls" />}
       {!inboxNotice && notices.isSuccess && (
         <ShortfallGauges
           shortfalls={openShortfalls ?? []}

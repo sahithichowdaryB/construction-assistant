@@ -357,3 +357,23 @@
     background-position: 40px 0;
   }
 }
+
+/* Loading feedback: an indeterminate bar that slides across the top while data or a page is loading */
+@keyframes bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* Skeleton shimmer: a light band sweeps across every loading placeholder */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
