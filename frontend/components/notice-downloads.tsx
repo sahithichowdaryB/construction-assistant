@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useApp } from "@/components/providers/app-context";
 import { Button } from "@/components/ui/button";
+import { downloadOnAndroid } from "@/lib/download";
 import { Input } from "@/components/ui/input";
 import { useMailStatus, useSendEmail } from "@/lib/correspondence";
 import type { NoticeDraft } from "@/lib/workflow";
