@@ -31,7 +31,9 @@ const elementSchema = z.object({
 });
 
 const pourSchema = z
-  .object({ id: z.string(), activity: z.string(), seq: num, kind: z.string(), planned: z.string().nullable(), m3: num })
+  .object({ id: z.string(), activity: z.string(), seq: num, kind: z.string(), planned: z.string().nullable(), m3: num,
+            /** false: drawn only; no plan or report measures it (e.g. walls the programme does not count in m³) */
+            tracked: z.boolean().optional() })
   .passthrough();
 
 const activitySpecSchema = z
@@ -130,6 +132,11 @@ const progressSchema = z.object({
     }),
   ),
   why: z.array(whySchema),
+  /** Structure activities driven by performance tasks: each task's planned and actual completion on the date */
+  tasks: z
+    .record(z.string(), z.array(z.object({ code: z.string(), name: z.string().nullable(), pct_done: num.nullable(),
+                                           pct_planned: num.nullable(), note: z.string().nullable() })))
+    .optional(),
 });
 
 const timelineSchema = z.object({

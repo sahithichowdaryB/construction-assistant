@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Box, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, Mic, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,7 +25,6 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/foreman/reports", label: "My reports", Icon: ClipboardList },
   ],
   site_manager: [
-    { href: "/model", label: "3D progress", Icon: Box },
     { href: ROLE_HOME.site_manager, label: "Shortfalls & notices", Icon: Gauge },
     { href: "/recaps", label: "Daily recaps", Icon: Clapperboard },
     { href: "/manager/write", label: "Write with SiteMate", Icon: PenLine },

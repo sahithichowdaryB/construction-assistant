@@ -82,7 +82,9 @@ def ensure_days(conn, project_id, to: date, when, cal, plans) -> int:
     return done
 
 
-def compute(conn, project_id, to: date, when) -> dict:
+def forecast_core(conn, project_id, to: date, when) -> dict:
+    """The forecast steps of compute(): plan, signed actuals, cumulative progress and the forward pass as of `to`
+    and instant `when`. Shared with the 3D progress model so both show the same forecast."""
     project = dict(conn.execute(text("SELECT * FROM sitemate.projects WHERE id=:p"), {"p": project_id}).mappings().one())
     baseline = active_baseline(conn, project_id, when)
     baseline_id = baseline["id"] if baseline else None
@@ -92,8 +94,6 @@ def compute(conn, project_id, to: date, when) -> dict:
     plans = _plans(conn, project_id, baseline_id, targets)
     actuals, tracking_start, assumed = m.carry_in(
         targets, {c: {d: v["quantity"] for d, v in s.items()} for c, s in signed.items()})
-    names = {r["code"]: dict(r) for r in conn.execute(text("SELECT code, name, unit FROM sitemate.activities WHERE project_id=:p"),
-                                                      {"p": project_id}).mappings()}
     window = int(settings.get("recent_rate_window") or 5)
     # Measure to the end of `to` once its report is in (or its sweep has passed); before that, to the previous
     # working day, so a morning view does not count today's plan as already missed.
@@ -105,6 +105,18 @@ def compute(conn, project_id, to: date, when) -> dict:
     cum = {p.code: m.cumulative(p, targets.get(p.code, {}), actuals.get(p.code, {}), measured_to, cal, window)
            for p in plans}
     fp = m.forward_pass(plans, cum, measured_to, cal)
+    return {"project": project, "baseline": baseline, "baseline_id": baseline_id, "settings": settings, "cal": cal,
+            "targets": targets, "plan_refs": plan_refs, "signed": signed, "plans": plans, "actuals": actuals,
+            "tracking_start": tracking_start, "assumed": assumed, "measured_to": measured_to, "cum": cum, "fp": fp}
+
+
+def compute(conn, project_id, to: date, when) -> dict:
+    core = forecast_core(conn, project_id, to, when)
+    project, baseline, baseline_id, settings, cal = (core[k] for k in ("project", "baseline", "baseline_id", "settings", "cal"))
+    targets, plan_refs, plans, actuals = core["targets"], core["plan_refs"], core["plans"], core["actuals"]
+    tracking_start, assumed, measured_to, cum, fp = (core[k] for k in ("tracking_start", "assumed", "measured_to", "cum", "fp"))
+    names = {r["code"]: dict(r) for r in conn.execute(text("SELECT code, name, unit FROM sitemate.activities WHERE project_id=:p"),
+                                                      {"p": project_id}).mappings()}
     planned_float = m.planned_critical(plans, cal)
     planned_pct, actual_pct = m.weighted_progress(plans, targets, actuals, measured_to)
     spi = m.spi(planned_pct, actual_pct)

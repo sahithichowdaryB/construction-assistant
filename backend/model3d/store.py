@@ -8,7 +8,7 @@ from datetime import date, datetime
 from sqlalchemy import text
 
 from . import generator
-from .spec import blocking, parse_day
+from .spec import blocking, parse_day, untracked
 
 COLUMNS = """project_id, id::text AS id, revision, status, extraction_status, title, source_ids, spec, review_reasons,
              deadline, model, error, created_by, created_at, as_of, activated_by, activated_at"""
@@ -103,7 +103,8 @@ def activate(conn, project_id: str, model_id: str, *, member_id: str, as_of: dat
     names = {a["code"]: a.get("name") for a in spec.get("activities") or []}
     levels = {lv["activity"]: lv["name"] for lv in spec.get("levels") or []}
     added = []
-    for code in dict.fromkeys(p["activity"] for p in built["pours"]):
+    skip = untracked(spec)   # drawn only: not a programme activity, so not added to the activity list
+    for code in dict.fromkeys(p["activity"] for p in built["pours"] if p["activity"] not in skip):
         made = conn.execute(text("""INSERT INTO sitemate.activities (project_id, code, name, unit, zone)
             VALUES (:p, :c, :n, 'm³', :z) ON CONFLICT (project_id, code) DO NOTHING RETURNING code"""),
                             {"p": project_id, "c": code, "n": names.get(code) or f"{levels.get(code, code)} structure",

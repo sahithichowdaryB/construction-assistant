@@ -8,6 +8,10 @@ Pour assignment: slabs, rafts and balconies belong to the activity's "slab" pour
 "vertical" pours, the parapet and lift overrun to its "other" pours. When an activity has several pours of a kind
 with grid ranges (slab bays, wall halves), an element is split at the pour boundaries so each piece belongs to
 exactly one pour. A range that starts or ends at the outer grid line also covers the overhang beyond it.
+
+A pour may name a `level`: it then builds that level's elements of its kind whatever the level's activity is. That
+lets one level be split between programme activities (foundations zone A / zone B), and lets elements the programme
+does not measure in m3 (walls) sit in their own untracked pour.
 """
 
 from __future__ import annotations
@@ -42,7 +46,8 @@ def model_pours(spec: dict) -> list[dict]:
                           "m3": a.get("m3") or 0, "planned": a.get("finish"), "seq": len(pours), "synthetic": True})
             have.add(code)
     order = {lv["activity"]: i for i, lv in enumerate(spec.get("levels") or [])}
-    pours.sort(key=lambda p: (order.get(p["activity"], 99), p["seq"]))
+    level_order = {lv["name"]: i for i, lv in enumerate(spec.get("levels") or [])}
+    pours.sort(key=lambda p: (level_order.get(p.get("level"), order.get(p["activity"], 99)), p["seq"]))
     for i, p in enumerate(pours):
         p["seq"] = i
     return pours
@@ -58,11 +63,15 @@ def _ranges(pours: list[dict], grid: Grid) -> list[tuple[dict, float, float]]:
     return out
 
 
-def _assign(box_mm, kind, activity, pours_of: dict[str, list[dict]], grid: Grid):
+def _assign(box_mm, kind, activity, level, pours_of: dict[str, list[dict]], pours_at: dict[str, list[dict]], grid: Grid):
     """Split a box at pour boundaries: [(pour_id, box_mm)]."""
-    candidates = pours_of.get(activity) or []
     cls = _kind_class(kind)
-    same = [p for p in candidates if p["kind"] == cls]
+    same = [p for p in pours_at.get(level) or [] if p["kind"] == cls]   # pours that name this level come first
+    if same:
+        candidates = same
+    else:
+        candidates = [p for p in pours_of.get(activity) or [] if not p.get("level")]
+        same = [p for p in candidates if p["kind"] == cls]
     if not same:
         fallback = {"other": ("vertical", "slab"), "vertical": ("slab", "other"), "slab": ("vertical", "other")}[cls]
         for alt in fallback:
@@ -91,8 +100,11 @@ def generate(spec: dict) -> dict:
     levels = spec["levels"]
     pours = model_pours(spec)
     pours_of: dict[str, list[dict]] = {}
+    pours_at: dict[str, list[dict]] = {}
     for p in pours:
         pours_of.setdefault(p["activity"], []).append(p)
+        if p.get("level"):
+            pours_at.setdefault(p["level"], []).append(p)
     X0, X1, Y0, Y1 = grid.x_min, grid.x_max, grid.y_min, grid.y_max
     raw: list[tuple[str, str, str, str | None, list[float]]] = []   # (kind, level, activity, mark, box_mm)
     by_name = {lv["name"]: i for i, lv in enumerate(levels)}
@@ -163,9 +175,11 @@ def generate(spec: dict) -> dict:
                             [x0, y0 + t, z0, x0 + t, y1 - t, z1], [x1 - t, y0 + t, z0, x1, y1 - t, z1]):
                     raw.append(("overrun", roof["name"], roof["activity"], mark, box))
 
+    pour_activity = {p["id"]: p["activity"] for p in pours}
     elements, volumes, counter = [], {}, {}
-    for kind, level, act, mark, box in raw:
-        for pour_id, piece in _assign(box, kind, act, pours_of, grid):
+    for kind, level, level_act, mark, box in raw:
+        for pour_id, piece in _assign(box, kind, level_act, level, pours_of, pours_at, grid):
+            act = pour_activity.get(pour_id, level_act)   # the activity of the pour that builds it
             counter[(level, kind)] = counter.get((level, kind), 0) + 1
             m = [round(v / 1000, 3) for v in piece]
             vol = round((m[3] - m[0]) * (m[4] - m[1]) * (m[5] - m[2]), 3)

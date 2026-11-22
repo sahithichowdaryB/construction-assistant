@@ -7,8 +7,14 @@ import { AUTH_REQUIRED, HOME_COOKIE, ROLE_HOME, SESSION_COOKIE } from "@/lib/ses
  * sign-in (GET /api/auth/me clears it).
  */
 export function middleware(req: NextRequest) {
-  if (!AUTH_REQUIRED) return NextResponse.next();
   const { pathname, search } = req.nextUrl;
+  if (pathname === "/model" || pathname.startsWith("/model/")) {
+    // 3D progress moved into Performance as the "3D structure" tab
+    const url = req.nextUrl.clone();
+    url.pathname = `/performance${pathname}`;
+    return NextResponse.redirect(url);
+  }
+  if (!AUTH_REQUIRED) return NextResponse.next();
   const signedIn = !!req.cookies.get(SESSION_COOKIE)?.value;
   const isAuthPage = pathname === "/login" || pathname === "/signup";
   const isPublic = isAuthPage || pathname === "/forgot-password" || pathname === "/reset-password";
@@ -25,8 +31,8 @@ export function middleware(req: NextRequest) {
     const workspace = roleHomes.find((route) => pathname === route || pathname.startsWith(route + "/"));
     const oldNotices = pathname === "/drafts" || pathname.startsWith("/drafts/");
     const sharedHub = ["/today", "/alerts", "/incidents", "/schedule", "/documents", "/actions", "/search", "/settings"].includes(pathname);
-    // 3D progress is a site-manager tool (the API enforces the same rule).
-    const managerOnly = pathname === "/model" || pathname.startsWith("/model/");
+    // The 3D structure is a site-manager tool (the API enforces the same rule).
+    const managerOnly = pathname === "/performance/model" || pathname.startsWith("/performance/model/");
     const outsideWorkspace = (sharedHub && home !== ROLE_HOME.site_manager) || (pathname === "/capture" && home !== ROLE_HOME.foreman && home !== ROLE_HOME.site_manager) ||
       (managerOnly && home !== ROLE_HOME.site_manager);
     if (home && roleHomes.includes(home) && (pathname === "/" || isAuthPage || oldNotices || outsideWorkspace || (workspace && workspace !== home))) {

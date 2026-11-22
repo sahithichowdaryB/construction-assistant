@@ -20,8 +20,8 @@ from sqlalchemy import text
 from database import writer_engine
 from deps import check_cutoff, connection, require_roles
 
-from . import generator, progress, store
-from .spec import blocking, parse_day, validate
+from . import generator, progress, store, tasks
+from .spec import blocking, parse_day, untracked, validate
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["3d-model"])
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -203,11 +203,12 @@ def list_models(project_id: str, as_of: datetime | None = None, conn=Depends(con
 
 def _model_view(row: dict, geo: dict) -> dict:
     spec = row["spec"] or {}
+    skip = untracked(spec)
     levels = [{"name": lv["name"], "tos": lv["tos"], "thickness": lv["thickness"], "activity": lv["activity"]}
               for lv in spec.get("levels") or []]
     return _summary(row) | {
         "levels": levels, "activities": spec.get("activities") or [], "grid": spec.get("grid") or {},
-        "pours": geo["pours"], "elements": geo["elements"],
+        "pours": [p | {"tracked": p["activity"] not in skip} for p in geo["pours"]], "elements": geo["elements"],
         "bounds": [min((e["box"][i] for e in geo["elements"]), default=0) for i in range(3)] +
                   [max((e["box"][i] for e in geo["elements"]), default=0) for i in range(3, 6)],
     }
@@ -223,6 +224,26 @@ def get_active(project_id: str, conn=Depends(connection)):
     return _model_view(row, store.geometry(conn, project_id, row["id"]))
 
 
+def _shared_forecast(conn, project_id: str, codes: list[str], day: date, as_of: datetime | None,
+                     driven: dict[str, list[str]] | None = None) -> dict | None:
+    """The performance forecast (forward pass) of the model's activities, {code: {"start", "finish"}}, or None when
+    the performance plan cannot be evaluated (no plan yet); the model then keeps its own forecast. An activity
+    driven by tasks takes its tasks' forecast: the earliest start and the latest finish of those the plan has."""
+    from performance.overall import forecast_core
+    try:
+        fp = forecast_core(conn, project_id, day, as_of or datetime.now(timezone.utc))["fp"]
+    except Exception:  # noqa: BLE001 - the 3D view must still load without a performance plan
+        return None
+    out = {}
+    for c in codes:
+        keys = (driven or {}).get(c) or [c]
+        finishes = [fp["finish"][k] for k in keys if fp["finish"].get(k)]
+        if finishes:
+            out[c] = {"start": min((fp["start"][k] for k in keys if fp["start"].get(k)), default=None),
+                      "finish": max(finishes)}
+    return out or None
+
+
 def _progress_inputs(conn, project_id, as_of, date_):
     check_cutoff(as_of)
     _installed(conn)
@@ -230,9 +251,22 @@ def _progress_inputs(conn, project_id, as_of, date_):
     if row is None:
         raise HTTPException(404, "No active 3D model; upload the drawings first")
     geo = store.geometry(conn, project_id, row["id"])
+    skip = untracked(row["spec"] or {})
+    geo["pours"] = [p for p in geo["pours"] if p["activity"] not in skip]   # drawn, but not progress
     day = _date(date_) or _today(conn, project_id, as_of)
     codes = list(dict.fromkeys(p["activity"] for p in geo["pours"]))
-    inputs = progress.load_inputs(conn, project_id, codes, day, as_of)
+    spec = row["spec"] or {}
+    driven = tasks.drivers(spec)
+    inputs = progress.load_inputs(conn, project_id, [c for c in codes if c not in driven], day, as_of)
+    if driven:
+        # task-driven structure activities: progress, plan and forecast come from their performance tasks
+        ti = tasks.load(conn, project_id, sorted({t for ts in driven.values() for t in ts}), day, as_of)
+        inputs["observations"] = sorted(inputs["observations"] + tasks.observations(spec, geo["pours"], ti),
+                                        key=lambda o: (o["date"], o["activity"], o["ref"]))
+        spec, geo["pours"] = tasks.plan(spec, geo["pours"], ti)
+        inputs["tasks"] = tasks.summary(spec, ti, day)
+    inputs["shared"] = _shared_forecast(conn, project_id, codes, day, as_of, driven)
+    row = {**row, "spec": spec}
     return row, geo, day, inputs
 
 
@@ -242,7 +276,8 @@ def get_progress(project_id: str, date_: str | None = Query(None, alias="date"),
     """Pour states on the date (default: today at the As of clock), read from the database: actual, planned and
     at the deadline; the deadline check; the reasons. Stored as a new element_progress version when changed."""
     row, geo, day, inputs = _progress_inputs(conn, project_id, as_of, date_)
-    result = progress.compute(row["spec"] or {}, geo["pours"], inputs, day, row["deadline"], row["review_reasons"])
+    result = progress.compute(row["spec"] or {}, geo["pours"], inputs, day, row["deadline"], row["review_reasons"],
+                              shared=inputs["shared"])
     digest = progress.input_digest(inputs, day)
     try:
         with writer_engine().begin() as w:
@@ -252,6 +287,7 @@ def get_progress(project_id: str, date_: str | None = Query(None, alias="date"),
     except Exception:  # noqa: BLE001 - reading must not fail because the history could not be written
         result["version"] = None
     result["model_id"] = row["id"]
+    result["tasks"] = inputs.get("tasks") or {}
     return result
 
 
@@ -261,7 +297,8 @@ def get_timeline(project_id: str, date_: str | None = Query(None, alias="date"),
     """Per-day planned/actual/forecast m3, the pour states at each date the records changed, and the planned and
     forecast window of every pour: everything the slider needs in one call."""
     row, geo, day, inputs = _progress_inputs(conn, project_id, as_of, date_)
-    return progress.timeline(row["spec"] or {}, geo["pours"], inputs, day, row["deadline"]) | {"model_id": row["id"]}
+    return progress.timeline(row["spec"] or {}, geo["pours"], inputs, day, row["deadline"],
+                             shared=inputs["shared"]) | {"model_id": row["id"]}
 
 
 @router.get("/models/{model_id}", dependencies=[Depends(require_roles("manager"))])

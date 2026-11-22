@@ -340,6 +340,10 @@ def validate(extracted: dict, passages: dict[str, str], *, grounded: bool) -> tu
                     reasons.append(_reason("warning", a["code"], f"predecessor {p} is not in the cited text; dropped", refs))
             a["predecessors"] = preds
         a["predecessors"] = [str(p).strip() for p in a.get("predecessors") or [] if str(p).strip()]
+        if raw.get("daily_targets") and not grounded:
+            daily = _daily_targets(raw["daily_targets"], a, reasons)
+            if daily:
+                a["daily_targets"] = daily
         for field in ("planned_start", "planned_finish", "planned_total"):
             if a[field] is None and field not in a["missing"]:
                 a["missing"].append(field)
@@ -362,9 +366,10 @@ def validate(extracted: dict, passages: dict[str, str], *, grounded: bool) -> tu
             a["duration_wd"] = working
             a["derived"].append("duration_wd")
         elif int(a["duration_wd"]) != working:
+            follow = "its own daily targets" if a.get("daily_targets") else "the calendar"
             reasons.append(_reason("warning", a["code"], f"Duration {a['duration_wd']:g} wd, but the calendar has {working} "
-                                   "working days in the window (holidays or calendar differ); targets follow the "
-                                   "calendar", a["refs"]))
+                                   f"working days in the window (holidays or calendar differ); targets follow {follow}",
+                                   a["refs"]))
         tpd, total, dur = a["target_per_day"], a["planned_total"], a["duration_wd"]
         if tpd is None and total is not None and dur:
             a["target_per_day"] = round(total / dur, 4)
@@ -459,6 +464,28 @@ def _flag(value):
     if isinstance(value, bool) or value is None:
         return value
     return {"yes": True, "true": True, "no": False, "false": False}.get(str(value).strip().lower())
+
+
+def _daily_targets(raw: dict, a: dict, reasons: list[dict]) -> dict[str, float] | None:
+    """Explicit per-day targets {"YYYY-MM-DD": qty} of an activity carried over from an earlier revision whose
+    calendar differs (e.g. weekend work in a Monday-Friday plan). They replace the per-working-day expansion."""
+    out = {}
+    for day, qty in (raw or {}).items():
+        d, q = _iso(day), _num(qty)
+        if d is None or q is None or q < 0:
+            reasons.append(_reason("blocking", a["code"], f"daily target {day!r}: {qty!r} is not a date and a quantity"))
+            return None
+        if (a.get("planned_start") and d < a["planned_start"]) or (a.get("planned_finish") and d > a["planned_finish"]):
+            reasons.append(_reason("blocking", a["code"], f"daily target on {d} is outside {a.get('planned_start')} - "
+                                                          f"{a.get('planned_finish')}"))
+            return None
+        out[d] = q
+    total = sum(out.values())
+    if a.get("planned_total") is not None and abs(total - float(a["planned_total"])) > 1e-6:
+        reasons.append(_reason("blocking", a["code"], f"daily targets add up to {total:g}, planned total is "
+                                                      f"{float(a['planned_total']):g}"))
+        return None
+    return dict(sorted(out.items()))
 
 
 def normalise(extracted: dict) -> dict:
@@ -677,7 +704,8 @@ def load_plans(conn, project_id, baseline_id) -> list[m.ActivityPlan]:
 
 
 def expand_targets(activities: list[dict], cal: m.Calendar) -> dict[str, dict[date, float]]:
-    """Target per day on each working day from start to finish; 0 on every other day of the plan's span."""
+    """Target per day on each working day from start to finish; 0 on every other day of the plan's span.
+    An activity with `daily_targets` keeps exactly those (carried over from a revision with another calendar)."""
     dated = [a for a in activities if a.get("planned_start") and a.get("planned_finish")]
     if not dated:
         return {}
@@ -688,9 +716,10 @@ def expand_targets(activities: list[dict], cal: m.Calendar) -> dict[str, dict[da
         start, finish = date.fromisoformat(a["planned_start"]), date.fromisoformat(a["planned_finish"])
         tpd = float(a.get("target_per_day") or 0)
         working = set(cal.working_days(start, finish))
+        explicit = {date.fromisoformat(d): float(q) for d, q in (a.get("daily_targets") or {}).items()}
         series, day = {}, first
         while day <= last:
-            series[day] = tpd if day in working else 0.0
+            series[day] = explicit.get(day, 0.0) if explicit else (tpd if day in working else 0.0)
             day += timedelta(days=1)
         out[a["code"]] = series
     return out
@@ -756,8 +785,10 @@ def activate(conn, project_id, baseline_id, *, member_id, as_of, normalize_weigh
                "ct": contractor})
     codes = [a["code"] for a in acts]
     wanted = {(p, a["code"]) for a in acts for p in a.get("predecessors") or [] if p in codes}
+    # A revision only speaks about links between its own activities: a link from an activity it does not contain
+    # (e.g. excavation before a carried-over foundation) is kept.
     existing = {tuple(r) for r in conn.execute(text("""SELECT predecessor, successor FROM sitemate.activity_dependencies
-        WHERE project_id = :p AND successor = ANY(:c)"""), {"p": project_id, "c": codes}).all()}
+        WHERE project_id = :p AND successor = ANY(:c) AND predecessor = ANY(:c)"""), {"p": project_id, "c": codes}).all()}
     for pred, succ in existing - wanted:
         conn.execute(text("DELETE FROM sitemate.activity_dependencies WHERE project_id=:p AND predecessor=:a AND successor=:b"),
                      {"p": project_id, "a": pred, "b": succ})

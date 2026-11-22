@@ -16,6 +16,9 @@ Rules:
     * Forecast: each remaining pour keeps its planned date shifted by the current slip (working days between the
       planned and the actual date of the latest completed pour), never earlier than tomorrow. The slip carries
       through the chain, so a late raft pour moves every later level.
+    * Shared forecast: when the performance evaluation forecasts an activity (performance/overall.forecast_core, the
+      forward pass behind the Performance page), its remaining pours take that forecast instead, spread over the
+      activity's forecast window by volume. Activities the performance plan does not know keep the forecast above.
 """
 
 from __future__ import annotations
@@ -48,13 +51,19 @@ def load_inputs(conn, project_id: str, activity_codes: list[str], day: date, as_
     """Everything the progress engine reads, as plain data (also hashed into input_digest)."""
     params = {"p": project_id, "codes": list(activity_codes), "d": day, "cutoff": as_of}
     tz = conn.scalar(text("SELECT timezone FROM sitemate.projects WHERE id=:p"), {"p": project_id}) or "UTC"
+    # One quantity per activity, day and basis: the latest report known at the cutoff, as performance/daily.py
+    # load_series counts it, so a corrected report replaces the earlier one instead of adding to it.
     obs = conn.execute(text("""
-        SELECT o.activity_code, o.work_date, o.quantity, o.basis, o.source_id, o.locator, s.available_at
-        FROM sitemate.observations o
-        JOIN sitemate.sources s ON (s.project_id, s.id) = (o.project_id, o.source_id)
-        WHERE o.project_id = :p AND o.activity_code = ANY(:codes) AND o.work_date <= :d
-          AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')
-        ORDER BY o.work_date, o.activity_code, o.source_id, o.locator
+        SELECT * FROM (
+            SELECT DISTINCT ON (o.activity_code, o.work_date, o.basis)
+                   o.activity_code, o.work_date, o.quantity, o.basis, o.source_id, o.locator, s.available_at
+            FROM sitemate.observations o
+            JOIN sitemate.sources s ON (s.project_id, s.id) = (o.project_id, o.source_id)
+            WHERE o.project_id = :p AND o.activity_code = ANY(:codes) AND o.work_date <= :d
+              AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')
+            ORDER BY o.activity_code, o.work_date, o.basis, s.available_at DESC, o.source_id, o.locator
+        ) latest
+        ORDER BY work_date, activity_code, source_id, locator
     """), params).mappings().all()
     events = conn.execute(text("""
         SELECT e.id::text AS id, e.activity_code, (e.occurred_at AT TIME ZONE p.timezone)::date AS day,
@@ -260,6 +269,35 @@ def forecast(spec: dict, pours: list[dict], actual: dict[str, dict], today: date
     return out
 
 
+def apply_shared(pours: list[dict], plan: dict, fc: dict, fwin: dict, actual: dict[str, dict], shared: dict | None,
+                 today: date, cal: Calendar) -> set[str]:
+    """Replace the forecast of every activity in `shared` ({code: {"start", "finish"}} from the performance forward
+    pass) for its pours that are not built. Updates fc and fwin in place; returns the activity codes it replaced."""
+    used = set()
+    tomorrow = today + timedelta(days=1)
+    for code, w in (shared or {}).items():
+        finish = parse_day(w.get("finish"))
+        remaining = [p for p in sorted(pours, key=lambda p: p["seq"])
+                     if p["activity"] == code and actual.get(p["id"], {}).get("status") != "built"]
+        if finish is None or not remaining:
+            if finish is not None:
+                used.add(code)
+            continue
+        start = min(max(parse_day(w.get("start")) or finish, tomorrow), finish)
+        total = sum(float(p["m3"] or 0) for p in remaining) or len(remaining)
+        acc, cursor = 0.0, start
+        for p in remaining:
+            acc += float(p["m3"] or 0) or 1
+            end = start + timedelta(days=round((finish - start).days * acc / total))
+            planned = plan.get(p["id"], (None, None))[1]
+            fc[p["id"]] = {"date": end.isoformat(), "slip_wd": cal.between(planned, end) if planned else 0,
+                           "done": False, "source": "performance"}
+            fwin[p["id"]] = (min(cursor, end), end)
+            cursor = end + timedelta(days=1)
+        used.add(code)
+    return used
+
+
 def forecast_windows(pours: list[dict], plan: dict, fc: dict, actual: dict[str, dict], today: date) -> dict:
     """Per pour (start, end) of the forecast; started pours run from today."""
     out = {}
@@ -345,13 +383,14 @@ def why(spec: dict, pours: list[dict], actual: dict, plan: dict, fc: dict, input
 
 
 def compute(spec: dict, pours: list[dict], inputs: dict, today: date, deadline: date | None,
-            review_reasons: list[dict] | None = None) -> dict:
+            review_reasons: list[dict] | None = None, shared: dict | None = None) -> dict:
     """Actual, planned and forecast state on `today`, the deadline check and the reasons."""
     cal = Calendar.from_spec(spec)
     actual = pour_states(pours, inputs, today)
     plan = planned_windows(spec, pours)
     fc = forecast(spec, pours, actual, today, cal)
     fwin = forecast_windows(pours, plan, fc, actual, today)
+    shared_codes = apply_shared(pours, plan, fc, fwin, actual, shared, today, cal)
     planned_state = {p["id"]: _window_state(plan.get(p["id"]), today) for p in pours}
     completion = max((parse_day(f["date"]) for f in fc.values() if f.get("date")), default=None)
     at_deadline = {}
@@ -396,6 +435,8 @@ def compute(spec: dict, pours: list[dict], inputs: dict, today: date, deadline: 
         "planned": planned_state,
         "at_deadline": at_deadline,
         "forecast": fc,
+        "forecast_source": "performance" if shared_codes and shared_codes >= {p["activity"] for p in pours}
+                           else "mixed" if shared_codes else "model",
         "summary": {
             "total_m3": r1(total), "built_m3": r1(built_m3), "planned_m3": r1(planned_m3),
             "pct_built": round(100 * built_m3 / total, 1) if total else 0.0,
@@ -418,7 +459,8 @@ def _window_state(window, d):
     return {"status": "built" if pct >= 100 else "in_progress" if pct > 0 else "not_started", "pct": pct}
 
 
-def timeline(spec: dict, pours: list[dict], inputs: dict, today: date, deadline: date | None) -> dict:
+def timeline(spec: dict, pours: list[dict], inputs: dict, today: date, deadline: date | None,
+             shared: dict | None = None) -> dict:
     """Series for the slider and the chart: planned/actual/forecast cumulative m3 per day, the actual pour states at
     every date the records changed, and the planned and forecast window of every pour."""
     cal = Calendar.from_spec(spec)
@@ -426,6 +468,7 @@ def timeline(spec: dict, pours: list[dict], inputs: dict, today: date, deadline:
     plan = planned_windows(spec, pours)
     fc = forecast(spec, pours, actual_today, today, cal)
     fwin = forecast_windows(pours, plan, fc, actual_today, today)
+    apply_shared(pours, plan, fc, fwin, actual_today, shared, today, cal)
     starts = [w[0] for w in plan.values()]
     if not starts:
         return {"points": [], "steps": [], "planned_windows": {}, "forecast_windows": {}, "start": None, "end": None}

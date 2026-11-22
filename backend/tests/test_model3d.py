@@ -322,3 +322,103 @@ def test_p5_schema_is_strict():
             for v in node:
                 walk(v)
     walk(P5_SCHEMA)
+
+
+def _plan_mapped_spec(**pour_overrides):
+    """A small building whose pours carry programme codes: one foundation level split between two activities,
+    walls in an untracked pour (the mapping used to put a model on the performance plan's codes)."""
+    return {
+        "grid": {"x": [{"name": "X1", "at": 0}, {"name": "X2", "at": 4000}, {"name": "X3", "at": 12000}],
+                 "y": [{"name": "Y1", "at": 0}, {"name": "Y2", "at": 9000}]},
+        "levels": [{"name": "FND", "kind": "raft", "tos": -300, "thickness": 500, "activity": "FND-A"},
+                   {"name": "GF", "kind": "slab", "tos": 0, "thickness": 200, "activity": "SLAB"},
+                   {"name": "L1", "kind": "slab", "tos": 3000, "thickness": 200, "activity": "POUR-L1"}],
+        "walls": [{"mark": "W", "thickness": 250, "from": "X1Y1", "to": "X3Y1", "storeys": ["L1"]}],
+        "activities": [{"code": c, "name": c, "start": "2026-11-02", "finish": "2026-11-14", "m3": m}
+                       for c, m in (("FND-A", 50), ("FND-B", 90), ("SLAB", 40), ("POUR-L1", 50))]
+                      + [{"code": "WALLS", "name": "Walls", "tracked": False}],
+        "pours": [{"id": "FND-A-P", "activity": "FND-A", "kind": "slab", "level": "FND", "x_from": "X1", "x_to": "X2",
+                   "m3": 50, "planned": "2026-11-09"},
+                  {"id": "FND-B-P", "activity": "FND-B", "kind": "slab", "level": "FND", "x_from": "X2", "x_to": "X3",
+                   "m3": 90, "planned": "2026-11-14", **pour_overrides},
+                  {"id": "SLAB-P", "activity": "SLAB", "kind": "slab", "m3": 40, "planned": "2026-11-10"},
+                  {"id": "POUR-L1-P", "activity": "POUR-L1", "kind": "slab", "m3": 50, "planned": "2026-11-13"},
+                  {"id": "WALLS-GF", "activity": "WALLS", "kind": "vertical", "level": "L1", "m3": 6}],
+    }
+
+
+def test_a_pour_naming_a_level_splits_it_between_activities_and_keeps_walls_apart():
+    from model3d.spec import untracked
+    spec, reasons = validate(_plan_mapped_spec())
+    assert not blocking(reasons)
+    g = generator.generate(spec)
+    by_pour = {}
+    for e in g["elements"]:
+        by_pour.setdefault(e["pour"], []).append(e)
+    a, b = by_pour["FND-A-P"][0], by_pour["FND-B-P"][0]
+    assert (a["activity"], b["activity"]) == ("FND-A", "FND-B")       # elements carry their pour's activity
+    assert a["box"][3] == 4.0 and b["box"][0] == 4.0                    # the raft is split at grid X2
+    assert {e["activity"] for e in by_pour["WALLS-GF"]} == {"WALLS"} and by_pour["WALLS-GF"][0]["kind"] == "wall"
+    assert [e["kind"] for e in by_pour["POUR-L1-P"]] == ["slab"]        # the L1 slab stays with its level activity
+    assert [p["id"] for p in g["pours"]][:2] == ["FND-A-P", "FND-B-P"]  # FND-B is ordered with its level
+    assert untracked(spec) == {"WALLS"}
+    obs = [{"activity": "FND-A", "date": "2026-11-09", "qty": 50, "basis": "signed", "ref": "R9:1"},
+           {"activity": "FND-B", "date": "2026-11-12", "qty": 20, "basis": "signed", "ref": "R12:1"}]
+    tracked = [p for p in g["pours"] if p["activity"] not in untracked(spec)]
+    st = progress.pour_states(tracked, {"observations": obs, "events": []}, D("2026-11-22"))
+    assert st["FND-A-P"]["status"] == "built" and st["FND-B-P"]["pct"] == 22.2 and "WALLS-GF" not in st
+
+
+def test_a_pour_naming_an_unknown_level_blocks():
+    _, reasons = validate(_plan_mapped_spec(level="B9"))
+    assert any(r["subject"] == "pour FND-B-P" and "B9" in r["message"] for r in blocking(reasons))
+
+
+def test_shared_performance_forecast_replaces_the_model_forecast_for_its_activities():
+    spec, _ = validate(_plan_mapped_spec())
+    g = generator.generate(spec)
+    from model3d.spec import untracked
+    pours = [p for p in g["pours"] if p["activity"] not in untracked(spec)]
+    obs = [{"activity": "FND-A", "date": "2026-11-09", "qty": 50, "basis": "signed", "ref": "R9:1"}]
+    inputs = {"observations": obs, "events": [], "remarks": []}
+    today = D("2026-11-22")
+    own = progress.compute(spec, pours, inputs, today, D("2026-12-31"))
+    shared = {"POUR-L1": {"start": D("2026-11-20"), "finish": D("2026-11-30")},
+              "FND-A": {"start": D("2026-11-08"), "finish": D("2026-11-09")}}   # built: keeps its actual date
+    r = progress.compute(spec, pours, inputs, today, D("2026-12-31"), shared=shared)
+    assert own["forecast_source"] == "model" and r["forecast_source"] == "mixed"
+    assert r["forecast"]["POUR-L1-P"]["date"] == "2026-11-30" and r["forecast"]["POUR-L1-P"]["source"] == "performance"
+    assert r["forecast"]["FND-A-P"] == own["forecast"]["FND-A-P"]                 # built pours are not re-forecast
+    assert r["forecast"]["FND-B-P"] == own["forecast"]["FND-B-P"]                 # not in the shared forecast
+    t = progress.timeline(spec, pours, inputs, today, D("2026-12-31"), shared=shared)
+    assert t["forecast_windows"]["POUR-L1-P"] == ["2026-11-23", "2026-11-30"]   # remaining work starts tomorrow
+
+
+def test_tasks_drive_a_structure_activity_by_their_average_completion():
+    from model3d import tasks
+    s = _plan_mapped_spec()
+    s["activities"] = [a for a in s["activities"] if a["code"] != "POUR-L1"] + [
+        {"code": "POUR-L1", "name": "Level 1", "start": "2026-12-01", "finish": "2026-12-20", "tasks": ["FORM-L1", "POUR-L1-T", "NO-PLAN"]}]
+    s["pours"] = [p for p in s["pours"] if p["id"] != "POUR-L1-P"] + [
+        {"id": "L1-V", "activity": "POUR-L1", "kind": "vertical", "m3": 30, "planned": "2026-12-10"},
+        {"id": "L1-S", "activity": "POUR-L1", "kind": "slab", "m3": 70, "planned": "2026-12-20"}]
+    spec, reasons = validate(s)
+    assert not blocking(reasons) and tasks.drivers(spec) == {"POUR-L1": ["FORM-L1", "POUR-L1-T", "NO-PLAN"]}
+    pours = generator.generate(spec)["pours"]
+    ti = {"targets": {"FORM-L1": {"2026-11-02": 60, "2026-11-03": 60}, "POUR-L1-T": {"2026-11-13": 50}},
+          "observations": [{"task": "FORM-L1", "date": "2026-11-02", "qty": 60, "basis": "signed", "ref": "R2:form"},
+                           {"task": "FORM-L1", "date": "2026-11-03", "qty": 80, "basis": "signed", "ref": "R3:form"}],
+          "names": {}}
+    obs = tasks.observations(spec, pours, ti)
+    # formwork 100% (capped), pour 0%, NO-PLAN ignored: Level 1 is 50% of its 100 m3, cited by the real reports
+    assert round(sum(o["qty"] for o in obs), 6) == 50 and {o["ref"] for o in obs} == {"R2:form", "R3:form"}
+    plan_spec, plan_pours = tasks.plan(spec, pours, ti)
+    act = next(a for a in plan_spec["activities"] if a["code"] == "POUR-L1")
+    assert (act["start"], act["finish"]) == ("2026-11-02", "2026-11-13")
+    # planned average reaches 30% (end of the vertical pour) on 3 Nov (formwork done = 50%), 100% on 13 Nov
+    assert {p["id"]: p["planned"] for p in plan_pours if p["activity"] == "POUR-L1"} == {"L1-V": "2026-11-03", "L1-S": "2026-11-13"}
+    st = progress.pour_states([p for p in plan_pours if p["activity"] == "POUR-L1"],
+                              {"observations": obs, "events": []}, D("2026-11-22"))
+    assert st["L1-V"]["status"] == "built" and st["L1-S"]["pct"] == round(100 * 20 / 70, 1)
+    rows = {r["code"]: r for r in tasks.summary(spec, ti, D("2026-11-22"))["POUR-L1"]}
+    assert rows["FORM-L1"]["pct_done"] == 100 and rows["POUR-L1-T"]["pct_done"] == 0 and rows["NO-PLAN"]["note"]

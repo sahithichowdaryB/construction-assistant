@@ -10,8 +10,9 @@ document, not geometry:
     balconies   {"levels": [...], "depth", "thickness", "width"} on the south edge (grid y minimum)
     parapet     {"height", "thickness"} on the roof
     cores       {"mark", "from", "to", "height_above_roof"} (lift overrun on the roof)
-    pours       {"id", "activity", "kind": slab|vertical|other, "x_from", "x_to", "m3", "planned"}
-    activities  {"code", "name", "start", "finish", "m3"}
+    pours       {"id", "activity", "kind": slab|vertical|other, "x_from", "x_to", "m3", "planned", "level"?}
+                (`level` names the level whose elements the pour builds when that is not its activity's level)
+    activities  {"code", "name", "start", "finish", "m3", "tracked"?} (tracked: false = shown, not measured)
     calendar    {"working_weekdays": [1..7, Monday=1], "holidays": ["YYYY-MM-DD", ...]}
     deadline_hint {"date", "label"}
     refs        {"<path>": ["source_id:locator", ...]} for the values read from the drawings
@@ -34,6 +35,11 @@ MATCH_TOLERANCE = 0.03      # pours of an activity must add up to its m3 within 
 
 def reason(severity: str, subject: str, message: str, refs=()) -> dict:
     return {"severity": severity, "subject": subject, "message": message, "refs": list(refs)}
+
+
+def untracked(spec: dict) -> set[str]:
+    """Activity codes marked `tracked: false`: their elements are drawn, but no plan or report measures them."""
+    return {a["code"] for a in spec.get("activities") or [] if a.get("tracked") is False}
 
 
 def blocking(reasons: list[dict]) -> list[dict]:
@@ -403,6 +409,10 @@ def validate(spec: dict, passages: dict[str, str] | None = None) -> tuple[dict, 
         p["activity"] = code
         if code not in acts:
             reasons.append(reason("blocking", subject, f"activity {code or '?'} is not a level activity"))
+        if p.get("level") not in (None, ""):
+            p["level"] = str(p["level"]).strip()
+            if p["level"] not in names:
+                reasons.append(reason("blocking", subject, f"level {p['level']!r} is not a level of the model"))
         p["kind"] = p.get("kind") if p.get("kind") in POUR_KINDS else "slab"
         p["m3"] = _num(p.get("m3"))
         if not p["m3"] or p["m3"] <= 0:
