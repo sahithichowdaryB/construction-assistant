@@ -1,20 +1,22 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, CircleDashed, FilePen, Hammer, MessageSquareWarning, Search, Send, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, FilePen, Hammer, MessageSquareWarning, PencilLine, Search, Send, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { DayNav } from "@/components/day-nav";
 import { SiteActivity } from "@/components/site-activity";
+import { DailyReportCard } from "@/components/daily-report-card";
 import { DayPerformanceCard } from "@/components/performance/day-performance-card";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
+import { DisclaimerBanner } from "@/components/disclaimer-banner";
 import { NoticeDownloads } from "@/components/notice-downloads";
+import { GapResolutions, NoticeGaps } from "@/components/notice-gaps";
 import { RecapStrip } from "@/components/recap/recap-strip";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { fmtQty, SOURCE_TYPE_LABEL } from "@/lib/format";
 import { useAlerts } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
@@ -24,6 +26,7 @@ import { cn } from "@/lib/utils";
 import {
   STATUS_LABEL,
   STATUS_TONE,
+  ORIGIN_LABEL,
   useDraftNotice,
   noticeLabel,
   useFieldNotes,
@@ -31,6 +34,7 @@ import {
   useRelated,
   useReviseNotice,
   useSiteDay,
+  useSubmitNotice,
   type DayActivity,
   type NoticeDraft,
 } from "@/lib/workflow";
@@ -219,53 +223,68 @@ function RelatedRecords({ code, date }: { code: string; date: string }) {
 function ReviseForm({ notice }: { notice: NoticeDraft }) {
   const { role } = useApp();
   const revise = useReviseNotice();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const missing = notice.latest.missing_fields.filter((f) => f === "contract reference" || f === "contract clause");
   const [body, setBody] = useState(notice.latest.body);
-  const needsRevision = notice.status === "changes_requested";
-  if (!missing.length && !needsRevision) return null;
+  const [open, setOpen] = useState(notice.status === "changes_requested");
+  const deny = denyReason(role, "edit_draft");
+  if (!open) {
+    return (
+      <GatedButton reason={deny} size="sm" variant="outline" className="self-start" onClick={() => setOpen(true)}>
+        <PencilLine aria-hidden /> {notice.status === "approved" ? "Edit wording (needs a new approval)" : "Edit wording"}
+      </GatedButton>
+    );
+  }
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        revise.mutate({
-          draftId: notice.id,
-          expected_version: notice.latest.version,
-          body: body !== notice.latest.body ? body : undefined,
-          contract_reference: values["contract reference"] || undefined,
-          contract_clause: values["contract clause"] || undefined,
-        });
+        revise.mutate({ draftId: notice.id, expected_version: notice.latest.version, body }, { onSuccess: () => setOpen(false) });
       }}
       className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4"
     >
-      {needsRevision && (
-        <label className="grid gap-2 text-sm font-medium">
-          Revise notice
-          <Textarea rows={8} value={body} onChange={(event) => setBody(event.target.value)} />
-        </label>
+      <label className="grid gap-2 text-sm font-medium">
+        Revise the wording
+        <Textarea rows={10} value={body} onChange={(event) => setBody(event.target.value)} />
+      </label>
+      {notice.status === "approved" && (
+        <p className="text-xs text-muted-foreground">
+          The approved version {notice.latest.version} and its downloads stay on record. The new version needs its own approval.
+        </p>
       )}
-      {missing.length > 0 && <p className="text-sm font-semibold">Fill in the missing details</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {missing.map((field) => (
-          <div key={field} className="flex flex-col gap-1.5">
-            <Label htmlFor={field} className="capitalize">
-              {field}
-            </Label>
-            <Input id={field} value={values[field] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))} className="h-11 md:h-9" />
-          </div>
-        ))}
+      <div className="flex gap-2">
+        <GatedButton type="submit" reason={deny} size="sm" disabled={body === notice.latest.body || revise.isPending}>
+          <Send aria-hidden /> {revise.isPending ? "Saving…" : `Save as version ${notice.latest.version + 1}`}
+        </GatedButton>
+        <Button type="button" size="sm" variant="ghost" onClick={() => { setBody(notice.latest.body); setOpen(false); }}>
+          Cancel
+        </Button>
       </div>
-      <GatedButton
-        type="submit"
-        reason={denyReason(role, "edit_draft")}
-        size="sm"
-        disabled={(body === notice.latest.body && !Object.values(values).some((v) => v.trim())) || revise.isPending}
-        className="self-start"
-      >
-        <Send aria-hidden /> {revise.isPending ? "Saving…" : `Submit version ${notice.latest.version + 1} for approval`}
-      </GatedButton>
       {revise.isError && <p className="text-sm text-red-800">{revise.error.message}</p>}
     </form>
+  );
+}
+
+function SubmitForApproval({ notice }: { notice: NoticeDraft }) {
+  const { role } = useApp();
+  const submit = useSubmitNotice();
+  if (notice.status !== "draft") return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-4">
+      <p className="text-sm">
+        {notice.origin === "alert_auto"
+          ? "SiteMate drafted this automatically when the deviation was detected. Only managers can see it until you send it for approval."
+          : "Only managers can see this draft until you send it for approval."}
+      </p>
+      <GatedButton
+        reason={denyReason(role, "submit_review")}
+        size="sm"
+        className="self-start"
+        disabled={submit.isPending}
+        onClick={() => submit.mutate({ draftId: notice.id, expected_version: notice.latest.version })}
+      >
+        <Send aria-hidden /> {submit.isPending ? "Sending…" : "Send for approval"}
+      </GatedButton>
+      {submit.isError && <p className="text-sm text-red-800">{submit.error.message}</p>}
+    </div>
   );
 }
 
@@ -277,8 +296,16 @@ function NoticePanel({ notice }: { notice: NoticeDraft }) {
         <h2 id="notice-title" className="flex items-center gap-2 text-base font-semibold">
           <FilePen className="size-4 text-muted-foreground" aria-hidden /> {noticeLabel(notice)} · version {notice.latest.version}
         </h2>
-        <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset", STATUS_TONE[notice.status])}>{STATUS_LABEL[notice.status]}</span>
+        <span className="flex flex-wrap items-center gap-2">
+          {notice.origin && ORIGIN_LABEL[notice.origin] && (
+            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-900 ring-1 ring-sky-200 ring-inset">
+              {ORIGIN_LABEL[notice.origin]}
+            </span>
+          )}
+          <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset", STATUS_TONE[notice.status])}>{STATUS_LABEL[notice.status]}</span>
+        </span>
       </div>
+      <DisclaimerBanner text={notice.disclaimer} />
       {review?.decision === "changes_requested" && (
         <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           <MessageSquareWarning className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -295,14 +322,17 @@ function NoticePanel({ notice }: { notice: NoticeDraft }) {
       {notice.status === "awaiting_review" && !!notice.latest.missing_fields.length && (
         <p className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          With the approver. It cannot be approved until these are filled in: {notice.latest.missing_fields.join(", ")}.
+          With the approver. It cannot be approved until these are filled in or left out: {notice.latest.missing_fields.join(", ")}.
         </p>
       )}
+      <NoticeGaps key={`gaps-${notice.latest.version}`} notice={notice} />
+      <GapResolutions version={notice.latest} />
       <EvidenceAt at={notice.latest.as_of}>
         <NoticeText body={notice.latest.body} />
       </EvidenceAt>
+      <SubmitForApproval notice={notice} />
       <NoticeDownloads notice={notice} />
-      {notice.status !== "approved" && <ReviseForm key={notice.latest.version} notice={notice} />}
+      <ReviseForm key={notice.latest.version} notice={notice} />
     </section>
   );
 }
@@ -394,6 +424,7 @@ export default function ManagerPage() {
       {!inboxNotice && <RecapStrip />}
       {!inboxNotice && <SiteActivity date={date} onOpenNotice={setInboxId} />}
       {!inboxNotice && <div className="mb-5"><DayPerformanceCard date={date} /></div>}
+      {!inboxNotice && <div className="mb-5"><DailyReportCard date={date} onOpenDraft={setInboxId} /></div>}
       {!!openShortfalls?.length && notices.isSuccess && (
         <section className="mb-5 grid gap-2" aria-label="Shortfalls without a notice">
           <h2 className="text-sm font-semibold">Shortfalls without a notice</h2>

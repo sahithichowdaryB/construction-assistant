@@ -1,5 +1,6 @@
+import os
 import sys
-from datetime import date as WorkDate, datetime
+from datetime import date as WorkDate, datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
@@ -10,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from auth_routes import router as auth_router
-from database import engine_for
+from database import engine_for, writer_engine
 from workflow import router as workflow_router
 from correspondence import router as correspondence_router
 from recaps import router as recaps_router
@@ -26,7 +27,7 @@ from app.tools import SqlEvidenceStore, default_as_of  # noqa: E402
 
 app = FastAPI(title="SiteMate API")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-                   allow_methods=["GET", "POST", "PATCH"], allow_headers=["Authorization", "Content-Type"])
+                   allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 app.include_router(documents_router)
 app.include_router(auth_router)
 app.include_router(workflow_router)
@@ -48,6 +49,25 @@ def health():
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
     return {"database": "connected"}
+
+
+@app.get("/health/capabilities")
+def capabilities():
+    """What this deployment can do (booleans only, no configuration values): database, model, speech-to-text and
+    whether a worker polled in the last 10 minutes. The web app uses it to enable the mic and warn when background
+    processing is offline."""
+    from app.capture.transcription import transcription_enabled
+    worker_seen = None
+    try:
+        with engine_for().connect() as conn:
+            db = conn.scalar(text("SELECT 1")) == 1
+            if conn.scalar(text("SELECT to_regclass('sitemate.worker_heartbeats')")) is not None:
+                worker_seen = conn.scalar(text("SELECT max(seen_at) FROM sitemate.worker_heartbeats"))
+    except Exception:  # noqa: BLE001 - a health probe reports, it never raises
+        db = False
+    fresh = bool(worker_seen and (datetime.now(timezone.utc) - worker_seen).total_seconds() < 600)
+    return {"db": db, "llm": bool(os.environ.get("ANTHROPIC_API_KEY")), "stt": transcription_enabled(),
+            "worker": fresh, "worker_seen_at": worker_seen}
 
 
 def check_incident_id(incident_id: str):
@@ -91,6 +111,60 @@ def alerts(project_id: str, as_of: datetime | None = None, status: str | None = 
     return [dict(row) for row in rows.mappings()]
 
 
+@app.get("/projects/{project_id}", dependencies=[Depends(check_member)])
+def project_info(project_id: str, conn=Depends(connection)):
+    """Project settings for the web app (Settings, headers). Contract details the record lacks stay null."""
+    row = conn.execute(text("SELECT * FROM sitemate.projects WHERE id=:p"), {"p": project_id}).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(404, "Unknown project")
+    note = conn.scalar(text("""SELECT excerpt FROM sitemate.source_passages WHERE project_id=:p AND source_id='PRJ'
+                              AND locator='calendar'"""), {"p": project_id})
+    rates = conn.execute(text("""SELECT count(*) AS total, count(amount) AS set FROM sitemate.cost_rates
+                                 WHERE project_id=:p"""), {"p": project_id}).mappings().one()
+    return {"id": row["id"], "name": row["name"], "timezone": row["timezone"],
+            "thresholds": {"deviation_pct": float(row["threshold"]), "high_above_pct": float(row["high_threshold"])},
+            "sender": {"name": row["sender"], "address": row["sender_address"]},
+            "recipient": {"name": row["recipient"], "address": row["recipient_address"]},
+            "contract_reference": row["contract_reference"], "contract_clause": row["contract_clause"],
+            "rate_table": f"{rates['set']} of {rates['total']} rates set" if rates["total"] else None,
+            "calendar_note": note, "locale": row.get("locale") or "en-GB", "settings": row.get("settings") or {}}
+
+
+@app.get("/projects/{project_id}/activities", dependencies=[Depends(check_member)])
+def activity_list(project_id: str, as_of: datetime | None = None, conn=Depends(connection)):
+    """The activity register with its planned dates and quantities: from the active baseline when there is one,
+    otherwise from the dated plan targets (as of `as_of`)."""
+    check_cutoff(as_of)
+    rows = conn.execute(text("""
+        WITH active AS (SELECT id FROM sitemate.plan_baselines WHERE project_id = :p AND status = 'active'
+                        AND coalesce(activated_at, as_of) <= coalesce(CAST(:cutoff AS timestamptz), 'infinity'))
+        SELECT a.code, a.name, a.zone, a.unit, a.contractor_id,
+               coalesce(ap.planned_start, t.first_day) AS planned_start,
+               coalesce(ap.planned_finish, t.last_day) AS planned_end,
+               coalesce(ap.target_per_day, t.per_day) AS planned_qty_per_day,
+               coalesce(ap.planned_total, t.total) AS planned_total_qty,
+               ap.is_critical, ap.weight,
+               ARRAY(SELECT d.predecessor FROM sitemate.activity_dependencies d
+                     WHERE d.project_id = a.project_id AND d.successor = a.code ORDER BY 1) AS predecessors,
+               ARRAY(SELECT DISTINCT e.equipment_id FROM sitemate.equipment_assignments e
+                     WHERE e.project_id = a.project_id AND e.activity_code = a.code ORDER BY 1) AS equipment_ids
+        FROM sitemate.activities a
+        LEFT JOIN sitemate.activity_plan ap ON ap.project_id = a.project_id AND ap.activity_code = a.code
+             AND ap.baseline_id = (SELECT id FROM active)
+        LEFT JOIN LATERAL (SELECT min(work_date) AS first_day, max(work_date) AS last_day, max(quantity) AS per_day,
+                                  sum(quantity) AS total
+                           FROM sitemate.plan_targets pt JOIN sitemate.sources s
+                             ON (s.project_id, s.id) = (pt.project_id, pt.source_id)
+                           WHERE pt.project_id = a.project_id AND pt.activity_code = a.code AND pt.quantity > 0
+                             AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz), 'infinity')) t ON true
+        WHERE a.project_id = :p
+        ORDER BY coalesce(ap.planned_start, t.first_day) NULLS LAST, a.code
+    """), {"p": project_id, "cutoff": as_of}).mappings().all()
+    num = lambda v: float(v) if v is not None else None  # noqa: E731
+    return [{**dict(r), "planned_qty_per_day": num(r["planned_qty_per_day"]), "planned_total_qty": num(r["planned_total_qty"]),
+             "weight": num(r["weight"]), "crew_size": None} for r in rows if r["planned_start"]]
+
+
 @app.get("/projects/{project_id}/activities/{code}/progress", dependencies=[Depends(check_member)])
 def progress(project_id: str, code: str, date: WorkDate, as_of: datetime | None = Query(None),
              conn=Depends(connection)):
@@ -114,6 +188,7 @@ def progress(project_id: str, code: str, date: WorkDate, as_of: datetime | None 
         JOIN sitemate.sources s ON (s.project_id,s.id)=(o.project_id,o.source_id)
         WHERE o.project_id=:p AND o.activity_code=:c AND o.work_date=:day
           AND s.available_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity')
+          AND (o.accepted_at IS NULL OR o.accepted_at <= coalesce(CAST(:cutoff AS timestamptz),'infinity'))
         ORDER BY (o.basis='signed') DESC, s.available_at DESC, o.source_id, o.locator
     """), params).mappings().all()
     reading = records[0] if records else None
@@ -176,6 +251,13 @@ def run_reasoning(project_id: str, incident_id: str, as_of: datetime | None = No
     except LLMError as exc:
         raise HTTPException(502, f"Reasoning model unavailable: {exc}") from None
     saved = analysis_store.save_analysis(conn, project_id, result)
+    # Like the worker's reasoning job: the recommended actions follow the new analysis (proposed, for a manager).
+    try:
+        from app import worker
+        with writer_engine().begin() as w:
+            worker.enqueue(w, project_id, "plan_actions", incident_id)
+    except Exception:  # noqa: BLE001 - the analysis is saved; planning can be re-run from the worker
+        pass
     return {**saved, **result.model_dump(mode="json")}
 
 
@@ -298,7 +380,13 @@ def incident(project_id: str, incident_id: str, as_of: datetime | None = None, c
 from capture import router as capture_router  # noqa: E402
 from ops import router as ops_router  # noqa: E402  (manager actions: alerts, actions, incident corrections)
 from performance.routes import router as performance_router  # noqa: E402  (baselines, daily and overall evaluation)
+from drafting import router as drafting_router  # noqa: E402  (gaps, submit, stored exports for every draft type)
+from ask.routes import router as ask_router  # noqa: E402  (Ask SiteMate: cited, read-only answers)
+from daily_report.routes import router as daily_report_router  # noqa: E402  (appointments, daily report drafts)
 
 app.include_router(ops_router)
 app.include_router(capture_router)
 app.include_router(performance_router)
+app.include_router(drafting_router)
+app.include_router(ask_router)
+app.include_router(daily_report_router)

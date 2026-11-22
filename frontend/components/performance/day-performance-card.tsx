@@ -8,7 +8,7 @@ import { BandChip, CauseChip, StatusChip } from "@/components/performance/chips"
 import { VarianceBar } from "@/components/performance/variance-bar";
 import { useApp } from "@/components/providers/app-context";
 import { ErrorState, LoadingSkeleton } from "@/components/states";
-import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/gated-button";
 import {
   deadlineLabel,
   NOTICE_TEXT,
@@ -19,12 +19,14 @@ import {
   type DailyEvaluation,
   type Suggestion,
 } from "@/lib/performance";
+import { denyReason } from "@/lib/roles";
 import { localDateOf } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const TONE = { red: "text-red-700 dark:text-red-400", amber: "text-amber-800 dark:text-amber-300", muted: "text-muted-foreground" };
 
 function SuggestionCard({ s, clockDate }: { s: Suggestion; clockDate: string }) {
+  const { role } = useApp();
   const draft = useDraftSuggestion();
   const router = useRouter();
   const due = deadlineLabel(s.deadline, clockDate);
@@ -42,13 +44,24 @@ function SuggestionCard({ s, clockDate }: { s: Suggestion; clockDate: string }) 
       {s.amount != null && <p className="text-sm">Indicative amount: <span className="font-semibold tabular">{s.amount} {s.currency}</span></p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <CitationList refs={toRefs(s.refs)} />
-        <Button size="sm" disabled={!s.alert_id || draft.isPending}
-          onClick={() => draft.mutate(s, { onSuccess: (d) => router.push(`/drafts/${d.id}`) })}>
-          <FilePen aria-hidden /> {draft.isPending ? "Drafting…" : "Draft notice"}
-        </Button>
+        {/* SiteMate drafts each suggestion automatically (private to managers); this opens it, or drafts it now. */}
+        <GatedButton reason={denyReason(role, "create_draft")} size="sm" disabled={!s.alert_id || draft.isPending}
+          onClick={() => draft.mutate(s, { onSuccess: (d) => router.push(`/manager?notice=${encodeURIComponent(d.id)}`) })}>
+          <FilePen aria-hidden /> {draft.isPending ? "Opening…" : "Open draft notice"}
+        </GatedButton>
       </div>
       {draft.isError && <p className="text-xs text-red-700">{(draft.error as Error).message}</p>}
     </li>
+  );
+}
+
+function RecomputeButton({ workDate, pending, onRecompute }: { workDate: string; pending: boolean; onRecompute: () => void }) {
+  const { role } = useApp();
+  return (
+    <GatedButton reason={denyReason(role, "recompute")} size="sm" variant="outline" disabled={pending} onClick={onRecompute}
+      aria-label={`Recompute ${workDate}`}>
+      <RefreshCw className={cn(pending && "animate-spin")} aria-hidden /> Recompute
+    </GatedButton>
   );
 }
 
@@ -72,9 +85,7 @@ export function DayPerformance({ d, clockDate }: { d: DailyEvaluation; clockDate
           <span className={cn("rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular", d.day_score < 0 ? "border-red-200 text-red-800" : "border-emerald-200 text-emerald-800")}>
             Score {d.day_score > 0 ? "+" : ""}{d.day_score}
           </span>
-          <Button size="sm" variant="outline" disabled={recompute.isPending} onClick={() => recompute.mutate(d.work_date)}>
-            <RefreshCw className={cn(recompute.isPending && "animate-spin")} aria-hidden /> Recompute
-          </Button>
+          <RecomputeButton workDate={d.work_date} pending={recompute.isPending} onRecompute={() => recompute.mutate(d.work_date)} />
         </div>
       </div>
       {d.provisional && <p className="text-xs text-amber-800 dark:text-amber-300">Provisional: the signed daily report is not in yet.</p>}

@@ -103,7 +103,8 @@ def _search_event(conn, project_id, event, timezone, recorded_at):
         SELECT o.activity_code, o.quantity, o.basis, o.source_id, o.locator
         FROM sitemate.observations o JOIN sitemate.sources s ON (s.project_id, s.id) = (o.project_id, o.source_id)
         WHERE o.project_id=:p AND o.activity_code = ANY(CAST(:codes AS text[])) AND o.work_date=CAST(:day AS date)
-          AND s.available_at <= :cutoff ORDER BY (o.basis='signed') DESC, s.available_at DESC"""),
+          AND s.available_at <= :cutoff AND (o.accepted_at IS NULL OR o.accepted_at <= :cutoff)
+          ORDER BY (o.basis='signed') DESC, s.available_at DESC"""),
                                       {**p, "codes": codes}).mappings()] if codes else []
     for r in progress:
         r["quantity"] = float(r["quantity"])

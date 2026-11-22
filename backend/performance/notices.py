@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
+from notice_templates import template, title_line
+
 from . import metrics as m
 from .baseline import active_baseline, load_settings
 
@@ -73,6 +75,9 @@ def compose_performance_notice(conn, project_id, alert, as_of, notice_type):
                           f"of the shift. {_tag(evidence)}")
     if alert["kind"] == "quality_hold":
         paragraphs.append(f"On {day:%d %B %Y} the records note: “{calc.get('text') or alert.get('title')}” {_tag(evidence)}")
+    if alert["kind"] == "instruction_concern":
+        paragraphs.append(f"On {day:%d %B %Y} the records note an instruction or design matter of concern: "
+                          f"“{calc.get('text') or alert.get('title')}” {_tag(evidence)}")
 
     attribution = suggestion.get("reason")
     if attribution:
@@ -98,7 +103,9 @@ def compose_performance_notice(conn, project_id, alert, as_of, notice_type):
         paragraphs.append("Location: [MISSING: exact location]. Photos: [MISSING: photo references]. We ask you to "
                           "inspect and confirm the remedy before work in this area continues.")
     if notice_type == "notice_of_concern":
-        paragraphs.append("Our concern: [MISSING: concern in one sentence]. Proposed remedy: [MISSING: proposed remedy]. "
+        concern = ("the matter recorded above" if alert["kind"] == "instruction_concern"
+                   else "[MISSING: concern in one sentence]")
+        paragraphs.append(f"Our concern: {concern}. Proposed remedy: [MISSING: proposed remedy]. "
                           "We ask for your instruction before proceeding.")
     if notice_type == "delay_notice":
         paragraphs.append("Expected effect on the programme: [MISSING: expected impact]. We will update you once the "
@@ -115,12 +122,13 @@ def compose_performance_notice(conn, project_id, alert, as_of, notice_type):
 
     sender = project["sender"] or "[MISSING: sender]"
     recipient = project["recipient"] or rule.get("addressee_name") or rule.get("addressee_role") or "[MISSING: recipient]"
-    header = [f"{TITLES[notice_type]} (DRAFT FOR REVIEW)", f"{day:%d %B %Y} | {project['name']}", f"From: {sender}",
+    header = [title_line(notice_type, project.get("settings")), f"{day:%d %B %Y} | {project['name']}", f"From: {sender}",
               f"To: {recipient}",
               f"Contract reference: {project['contract_reference'] or '[MISSING: contract reference]'}",
               f"Applicable clause: {project['contract_clause'] or '[MISSING: contract clause]'}", "",
               f"Subject: {TITLES[notice_type].title()} – {name}" + (f" ({code})" if code else ""), "",
               f"Dear {recipient.split(',')[0]},"]
-    body = "\n".join(header) + "\n\n" + "\n\n".join(paragraphs) + f"\n\n{sender.split(',')[0]}" + \
-        f"\n\nInternal note, remove before sending: {m.DISCLAIMER}"
+    # The disclaimer travels with the draft (shown on every draft screen), not inside the letter itself.
+    closing = template(notice_type, project.get("settings"))["closing"]
+    body = "\n".join(header) + "\n\n" + "\n\n".join(paragraphs) + f"\n\n{closing}\n{sender.split(',')[0]}"
     return body, refs

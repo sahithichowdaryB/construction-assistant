@@ -58,6 +58,23 @@ def main():
             cur.execute(sql.SQL("GRANT INSERT ON {} TO {}").format(ident(PERFORMANCE_INSERT), r))
             cur.execute(sql.SQL("""GRANT UPDATE (status, reviewer_id, note, reviewed_at, superseded_at, superseded_version)
                                    ON sitemate.performance_ledger TO {}""").format(r))
+            # Migrations 0010-0015: the worker reads reading reviews, appointments and gap resolutions, records its
+            # heartbeat and claims jobs with a lock. Draft writes from worker jobs use the writer login.
+            for table, privileges in (("reading_reviews", "SELECT"), ("appointments", "SELECT"),
+                                      ("draft_gap_resolutions", "SELECT"), ("exports", "SELECT"),
+                                      ("worker_heartbeats", "SELECT, INSERT, UPDATE, DELETE")):
+                cur.execute(sql.SQL("""DO $$ BEGIN
+                                         IF to_regclass({}) IS NOT NULL THEN
+                                           EXECUTE 'GRANT {} ON ' || {} || ' TO sitemate_ops';
+                                         END IF;
+                                       END $$""").format(sql.Literal(f"sitemate.{table}"), sql.SQL(privileges),
+                                                         sql.Literal(f"sitemate.{table}")))
+            cur.execute("""DO $$ BEGIN
+                             IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'sitemate'
+                                        AND table_name = 'agent_jobs' AND column_name = 'locked_at') THEN
+                               GRANT UPDATE (locked_at, locked_by) ON sitemate.agent_jobs TO sitemate_ops;
+                             END IF;
+                           END $$""")
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_ops")
     print("Database ops role provisioned.")
 

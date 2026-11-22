@@ -22,6 +22,8 @@ from .tools import SqlEvidenceStore
 log = logging.getLogger("sitemate.worker")
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = (30, 120)
+STUCK_AFTER_SECONDS = int(os.environ.get("AGENT_STUCK_JOB_SECONDS", "600"))
+WORKER_ID = f"{os.uname().nodename}:{os.getpid()}"
 SEVERITIES = ["low", "medium", "high", "critical"]
 
 
@@ -32,13 +34,14 @@ def _now() -> datetime:
 def claim_job(conn) -> dict | None:
     """Atomically take the oldest ready job (or None). The transaction commits, so the claim survives a crash as 'running'."""
     row = conn.execute(text("""
-        UPDATE sitemate.agent_jobs j SET status='running', attempts=j.attempts+1, updated_at=now()
+        UPDATE sitemate.agent_jobs j SET status='running', attempts=j.attempts+1, updated_at=now(),
+            locked_at=now(), locked_by=:me
         WHERE (j.project_id, j.id) = (
             SELECT project_id, id FROM sitemate.agent_jobs
             WHERE status='queued' AND run_after <= now() ORDER BY run_after, created_at
             FOR UPDATE SKIP LOCKED LIMIT 1)
         RETURNING j.project_id, j.id::text AS id, j.kind, j.incident_id::text AS incident_id, j.attempts, j.payload
-    """)).mappings().one_or_none()
+    """), {"me": WORKER_ID}).mappings().one_or_none()
     conn.commit()
     return dict(row) if row else None
 
@@ -52,15 +55,55 @@ def enqueue(conn, project_id: str, kind: str, incident_id: str, delay_seconds: i
     """), {"p": project_id, "k": kind, "i": incident_id, "d": delay_seconds})
 
 
+# Unique partial indexes (migration 0012) that keep one queued job per subject; ON CONFLICT names the same predicate.
+_DEBOUNCE = {
+    "ingest": ("(project_id, kind, (payload->>'source_id')) WHERE status = 'queued' AND kind IN ('ingest','summarize')"),
+    "summarize": ("(project_id, kind, (payload->>'source_id')) WHERE status = 'queued' AND kind IN ('ingest','summarize')"),
+    "auto_draft": ("(project_id, (payload->>'alert_id'), (payload->>'notice_type')) "
+                   "WHERE status = 'queued' AND kind = 'auto_draft'"),
+    "daily_report_draft": "(project_id, kind, (payload->>'work_date')) WHERE status = 'queued' AND incident_id IS NULL",
+    "plan_extract": None,
+}
+
+
+def enqueue_job(conn, project_id: str, kind: str, payload: dict, *, delay_seconds: int = 0) -> None:
+    """Queue a payload job. While an equal job is queued (same source, alert+type or work date) the call is a no-op
+    apart from keeping the earliest start, so retries and bursts never run the work twice."""
+    target = _DEBOUNCE.get(kind)
+    conflict = (f"ON CONFLICT {target} DO UPDATE SET run_after = LEAST(sitemate.agent_jobs.run_after, "
+                "EXCLUDED.run_after), updated_at = now()") if target else ""
+    conn.execute(text(f"""
+        INSERT INTO sitemate.agent_jobs (project_id, kind, payload, run_after)
+        VALUES (:p, :k, CAST(:payload AS jsonb), now() + make_interval(secs => :d)) {conflict}"""),
+                 {"p": project_id, "k": kind, "payload": json.dumps(payload, default=str), "d": delay_seconds})
+
+
+def recover_stuck(conn, older_than_seconds: int = STUCK_AFTER_SECONDS) -> int:
+    """A worker that died mid-job leaves it 'running'. Queue it again (attempts kept), or fail it when its attempts are
+    used up, so nothing waits forever."""
+    rows = conn.execute(text("""
+        UPDATE sitemate.agent_jobs SET
+            status = CASE WHEN attempts >= :max THEN 'failed' ELSE 'queued' END,
+            last_error = coalesce(last_error, 'worker stopped while running the job'),
+            locked_at = NULL, locked_by = NULL, run_after = now(), updated_at = now()
+        WHERE status = 'running' AND coalesce(locked_at, updated_at) < now() - make_interval(secs => :age)
+        RETURNING id"""), {"max": MAX_ATTEMPTS, "age": older_than_seconds}).all()
+    conn.commit()
+    return len(rows)
+
+
 DAILY_DEBOUNCE_SECONDS = 120  # a burst of events for one project and day causes one evaluation
 
 
 def enqueue_daily_eval(conn, project_id: str, work_date, *, trigger: str, as_of=None,
-                       delay_seconds: int = DAILY_DEBOUNCE_SECONDS, force: bool = False, kind: str = "daily_eval") -> None:
+                       delay_seconds: int = DAILY_DEBOUNCE_SECONDS, force: bool = False, kind: str = "daily_eval",
+                       use_llm: bool = True) -> None:
     """Queue a daily (or overall) evaluation for (project, date). While a job is queued, a new trigger pushes its
-    run_after out (debounce). `force` (manual recompute) also replaces the payload; it needs UPDATE on payload."""
-    payload = json.dumps({"work_date": str(work_date), "trigger": trigger,
-                          "as_of": as_of.isoformat() if as_of else None, "force": force})
+    run_after out (debounce). `force` (manual recompute) also replaces the payload; it needs UPDATE on payload.
+    use_llm=False keeps an overall snapshot code-only (the snapshot that follows each day result)."""
+    stamp = as_of.isoformat() if hasattr(as_of, "isoformat") else as_of
+    payload = json.dumps({"work_date": str(work_date), "trigger": trigger, "as_of": stamp, "force": force,
+                          "use_llm": use_llm})
     replace = ", payload = EXCLUDED.payload" if force else ""
     conn.execute(text(f"""
         INSERT INTO sitemate.agent_jobs (project_id, kind, payload, run_after)
@@ -90,6 +133,10 @@ def run_daily_eval(conn, llm: LLMClient, job: dict) -> dict:
     started = time.monotonic()
     result = daily.evaluate_day(conn, job["project_id"], _date.fromisoformat(payload["work_date"]), as_of,
                                 trigger=payload.get("trigger") or "job", force=bool(payload.get("force")))
+    if not result.get("reused"):
+        # The overall snapshot to that date follows each new day result (debounced like the day itself).
+        enqueue_daily_eval(conn, job["project_id"], payload["work_date"], trigger="daily_eval", as_of=as_of,
+                           kind="overall_eval", use_llm=False)
     conn.commit()
     _log_run(conn, job["project_id"], "daily_eval", None, None, None, result, "ok", started)
     return result
@@ -102,9 +149,81 @@ def run_overall_eval(conn, llm: LLMClient, job: dict) -> dict:
     as_of = datetime.fromisoformat(payload["as_of"]) if payload.get("as_of") else None
     started = time.monotonic()
     result = overall.snapshot(conn, job["project_id"], _date.fromisoformat(payload["work_date"]), as_of,
-                              force=bool(payload.get("force")))
+                              force=bool(payload.get("force")), use_llm=payload.get("use_llm", True) is not False)
     conn.commit()
     _log_run(conn, job["project_id"], "overall_eval", None, None, None, {"version": result.get("version")}, "ok", started)
+    return result
+
+
+def _backend():
+    """Backend modules (drafting, documents, daily reports) for the jobs below; the worker runs from backend/."""
+    import sys
+    from pathlib import Path
+    backend = str(Path(__file__).resolve().parents[2] / "backend")
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+
+
+def run_auto_draft(conn, llm: LLMClient, job: dict) -> dict:
+    """A private notice draft for a qualifying deviation (payload: alert_id, notice_type, as_of). Composed from the
+    stored records by the same code as the manager's Draft button (no model); written with the writer login, like
+    document ingestion. Idempotent: one draft per alert and type; a newer alert revision adds a version."""
+    _backend()
+    import workflow
+    from database import writer_engine
+    payload = job.get("payload") or {}
+    when = datetime.fromisoformat(payload["as_of"]) if payload.get("as_of") else _now()
+    started = time.monotonic()
+    with writer_engine().begin() as wconn:
+        draft_id, changed = workflow.create_alert_draft(wconn, job["project_id"], payload["alert_id"],
+                                                        payload["notice_type"], when, origin="alert_auto", refresh=True)
+    result = {"draft_id": draft_id, "changed": changed, "notice_type": payload["notice_type"]}
+    _log_run(conn, job["project_id"], "auto_draft", None, None, None, result, "ok", started)
+    return result
+
+
+def run_ingest(conn, llm: LLMClient, job: dict) -> dict:
+    """Parse a stored document (and summarise it when its kind is summarised). payload: source_id, summarize."""
+    _backend()
+    from documents.ingest import ingest_source
+    payload = job.get("payload") or {}
+    outcome = ingest_source(job["project_id"], payload["source_id"], summarize=payload.get("summarize"))
+    if outcome.get("status") == "failed":
+        raise RuntimeError(outcome.get("error") or "parsing failed")
+    return {k: outcome.get(k) for k in ("job_id", "status", "passages_written")}
+
+
+def run_summarize(conn, llm: LLMClient, job: dict) -> dict:
+    _backend()
+    from documents.summaries import summarize_source
+    out = summarize_source(job["project_id"], (job.get("payload") or {})["source_id"])
+    if out.get("status") == "failed":
+        raise RuntimeError(out.get("error") or "summary failed")
+    return out
+
+
+def run_plan_extract(conn, llm: LLMClient, job: dict) -> dict:
+    """Baseline extraction (P1) for an uploaded plan. payload: baseline_id."""
+    _backend()
+    from performance.routes import run_extraction
+    run_extraction(job["project_id"], (job.get("payload") or {})["baseline_id"])
+    return {"baseline_id": (job.get("payload") or {})["baseline_id"]}
+
+
+def run_daily_report(conn, llm: LLMClient, job: dict) -> dict:
+    """Draft (or redraft) the day's site report. payload: work_date, as_of, member_id, trigger."""
+    _backend()
+    from daily_report.draft import draft_daily_report
+    from database import writer_engine
+    from datetime import date as _date
+    payload = job.get("payload") or {}
+    when = datetime.fromisoformat(payload["as_of"]) if payload.get("as_of") else _now()
+    started = time.monotonic()
+    with writer_engine().begin() as wconn:
+        result = draft_daily_report(wconn, job["project_id"], _date.fromisoformat(payload["work_date"]), when,
+                                    member_id=payload.get("member_id"))
+    _log_run(conn, job["project_id"], "daily_report", None, result.get("model"), None,
+             {k: v for k, v in result.items() if k != "body"}, "ok", started)
     return result
 
 
@@ -126,6 +245,36 @@ def sweep_daily(conn) -> int:
                           AND j.payload->>'trigger' = 'sweep')""")).mappings().all()
     for row in due:
         enqueue_daily_eval(conn, row["id"], row["today"], trigger="sweep", delay_seconds=0)
+    conn.commit()
+    return len(due)
+
+
+def heartbeat(conn) -> None:
+    """Record that this worker is alive (read by GET /health/capabilities). Old rows of stopped workers age out."""
+    conn.execute(text("""
+        INSERT INTO sitemate.worker_heartbeats (worker_id, seen_at) VALUES (:w, now())
+        ON CONFLICT (worker_id) DO UPDATE SET seen_at = now()"""), {"w": WORKER_ID})
+    conn.execute(text("DELETE FROM sitemate.worker_heartbeats WHERE seen_at < now() - interval '1 day'"))
+    conn.commit()
+
+
+def sweep_daily_reports(conn) -> int:
+    """Projects that set settings.daily_report.auto_at (local HH:MM) get today's daily report drafted once, as a
+    private draft for the manager. Nothing is drafted for projects without that setting."""
+    if conn.scalar(text("SELECT to_regclass('sitemate.appointments')")) is None:
+        return 0
+    due = conn.execute(text("""
+        SELECT p.id, (now() AT TIME ZONE p.timezone)::date AS today
+        FROM sitemate.projects p
+        WHERE p.settings #>> '{daily_report,auto_at}' ~ '^[0-2][0-9]:[0-5][0-9]$'
+          AND (now() AT TIME ZONE p.timezone)::time >= CAST(p.settings #>> '{daily_report,auto_at}' AS time)
+          AND NOT EXISTS (SELECT 1 FROM sitemate.drafts d WHERE d.project_id = p.id AND d.notice_type = 'daily_report'
+                          AND d.work_date = (now() AT TIME ZONE p.timezone)::date)
+          AND NOT EXISTS (SELECT 1 FROM sitemate.agent_jobs j WHERE j.project_id = p.id AND j.kind = 'daily_report_draft'
+                          AND j.payload->>'work_date' = ((now() AT TIME ZONE p.timezone)::date)::text)""")).mappings().all()
+    for row in due:
+        enqueue_job(conn, row["id"], "daily_report_draft",
+                    {"work_date": str(row["today"]), "trigger": "auto", "member_id": None})
     conn.commit()
     return len(due)
 
@@ -191,7 +340,8 @@ def run_plan_actions(conn, llm: LLMClient, job: dict) -> dict:
 
 
 HANDLERS = {"reasoning": run_reasoning, "plan_actions": run_plan_actions, "daily_eval": run_daily_eval,
-            "overall_eval": run_overall_eval}
+            "overall_eval": run_overall_eval, "auto_draft": run_auto_draft, "ingest": run_ingest,
+            "summarize": run_summarize, "plan_extract": run_plan_extract, "daily_report_draft": run_daily_report}
 
 
 def finish(conn, job: dict, error: Exception | None) -> None:
@@ -202,11 +352,47 @@ def finish(conn, job: dict, error: Exception | None) -> None:
     else:
         status, run_after, message = "queued", BACKOFF_SECONDS[min(job["attempts"] - 1, len(BACKOFF_SECONDS) - 1)], str(error)[:500]
     conn.execute(text("""
-        UPDATE sitemate.agent_jobs SET status=:s, last_error=:e, updated_at=now(),
+        UPDATE sitemate.agent_jobs SET status=:s, last_error=:e, updated_at=now(), locked_at=NULL, locked_by=NULL,
             run_after=CASE WHEN CAST(:d AS int) IS NULL THEN run_after ELSE now() + make_interval(secs => CAST(:d AS int)) END
         WHERE project_id=:p AND id=CAST(:id AS uuid)"""),
                  {"s": status, "e": message, "d": run_after, "p": job["project_id"], "id": job["id"]})
     conn.commit()
+
+
+NEEDS_LLM = ("reasoning", "plan_actions")
+
+
+def run_claimed(conn, job: dict, llm_factory) -> Exception | None:
+    """Run a job this process has claimed and record the outcome on its row. Returns the error, if any."""
+    handler = HANDLERS.get(job["kind"])
+    try:
+        if handler is None:
+            raise ValueError(f"no handler for job kind {job['kind']!r}")
+        # Only the incident agents take the worker's model client; the other jobs use their own (or none), so a
+        # missing API key never fails parsing, drafting or evaluation jobs.
+        handler(conn, llm_factory() if job["kind"] in NEEDS_LLM else None, job)
+        finish(conn, job, None)
+        return None
+    except Exception as exc:  # noqa: BLE001 - every failure must land in the job row, not kill the worker
+        conn.rollback()
+        log.warning("job %s (%s) failed: %s", job["id"], job["kind"], exc)
+        finish(conn, job, exc)  # retried with backoff up to MAX_ATTEMPTS; the row keeps last_error
+        return exc
+
+
+def claim_matching(conn, project_id: str, kind: str, match: dict) -> dict | None:
+    """Claim the queued job of this kind whose payload contains `match` (the API runs the job it just queued)."""
+    row = conn.execute(text("""
+        UPDATE sitemate.agent_jobs j SET status='running', attempts=j.attempts+1, updated_at=now(),
+            locked_at=now(), locked_by=:me
+        WHERE (j.project_id, j.id) = (
+            SELECT project_id, id FROM sitemate.agent_jobs
+            WHERE project_id=:p AND kind=:k AND status='queued' AND payload @> CAST(:m AS jsonb)
+            ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+        RETURNING j.project_id, j.id::text AS id, j.kind, j.incident_id::text AS incident_id, j.attempts, j.payload
+    """), {"me": f"api:{WORKER_ID}", "p": project_id, "k": kind, "m": json.dumps(match)}).mappings().one_or_none()
+    conn.commit()
+    return dict(row) if row else None
 
 
 def process_one(engine, llm_factory) -> bool:
@@ -215,16 +401,7 @@ def process_one(engine, llm_factory) -> bool:
         job = claim_job(conn)
         if job is None:
             return False
-        handler = HANDLERS.get(job["kind"])
-        try:
-            if handler is None:
-                raise ValueError(f"no handler for job kind {job['kind']!r}")
-            handler(conn, llm_factory(), job)
-            finish(conn, job, None)
-        except Exception as exc:  # noqa: BLE001 - every failure must land in the job row, not kill the worker
-            conn.rollback()
-            log.warning("job %s (%s) failed: %s", job["id"], job["kind"], exc)
-            finish(conn, job, exc)  # retried with backoff up to MAX_ATTEMPTS; the row keeps last_error
+        run_claimed(conn, job, llm_factory)
         return True
 
 
@@ -312,8 +489,10 @@ def run_forever(engine, llm_factory, poll_seconds: float = 3.0, sweep_seconds: f
         try:
             if time.monotonic() - last_sweep > sweep_seconds:
                 with engine.connect() as conn:
-                    log.info("sweep: escalated=%s auto_resolved=%s daily=%s", escalate_long_open(conn, escalate_hours),
-                             auto_resolve_quiet(conn, resolve_hours), sweep_daily(conn))
+                    log.info("sweep: recovered=%s escalated=%s auto_resolved=%s daily=%s reports=%s",
+                             recover_stuck(conn), escalate_long_open(conn, escalate_hours),
+                             auto_resolve_quiet(conn, resolve_hours), sweep_daily(conn), sweep_daily_reports(conn))
+                    heartbeat(conn)
                 last_sweep = time.monotonic()
             if not process_one(engine, llm_factory):
                 time.sleep(poll_seconds)

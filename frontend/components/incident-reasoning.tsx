@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -304,7 +304,7 @@ function HowWeGotHere({ a }: { a: IncidentReasoning }) {
 // ---------- the card ----------
 
 export function IncidentReasoning({ incidentId }: { incidentId: string }) {
-  const { role, projectId, asOf } = useApp();
+  const { role } = useApp();
   const reasoning = useIncidentReasoning(incidentId);
   const run = useRunReasoning(incidentId);
   const notYet = reasoning.isError && reasoning.error instanceof ApiError && reasoning.error.status === 404;
@@ -312,16 +312,8 @@ export function IncidentReasoning({ incidentId }: { incidentId: string }) {
   // The mutation stays pending until the refreshed result is loaded, so the old answer is never shown beside a new run.
   const busy = run.isPending;
 
-  // Run automatically when nothing is saved for this incident and clock time, or the records changed since.
-  // Once per incident + project + clock, so a failure never loops; the button remains for a manual re-run.
-  const attempted = useRef(new Set<string>());
-  useEffect(() => {
-    if (USE_FIXTURES || run.isPending || !(notYet || stale) || !can(role, "run_reasoning")) return;
-    const key = `${projectId}|${incidentId}|${asOf}`;
-    if (attempted.current.has(key)) return;
-    attempted.current.add(key);
-    run.mutate();
-  }, [notYet, stale, role, projectId, incidentId, asOf, run]);
+  // The analysis runs when a person asks for it (the button below): opening an incident never calls the model by
+  // itself. The background worker also analyses new incidents after capture.
 
   if (USE_FIXTURES) {
     return (

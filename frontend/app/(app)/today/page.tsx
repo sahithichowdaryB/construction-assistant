@@ -2,6 +2,8 @@
 
 import { ArrowRight, ChevronRight, FilePen, ClipboardPen, Siren, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { alertSummary } from "@/components/alert-card";
 import { CitationList } from "@/components/citation-chip";
 import { DayPerformanceCard } from "@/components/performance/day-performance-card";
@@ -14,6 +16,7 @@ import { USE_FIXTURES } from "@/lib/endpoints";
 import { NOTICE_LABEL } from "@/lib/format";
 import { useActivities, useIncidents, useToday } from "@/lib/queries";
 import { ROLE_PERSON } from "@/lib/roles";
+import { ROLE_HOME } from "@/lib/session";
 import { fmtDateTime, fmtLocalDate, fmtShort, PROJECT_TZ } from "@/lib/time";
 import type { Activity, Incident, TodayBriefing } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -105,7 +108,18 @@ function zoneStatuses(t: TodayBriefing, byCode: Map<string, Activity>, known: In
   return out;
 }
 
+/** Live mode: the role's own home (for a site manager, Shortfalls & notices) replaces this fixture-only overview. */
 export default function TodayPage() {
+  const { role } = useApp();
+  const router = useRouter();
+  useEffect(() => {
+    if (!USE_FIXTURES) router.replace(ROLE_HOME[role]);
+  }, [role, router]);
+  if (!USE_FIXTURES) return <LoadingSkeleton rows={2} />;
+  return <FixtureToday />;
+}
+
+function FixtureToday() {
   const today = useToday();
   const activities = useActivities();
   const incidents = useIncidents({ upToAsOf: true });

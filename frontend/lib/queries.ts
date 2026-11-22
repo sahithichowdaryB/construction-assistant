@@ -6,7 +6,7 @@ import { useApp } from "@/components/providers/app-context";
 import * as api from "@/lib/api";
 import { toIsoWithOffset } from "@/lib/time";
 import { getEventCategories } from "@/lib/agent";
-import type { Alert, Export, Gap, NoticeType } from "@/lib/types";
+import type { Alert, Export, Gap, NoticeType, ReadingDecision } from "@/lib/types";
 
 /** Query keys always start with the project id; time-scoped reads include as_of. */
 export const keys = {
@@ -65,10 +65,10 @@ export function useAlerts() {
 }
 
 export function useAlertContext(alert: Alert | undefined, workDate: string | undefined) {
-  const { projectId } = useApp();
+  const { projectId, asOf } = useApp();
   return useQuery({
-    queryKey: keys.alertContext(projectId, alert?.id ?? "", workDate ?? ""),
-    queryFn: () => api.getAlertContext(projectId, alert!, workDate!),
+    queryKey: [...keys.alertContext(projectId, alert?.id ?? "", workDate ?? ""), asOf],
+    queryFn: () => api.getAlertContext(projectId, alert!, workDate!, asOf),
     enabled: !!alert && !!workDate,
   });
 }
@@ -204,6 +204,17 @@ export function useReportReadings(sid: string, enabled = true) {
   });
 }
 
+/** Confirm parsed report quantities; everything that reads quantities (site day, alerts, evaluations) refreshes. */
+export function useConfirmReadings(sid: string) {
+  const { projectId, asOf } = useApp();
+  const invalidate = useInvalidateProject();
+  return useMutation({
+    mutationFn: (body: { decisions?: ReadingDecision[]; all_signed?: boolean }) =>
+      api.confirmReadings(projectId, sid, asOf, body),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSourceStorage(sid: string, enabled = true) {
   const { projectId, asOf } = useApp();
   return useQuery({
@@ -331,7 +342,19 @@ export function useConfirmProposal() {
 
 export function useAsk() {
   const { projectId, asOf } = useApp();
-  return useMutation({ mutationFn: (question: string) => api.askSiteMate(projectId, question, asOf) });
+  return useMutation({
+    mutationFn: ({ question, threadId }: { question: string; threadId?: string | null }) =>
+      api.askSiteMate(projectId, question, asOf, threadId),
+  });
+}
+
+export function useCapabilities() {
+  return useQuery({ queryKey: ["sm", "capabilities"], queryFn: api.getCapabilities, staleTime: 60_000, retry: false });
+}
+
+export function useTranscribe() {
+  const { projectId } = useApp();
+  return useMutation({ mutationFn: ({ blob, filename }: { blob: Blob; filename: string }) => api.transcribe(projectId, blob, filename) });
 }
 
 export function useDismissAlert() {

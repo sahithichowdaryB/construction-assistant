@@ -160,3 +160,57 @@ def test_auto_resolve_quiet_monitoring_incidents(engine):
         assert worker.auto_resolve_quiet(conn, 12) == 1
         states = dict(conn.execute(text("SELECT id::text, status FROM sitemate.incidents WHERE project_id=:p"), {"p": PID}).all())
         assert states[quiet] == "resolved" and states[recent] == "monitoring"
+
+
+def test_claim_stamps_the_lock_and_recovery_requeues_a_stuck_job(engine):
+    with engine.connect() as conn:
+        worker.enqueue(conn, PID, "reasoning", incident(conn), 0)
+        conn.commit()
+        job = worker.claim_job(conn)
+        row = conn.execute(text("SELECT locked_at, locked_by FROM sitemate.agent_jobs WHERE id=CAST(:i AS uuid)"),
+                           {"i": job["id"]}).one()
+        assert row.locked_at is not None and row.locked_by == worker.WORKER_ID
+        assert worker.recover_stuck(conn) == 0  # fresh lock: the worker is still on it
+        conn.execute(text("UPDATE sitemate.agent_jobs SET locked_at = now() - interval '1 hour' WHERE id=CAST(:i AS uuid)"),
+                     {"i": job["id"]})
+        conn.commit()
+        assert worker.recover_stuck(conn) == 1
+        row = conn.execute(text("SELECT status, locked_at, last_error FROM sitemate.agent_jobs WHERE id=CAST(:i AS uuid)"),
+                           {"i": job["id"]}).one()
+        assert row.status == "queued" and row.locked_at is None and "stopped" in row.last_error
+        again = worker.claim_job(conn)
+        assert again["id"] == job["id"] and again["attempts"] == 2  # attempts are kept, not reset
+
+
+def test_recovery_fails_a_stuck_job_whose_attempts_are_used_up(engine):
+    with engine.connect() as conn:
+        worker.enqueue(conn, PID, "reasoning", incident(conn), 0)
+        conn.execute(text("""UPDATE sitemate.agent_jobs SET status='running', attempts=:m,
+                             locked_at = now() - interval '1 hour' WHERE project_id=:p"""),
+                     {"p": PID, "m": worker.MAX_ATTEMPTS})
+        conn.commit()
+        assert worker.recover_stuck(conn) == 1
+        assert conn.scalar(text("SELECT status FROM sitemate.agent_jobs WHERE project_id=:p"), {"p": PID}) == "failed"
+
+
+def test_enqueue_job_debounces_per_subject(engine):
+    with engine.connect() as conn:
+        for _ in range(3):
+            worker.enqueue_job(conn, PID, "ingest", {"source_id": "R10"})
+            worker.enqueue_job(conn, PID, "auto_draft", {"alert_id": "a1", "notice_type": "delay_notice"})
+        worker.enqueue_job(conn, PID, "ingest", {"source_id": "R11"})
+        worker.enqueue_job(conn, PID, "auto_draft", {"alert_id": "a1", "notice_type": "defect_notice"})
+        conn.commit()
+        kinds = dict(conn.execute(text("""SELECT kind, count(*) FROM sitemate.agent_jobs WHERE project_id=:p
+                                          GROUP BY kind"""), {"p": PID}).all())
+        assert kinds == {"ingest": 2, "auto_draft": 2}
+
+
+def test_heartbeat_records_the_worker(engine):
+    with engine.connect() as conn:
+        worker.heartbeat(conn)
+        worker.heartbeat(conn)
+        n = conn.scalar(text("SELECT count(*) FROM sitemate.worker_heartbeats WHERE worker_id=:w"), {"w": worker.WORKER_ID})
+        assert n == 1
+        conn.execute(text("DELETE FROM sitemate.worker_heartbeats WHERE worker_id=:w"), {"w": worker.WORKER_ID})
+        conn.commit()

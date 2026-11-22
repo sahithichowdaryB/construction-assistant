@@ -22,6 +22,8 @@ import {
   previewSchema,
   progressSchema,
   readingsSchema,
+  confirmReadingsSchema,
+  askResponseSchema,
   searchSchema,
   sourceDetailSchema,
   recapsSchema,
@@ -53,6 +55,8 @@ import type {
   Project,
   Proposal,
   ReportReadings,
+  ReadingDecision,
+  ConfirmReadingsResult,
   Role,
   SearchResponse,
   Source,
@@ -110,6 +114,8 @@ async function http<S extends z.ZodTypeAny>(path: string, schema: S, init?: Requ
       const body = (await res.json()) as { detail?: unknown; message?: unknown };
       const detail = body.detail ?? body.message;
       if (typeof detail === "string") message = detail;
+      else if (detail && typeof detail === "object" && typeof (detail as { message?: unknown }).message === "string")
+        message = (detail as { message: string }).message;
       else if (detail) message = JSON.stringify(detail);
     } catch {
       /* body was not JSON */
@@ -134,14 +140,52 @@ export async function getHealth(): Promise<HealthStatus> {
 }
 
 // ---------- project & schedule ----------
+const partySchema = z.object({ name: z.string().nullable(), address: z.string().nullable() });
+const projectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  timezone: z.string(),
+  thresholds: z.object({ deviation_pct: z.number(), high_above_pct: z.number() }),
+  sender: partySchema,
+  recipient: partySchema,
+  contract_reference: z.string().nullable(),
+  contract_clause: z.string().nullable(),
+  rate_table: z.string().nullable(),
+  calendar_note: z.string().nullable(),
+});
+const activityListSchema = z.array(
+  z.object({
+    code: z.string(),
+    name: z.string(),
+    zone: z.string(),
+    unit: z.string(),
+    planned_start: z.string(),
+    planned_end: z.string(),
+    planned_qty_per_day: z.number().nullable(),
+    planned_total_qty: z.number().nullable(),
+    crew_size: z.number().nullable(),
+    contractor_id: z.string().nullable(),
+    equipment_ids: z.array(z.string()),
+    predecessors: z.array(z.string()),
+  }),
+);
+
 export async function getProject(pid: string): Promise<Project> {
-  void pid;
-  return fixture("project", () => fx.fxProject());
+  if (servedFromFixtures("project")) return fixture("project", () => fx.fxProject());
+  const p = await http(projectPath(pid), projectSchema);
+  return { ...p, sender: { name: p.sender.name ?? "", address: p.sender.address ?? "" }, recipient: { name: p.recipient.name ?? "", address: p.recipient.address ?? "" } } as Project;
 }
 
-export async function getActivities(pid: string): Promise<Activity[]> {
-  void pid;
-  return fixture("activities", () => fx.fxActivities());
+export async function getActivities(pid: string, asOf?: string): Promise<Activity[]> {
+  if (servedFromFixtures("activities")) return fixture("activities", () => fx.fxActivities());
+  const rows = await http(`${projectPath(pid)}/activities${qs({ as_of: asOf })}`, activityListSchema);
+  return rows.map((a) => ({
+    ...a,
+    planned_qty_per_day: a.planned_qty_per_day ?? 0,
+    planned_total_qty: a.planned_total_qty ?? 0,
+    crew_size: a.crew_size ?? 0,
+    contractor_id: a.contractor_id ?? "",
+  }));
 }
 
 export async function getProgress(pid: string, code: string, date: string, asOf: string): Promise<Progress> {
@@ -164,14 +208,34 @@ export async function getAlerts(pid: string, asOf: string): Promise<Alert[]> {
   return http(`/projects/${encodeURIComponent(pid)}/alerts${qs({ as_of: asOf })}`, alertsSchema);
 }
 
-export async function getAlertContext(pid: string, alert: Alert, workDate: string): Promise<AlertContext> {
-  void pid;
-  return fixture("alertContext", () => fx.fxAlertContext(alert.activity_code ?? "", workDate));
+const ctxRef = z.object({ source_id: z.string(), locator: z.string(), passage_id: z.string().optional(), page: z.number().nullable().optional() });
+const alertContextSchema = z.object({
+  activity_code: z.string().nullable(),
+  work_date: z.string(),
+  likely_causes: z.array(z.object({ text: z.string(), refs: z.array(ctxRef) }).passthrough()),
+  successors_at_risk: z.array(z.object({ code: z.string(), name: z.string(), planned_start: z.string().nullable(), refs: z.array(ctxRef) })),
+  incident_id: z.string().nullable(),
+  draft_id: z.string().nullable(),
+});
+
+export async function getAlertContext(pid: string, alert: Alert, workDate: string, asOf?: string): Promise<AlertContext> {
+  if (servedFromFixtures("alertContext")) return fixture("alertContext", () => fx.fxAlertContext(alert.activity_code ?? "", workDate));
+  const c = await http(`${projectPath(pid)}/alerts/${encodeURIComponent(alert.id)}/context${qs({ as_of: asOf })}`, alertContextSchema);
+  return {
+    ...c,
+    activity_code: c.activity_code ?? "",
+    successors_at_risk: c.successors_at_risk.map((x) => ({ ...x, planned_start: x.planned_start ?? "" })),
+  } as AlertContext;
 }
 
+/** Dismiss with a reason (POST /alerts/{id}/dismiss, manager or approver); the reason is kept in the alert log. */
 export async function dismissAlert(pid: string, id: string, reason: string, asOf: string) {
-  void pid;
-  return fixture("dismissAlert", () => fx.fxDismissAlert(id, reason, asOf));
+  if (servedFromFixtures("dismissAlert")) return fixture("dismissAlert", () => fx.fxDismissAlert(id, reason, asOf));
+  return http(`${projectPath(pid)}/alerts/${encodeURIComponent(id)}/dismiss`, z.object({ id: z.string(), status: z.string() }), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ note: reason }),
+  });
 }
 
 // ---------- incidents ----------
@@ -319,6 +383,24 @@ export async function getReportReadings(pid: string, sid: string, asOf: string):
   return http(`${projectPath(pid)}/sources/${encodeURIComponent(sid)}/readings${qs({ as_of: asOf })}`, readingsSchema);
 }
 
+/** Accept, correct or reject parsed quantities (manager). Accepted and corrected values become observations. */
+export async function confirmReadings(
+  pid: string,
+  sid: string,
+  asOf: string,
+  body: { decisions?: ReadingDecision[]; all_signed?: boolean },
+): Promise<ConfirmReadingsResult> {
+  if (servedFromFixtures("readings"))
+    return fixture("readings", () => {
+      throw new fx.FixtureError(501, "Confirming readings needs the live API (set NEXT_PUBLIC_USE_FIXTURES=false)");
+    });
+  return http(`${projectPath(pid)}/sources/${encodeURIComponent(sid)}/readings/confirm${qs({ as_of: asOf })}`, confirmReadingsSchema, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ decisions: body.decisions ?? [], all_signed: !!body.all_signed }),
+  });
+}
+
 /** Where the original file and every derived record of a source are stored (live API only). */
 export async function getSourceStorage(pid: string, sid: string, asOf: string): Promise<SourceStorage> {
   if (servedFromFixtures("storage"))
@@ -433,9 +515,75 @@ export async function confirmProposal(pid: string, sid: string, input: ConfirmIn
 }
 
 // ---------- ask ----------
-export async function askSiteMate(pid: string, question: string, asOf: string): Promise<AskAnswer> {
-  void pid;
-  return fixture("ask", () => fx.fxAsk(question, asOf));
+/**
+ * Ask SiteMate (POST /projects/{pid}/ask): a cited answer from the records available at `asOf`. When the model is
+ * unavailable the server answers 503 with matching passages; that is returned as `fallback` instead of an error.
+ */
+export async function askSiteMate(pid: string, question: string, asOf: string, threadId?: string | null): Promise<AskAnswer> {
+  if (servedFromFixtures("ask")) return fixture("ask", () => fx.fxAsk(question, asOf));
+  const res = await fetch(`/api/sm${projectPath(pid)}/ask${qs({ as_of: asOf })}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question, thread_id: threadId ?? null }),
+  }).catch(() => {
+    throw new ApiError(0, "Network error: the SiteMate proxy could not be reached");
+  });
+  const body = await res.json().catch(() => null);
+  if (res.status === 503 && body?.detail?.fallback) {
+    return { question, answer: String(body.detail.message ?? ""), citations: [], as_of: asOf, fallback: body.detail.fallback, status: "no_evidence" };
+  }
+  if (!res.ok) {
+    const detail = body?.detail;
+    throw new ApiError(res.status, typeof detail === "string" ? detail : detail?.message ?? `Request failed (${res.status})`);
+  }
+  const parsed = askResponseSchema.safeParse(body);
+  if (!parsed.success) throw new ApiError(502, "Unexpected response from /ask");
+  const d = parsed.data;
+  const n = new Map(d.citations.map((c, i) => [c.passage_id, i + 1]));
+  return {
+    question,
+    answer: d.answer.map((a) => a.text).join("\n\n") || d.unknowns.join(" "),
+    status: d.status,
+    paragraphs: d.answer.map((a) => ({ text: a.text, refs: a.refs })),
+    unknowns: d.unknowns,
+    suggested_actions: d.suggested_actions,
+    citations: d.citations.map((c) => ({
+      n: n.get(c.passage_id)!,
+      ref: { source_id: c.source_id, locator: c.locator, passage_id: c.passage_id },
+      label: c.title ?? c.source_id,
+      excerpt: c.excerpt,
+      untrusted: c.untrusted,
+    })),
+    as_of: d.as_of,
+    thread_id: d.thread_id,
+    disclaimer: d.disclaimer,
+  };
+}
+
+export interface Capabilities {
+  db: boolean;
+  llm: boolean;
+  stt: boolean;
+  worker: boolean;
+  worker_seen_at: string | null;
+}
+
+/** What the deployment can do (GET /health/capabilities): enables the mic, warns when the worker is offline. */
+export async function getCapabilities(): Promise<Capabilities> {
+  if (servedFromFixtures("health")) return { db: false, llm: false, stt: false, worker: false, worker_seen_at: null };
+  return http(
+    "/health/capabilities",
+    z.object({ db: z.boolean(), llm: z.boolean(), stt: z.boolean(), worker: z.boolean(), worker_seen_at: z.string().nullable() }),
+  );
+}
+
+/** Speech to text for dictation (POST /projects/{pid}/transcribe); nothing is stored. */
+export async function transcribe(pid: string, audio: Blob, filename: string): Promise<string> {
+  const form = new FormData();
+  form.append("audio", audio, filename);
+  const out = await http(`${projectPath(pid)}/transcribe`, z.object({ text: z.string() }), { method: "POST", body: form });
+  return out.text;
 }
 
 // ---------- recaps ----------

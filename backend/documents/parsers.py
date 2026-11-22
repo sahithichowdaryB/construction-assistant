@@ -628,7 +628,10 @@ def metadata_passage(result, ctx, path):
 def parse_file(path: Path, ctx) -> ParseResult:
     result = ParseResult()
     kind = ctx["source"]["kind"]
-    parser = parse_diary if kind == "diary" else parse_plan if kind == "plan" else PARSERS.get(path.suffix.lower())
+    suffix = path.suffix.lower()
+    # A diary entry is plain text; a scanned docket or note filed with the diary (a PDF, a photo) uses its file parser.
+    text_diary = kind == "diary" and suffix not in PARSERS
+    parser = parse_diary if text_diary else parse_plan if kind == "plan" else PARSERS.get(suffix)
     if parser is None:
         result.title = path.name
         result.review_reasons.append(f"No parser for {path.suffix or 'files without an extension'}")

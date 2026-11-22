@@ -42,6 +42,21 @@ const versionSchema = z.object({
   review: z
     .object({ decision: z.enum(["approved", "changes_requested"]), reason: z.string().nullable(), reviewer: z.string(), decided_at: z.string() })
     .nullable(),
+  gap_resolutions: z
+    .array(
+      z.object({
+        field: z.string(),
+        resolution: z.enum(["filled", "omitted"]),
+        value: z.string().nullable(),
+        reason: z.string().nullable(),
+        decided_by: z.string().nullable(),
+        decided_at: z.string(),
+      }),
+    )
+    .default([]),
+  exports: z
+    .array(z.object({ format: z.string(), sha256: z.string(), bytes: z.number().nullable(), filename: z.string().nullable(), created_at: z.string() }))
+    .default([]),
 });
 
 export const draftSchema = z.object({
@@ -54,6 +69,12 @@ export const draftSchema = z.object({
   kind_label: z.string().optional(),
   title: z.string().nullable().optional(),
   written_with_agent: z.boolean().optional(),
+  origin: z.enum(["manual", "keywords", "alert_auto", "suggestion", "daily_report"]).optional(),
+  work_date: z.string().nullable().optional(),
+  submitted_at: z.string().nullable().optional(),
+  omittable_fields: z.array(z.string()).default([]),
+  approval_roles: z.array(z.string()).default(["approver"]),
+  disclaimer: z.string().optional(),
   status: z.enum(["draft", "awaiting_review", "changes_requested", "approved"]),
   latest: versionSchema,
   versions: z.array(versionSchema),
@@ -272,6 +293,32 @@ export function useReviewNotice() {
       call(`${base}/drafts/${input.draftId}/versions/${input.version}/review`, draftSchema, json(input)),
   );
 }
+
+/** Fill a [MISSING: …] field, or leave it out with a reason (template-permitted fields only). Creates a new version. */
+export function useResolveGap() {
+  return useNoticeMutation(
+    (base, q, input: { draftId: string; version: number; field: string; resolution: "filled" | "omitted"; value?: string; reason?: string }) =>
+      call(`${base}/drafts/${input.draftId}/versions/${input.version}/gaps${q}`, draftSchema, json(input)),
+  );
+}
+
+/** Send a private draft (written with SiteMate, auto-drafted or a daily report) to the approver's queue. */
+export function useSubmitNotice() {
+  return useNoticeMutation((base, q, input: { draftId: string; expected_version: number }) =>
+    call(`${base}/drafts/${input.draftId}/submit${q}`, draftSchema, json({ expected_version: input.expected_version })),
+  );
+}
+
+/** The most recent approved version (an edit after approval adds a newer, unapproved one). */
+export function latestApproved(draft: NoticeDraft) {
+  return [...draft.versions].reverse().find((v) => v.review?.decision === "approved") ?? null;
+}
+
+export const ORIGIN_LABEL: Record<string, string> = {
+  alert_auto: "Auto-drafted from an alert",
+  keywords: "Written with SiteMate",
+  daily_report: "Daily report",
+};
 
 export const STATUS_LABEL: Record<DraftStatus, string> = {
   draft: "Draft (not sent)",

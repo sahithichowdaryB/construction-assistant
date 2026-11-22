@@ -17,7 +17,7 @@ type Ctx = { params: Promise<{ path: string[] }> };
 const SAFE_SEGMENT = /^[A-Za-z0-9._~:-]+$/;
 const FILE_ROUTE = /^projects\/([^/]+)\/sources\/([^/]+)\/file$/;
 
-async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PATCH") {
+async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE") {
   const { path } = await ctx.params;
   if (!path.length || path.some((s) => !SAFE_SEGMENT.test(s) || s === "." || s === "..")) {
     return Response.json({ detail: "Invalid path" }, { status: 400 });
@@ -52,7 +52,7 @@ async function forward(req: NextRequest, ctx: Ctx, method: "GET" | "POST" | "PAT
       cache: "no-store",
       // POST may run the LLM (reasoning, uploads, capture chains several calls); reranked search and PATCH are slower than plain reads.
       signal: AbortSignal.timeout(
-        method === "POST" || /\/plans\/[^/]+\/summary$/.test(joined) ? 150_000 : method === "PATCH" || joined.endsWith("/search") || /\/(performance|daily-evaluations)(\/|$)/.test(joined)
+        method === "POST" || /\/plans\/[^/]+\/summary$/.test(joined) ? 150_000 : method === "PATCH" || method === "PUT" || method === "DELETE" || joined.endsWith("/search") || /\/(performance|daily-evaluations)(\/|$)/.test(joined)
           ? 60_000 : 15_000,
       ),
     });
@@ -88,4 +88,12 @@ export function POST(req: NextRequest, ctx: Ctx) {
 
 export function PATCH(req: NextRequest, ctx: Ctx) {
   return forward(req, ctx, "PATCH");
+}
+
+export function PUT(req: NextRequest, ctx: Ctx) {
+  return forward(req, ctx, "PUT");
+}
+
+export function DELETE(req: NextRequest, ctx: Ctx) {
+  return forward(req, ctx, "DELETE");
 }

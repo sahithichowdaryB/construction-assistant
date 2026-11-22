@@ -23,6 +23,7 @@ import io
 import json
 import re
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
@@ -713,6 +714,11 @@ def activate(conn, project_id, baseline_id, *, member_id, as_of, normalize_weigh
     acts = [a for a in x.get("activities") or [] if a.get("planned_start") and a.get("planned_finish")]
     if not acts:
         raise ValueError("The baseline has no dated activities")
+    # Every daily target must cite the plan row it comes from, so a row without a citation blocks activation.
+    uncited = [a["code"] for a in acts if not any(":" in str(r) for r in a.get("refs") or [])]
+    if uncited:
+        raise ValueError("These activities have no source citation; cite the plan row or remove them: "
+                         + ", ".join(sorted(uncited)))
     project = project or dict(conn.execute(text("SELECT * FROM sitemate.projects WHERE id=:p"), {"p": project_id}).mappings().one())
     layer = {**settings_from_extracted(x, project if x.get("method") == "csv" or not x.get("thresholds") else None),
              **(x.get("settings_overrides") or {})}
@@ -734,6 +740,8 @@ def activate(conn, project_id, baseline_id, *, member_id, as_of, normalize_weigh
         "SELECT code, name, unit, zone, contractor_id FROM sitemate.activities WHERE project_id=:p"),
         {"p": project_id}).mappings()}
     when = stamp(as_of)
+    previous = conn.execute(text("""SELECT id FROM sitemate.plan_baselines
+                                    WHERE project_id = :p AND status = 'active'"""), {"p": project_id}).scalar()
     conn.execute(text("""UPDATE sitemate.plan_baselines SET status = 'superseded'
                          WHERE project_id = :p AND status = 'active'"""), {"p": project_id})
     conn.execute(text("""UPDATE sitemate.plan_baselines SET status = 'active', activated_by = :by, activated_at = :at,
@@ -782,8 +790,17 @@ def activate(conn, project_id, baseline_id, *, member_id, as_of, normalize_weigh
                "w": _clean_num(a.get("weight_pct")), "crit": critical, "basis": basis,
                "preds": a.get("predecessors") or [], "src": src, "loc": loc})
     written, series = 0, expand_targets(acts, cal)
+    if previous is not None:
+        # Activities the new baseline drops keep their history, but have no plan from the activation day onward.
+        today = when.astimezone(ZoneInfo(project["timezone"])).date()
+        removed = conn.execute(text("""
+            DELETE FROM sitemate.plan_targets t USING sitemate.activity_plan ap
+            WHERE ap.project_id = :p AND ap.baseline_id = :prev AND t.project_id = ap.project_id
+              AND t.activity_code = ap.activity_code AND NOT (t.activity_code = ANY(:codes)) AND t.work_date >= :today
+        """), {"p": project_id, "prev": previous, "codes": codes, "today": today})
+        written += removed.rowcount or 0
     for a in acts:
-        src, loc = a["refs"][0].split(":", 1)
+        src, loc = next(str(r) for r in a["refs"] if ":" in str(r)).split(":", 1)
         rows = [{"p": project_id, "c": a["code"], "d": d, "q": _clean_num(q), "s": src, "l": loc}
                 for d, q in series[a["code"]].items()]
         result = conn.execute(text("""

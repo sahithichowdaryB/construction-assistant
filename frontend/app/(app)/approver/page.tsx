@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
 import { GatedButton } from "@/components/gated-button";
 import { NoticeText } from "@/components/notice-text";
+import { DisclaimerBanner } from "@/components/disclaimer-banner";
 import { NoticeDownloads } from "@/components/notice-downloads";
+import { GapResolutions } from "@/components/notice-gaps";
 import { EvidenceAt, useApp } from "@/components/providers/app-context";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -91,7 +93,14 @@ function Decision({ notice }: { notice: NoticeDraft }) {
     );
   }
 
-  const approveBlocked = denyReason(role, "approve") ?? (missing.length ? `Fill in first: ${missing.join(", ")}. Ask the site manager for a new version.` : null);
+  // Who approves is a project setting (approval_roles); the server checks it again.
+  const backendRole = role === "site_manager" ? "manager" : role === "approver" ? "approver" : "contributor";
+  const roleBlocked = notice.approval_roles.includes(backendRole)
+    ? null
+    : `Only ${notice.approval_roles.join(" or ")} members approve notices on this project.`;
+  const approveBlocked =
+    roleBlocked ??
+    (missing.length ? `Fill in or leave out first: ${missing.join(", ")}. Ask the site manager for a new version.` : null);
   return (
     <div className="flex flex-col gap-3">
       {asking ? (
@@ -166,9 +175,16 @@ function NoticeReview({ notice }: { notice: NoticeDraft }) {
         </div>
       ) : (
         <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          <CheckCircle2 className="size-4" aria-hidden /> All required fields are filled in.
+          <CheckCircle2 className="size-4" aria-hidden /> Every required detail is filled in or left out with a reason.
         </p>
       )}
+      {notice.versions.some((v) => v.gap_resolutions.length) && (
+        <div className="flex flex-col gap-1 rounded-xl border p-3">
+          <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Filled in or left out by the site manager</p>
+          {notice.versions.map((v) => <GapResolutions key={v.version} version={v} />)}
+        </div>
+      )}
+      <DisclaimerBanner text={notice.disclaimer} />
 
       <Changes notice={notice} />
       <NoticeText body={latest.body} />

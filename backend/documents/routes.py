@@ -12,22 +12,24 @@ import hashlib
 import json
 import mimetypes
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from database import writer_engine
-from deps import check_cutoff, check_member, connection, require_writer
+from jobs import durable
+from deps import check_cutoff, check_member, connection, require_roles, require_writer
 
+from . import readings as readings_module
 from . import search as search_module
 from . import storage
-from .ingest import ingest_source, queue_job
+from .ingest import queue_job
 from .preview import build_preview
-from .summaries import summarize_source
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["documents"])
 CUTOFF = "coalesce(CAST(:cutoff AS timestamptz), 'infinity')"
@@ -206,7 +208,8 @@ def evidence(project_id: str, passage_id: str, as_of: datetime | None = None, co
 
 @router.get("/sources/{source_id}/readings", dependencies=[Depends(check_member)])
 def readings(project_id: str, source_id: str, as_of: datetime | None = None, conn=Depends(connection)):
-    """Quantity readings parsed from a daily report, compared with the accepted observations."""
+    """Quantity readings parsed from a daily report, compared with the accepted observations, with the manager's
+    decision on each row (as of `as_of`)."""
     check_cutoff(as_of)
     _source_or_404(conn, project_id, source_id, as_of)
     job = conn.execute(text("""
@@ -215,17 +218,65 @@ def readings(project_id: str, source_id: str, as_of: datetime | None = None, con
         {"p": project_id, "s": source_id}).mappings().one_or_none()
     if job is None:
         raise HTTPException(404, "Source has not been parsed yet")
-    accepted = {(r.activity_code, r.work_date.isoformat(), r.locator): float(r.quantity) for r in conn.execute(text("""
+    accepted = {(r.activity_code, r.work_date.isoformat(), r.locator): float(r.quantity) for r in conn.execute(text(f"""
         SELECT activity_code, work_date, locator, quantity FROM sitemate.observations
-        WHERE project_id=:p AND source_id=:s"""), {"p": project_id, "s": source_id})}
+        WHERE project_id=:p AND source_id=:s AND (accepted_at IS NULL OR accepted_at <= {CUTOFF})"""),
+        {"p": project_id, "s": source_id, "cutoff": as_of})}
+    reviews = readings_module.latest_reviews(conn, project_id, source_id, as_of)
     items = []
     for proposal in job["result"].get("proposals", []):
         stored = accepted.get((proposal["activity_code"], proposal["work_date"], proposal["locator"]))
-        status = "proposed" if stored is None else "accepted" if stored == float(proposal["value"]) else "conflict"
+        review = reviews.get(proposal["locator"])
+        if review and review["decision"] == "rejected":
+            status = "rejected"
+        elif review and review["decision"] == "corrected":
+            status = "corrected"
+        else:
+            status = "proposed" if stored is None else "accepted" if stored == float(proposal["value"]) else "conflict"
         items.append({**proposal, "review_status": status, "accepted_value": stored,
+                      "review": ({"decision": review["decision"], "quantity": _num(review["quantity"]),
+                                  "reason": review["reason"], "reviewer": review["reviewer_name"],
+                                  "decided_at": review["decided_at"]} if review else None),
                       "ref": ref(source_id, proposal["locator"], proposal.get("page"))})
     return {"source_id": source_id, "job_id": str(job["id"]), "job_status": job["status"],
-            "review_reasons": job["result"].get("review_reasons", []), "readings": items}
+            "review_reasons": job["result"].get("review_reasons", []), "readings": items,
+            "pending": sum(1 for i in items if i["review_status"] in ("proposed", "conflict"))}
+
+
+def _num(value):
+    return float(value) if value is not None else None
+
+
+class ReadingDecisionIn(BaseModel):
+    locator: str = Field(min_length=1, max_length=120)
+    decision: Literal["accepted", "corrected", "rejected"]
+    quantity: float | None = Field(None, ge=0, le=10_000_000)
+    reason: str | None = Field(None, max_length=1000)
+
+
+class ConfirmReadingsIn(BaseModel):
+    decisions: list[ReadingDecisionIn] = Field(default_factory=list, max_length=200)
+    all_signed: bool = False
+
+
+@router.post("/sources/{source_id}/readings/confirm")
+def confirm_readings(project_id: str, source_id: str, body: ConfirmReadingsIn, as_of: datetime | None = None,
+                     member=Depends(require_roles("manager"))):
+    """Accept, correct or reject parsed report quantities. Accepted and corrected values become observations; the
+    affected days are queued for evaluation. All or nothing: a conflict writes nothing (409 with the differences)."""
+    check_cutoff(as_of)
+    when = as_of or datetime.now(timezone.utc).replace(microsecond=0)
+    decisions = [readings_module.Decision(d.locator, d.decision, d.quantity, d.reason) for d in body.decisions]
+    with writer_engine().begin() as conn:
+        try:
+            outcome = readings_module.confirm_readings(conn, project_id, source_id, decisions,
+                                                       member_id=member["member_id"], when=when,
+                                                       all_signed=body.all_signed)
+        except readings_module.ReadingError as exc:
+            raise HTTPException(exc.status, {"message": exc.message, "conflicts": exc.detail} if exc.detail
+                                else exc.message) from None
+    return {"source_id": source_id, "reviews": outcome.reviews, "observations": outcome.observations,
+            "unchanged": outcome.unchanged, "queued_days": outcome.queued_days}
 
 
 @router.get("/sources/{source_id}/storage", dependencies=[Depends(check_member)])
@@ -442,10 +493,21 @@ def upload_source(project_id: str, background: BackgroundTasks, file: UploadFile
                        "sha": digest, "title": file.filename,
                        "meta": json.dumps({"uploaded_by": member["member_id"], "filename": file.filename})})
             except IntegrityError:
+                _drop_unreferenced(project_id, stored_path)
                 raise HTTPException(404, "Unknown project") from None
     queued = _queue(project_id, source_id, "parse")
-    background.add_task(ingest_source, project_id, source_id)
+    durable(background, project_id, "ingest", {"source_id": source_id, "summarize": None}, {"source_id": source_id})
     return {**queued, "duplicate": False, "available_at": available}
+
+
+def _drop_unreferenced(project_id, stored_path):
+    """Remove an uploaded file no source refers to (a failed insert); files are content-addressed and may be shared."""
+    with writer_engine().connect() as conn:
+        used = conn.scalar(text("SELECT 1 FROM sitemate.sources WHERE project_id=:p AND path=:path"),
+                           {"p": project_id, "path": stored_path})
+    path = storage.resolve(project_id, stored_path)
+    if not used and path is not None:
+        path.unlink(missing_ok=True)
 
 
 @router.post("/sources/{source_id}/ingest", status_code=202, dependencies=[Depends(require_writer)])
@@ -454,7 +516,7 @@ def reingest(project_id: str, source_id: str, background: BackgroundTasks, summa
     """Retry or re-run parsing. Same file, same passages: the run is idempotent."""
     _source_or_404(conn, project_id, source_id, None)
     queued = _queue(project_id, source_id, "parse")
-    background.add_task(ingest_source, project_id, source_id, summarize)
+    durable(background, project_id, "ingest", {"source_id": source_id, "summarize": summarize}, {"source_id": source_id})
     return queued
 
 
@@ -462,7 +524,7 @@ def reingest(project_id: str, source_id: str, background: BackgroundTasks, summa
 def regenerate_summary(project_id: str, source_id: str, background: BackgroundTasks, conn=Depends(connection)):
     _source_or_404(conn, project_id, source_id, None)
     queued = _queue(project_id, source_id, "summarize")
-    background.add_task(summarize_source, project_id, source_id)
+    durable(background, project_id, "summarize", {"source_id": source_id}, {"source_id": source_id})
     return queued
 
 

@@ -531,7 +531,17 @@ export function usePlanSummary(id: string | null) {
     enabled: !!id,
     retry: false,
     staleTime: Infinity,
-    queryFn: () => call(`${base}/plans/${id}/summary`, planSummarySchema),
+    // GET only reads the stored summary; when there is none yet (404), ask the server to write it (POST, model call).
+    queryFn: async () => {
+      try {
+        return await call(`${base}/plans/${id}/summary`, planSummarySchema);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) {
+          return call(`${base}/plans/${id}/summary`, planSummarySchema, { method: "POST" });
+        }
+        throw e;
+      }
+    },
   });
 }
 

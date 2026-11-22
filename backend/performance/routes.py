@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import writer_engine
+from jobs import durable
 from deps import check_cutoff, check_member, connection, require_roles
 
 from . import baseline as bl
@@ -49,29 +50,38 @@ def _uuid(value: str) -> str:
     return value
 
 
-# ------------------------------------------------------------------ reference plans (mock_data PDFs)
+# ------------------------------------------------------------------ reference plans (project-scoped PDFs)
+
+def _plan_path(project_id: str, plan_id: str):
+    try:
+        path = plans.find_plan(project_id, plan_id)
+    except ValueError:
+        path = None
+    if path is None:
+        raise HTTPException(404, "Plan not found")
+    return path
+
 
 @router.get("/plans", dependencies=[Depends(check_member)])
 def list_plan_files(project_id: str):
-    return {"plans": plans.list_plans()}
+    return {"plans": plans.list_plans(project_id)}
 
 
 @router.post("/plans", status_code=201)
 def upload_plan(project_id: str, file: UploadFile = File(...), member=Depends(require_roles("manager"))):
-    """Add a PDF plan to the list. It is summarised the first time it is opened."""
+    """Add a PDF plan to this project's list. It is summarised when a manager asks for the summary."""
     if Path(file.filename or "").suffix.lower() != ".pdf":
         raise HTTPException(422, "Plans must be PDF files")
     data = file.file.read(MAX_UPLOAD + 1)
     if not data.startswith(b"%PDF") or len(data) > MAX_UPLOAD:
         raise HTTPException(422, "Not a PDF, or larger than 25 MB")
-    path = plans.save_upload(file.filename, data)
-    return next(p for p in plans.list_plans() if p["filename"] == path.name)
+    path = plans.save_upload(project_id, file.filename, data)
+    return next(p for p in plans.list_plans(project_id) if p["filename"] == path.name)
 
 
 @router.get("/plans/{plan_id}/page/{page}.png", dependencies=[Depends(check_member)])
 def plan_page(project_id: str, plan_id: str, page: int):
-    path = plans.find_plan(plan_id)
-    png = plans.render_page(path, page) if path else None
+    png = plans.render_page(_plan_path(project_id, plan_id), page)
     if png is None:
         raise HTTPException(404, "Page not found")
     return Response(png, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
@@ -79,22 +89,32 @@ def plan_page(project_id: str, plan_id: str, page: int):
 
 @router.get("/plans/{plan_id}/file", dependencies=[Depends(check_member)])
 def plan_file(project_id: str, plan_id: str):
-    path = plans.find_plan(plan_id)
-    if path is None:
-        raise HTTPException(404, "Plan not found")
+    path = _plan_path(project_id, plan_id)
     return Response(path.read_bytes(), media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{path.name}"'})
 
 
 @router.get("/plans/{plan_id}/summary", dependencies=[Depends(check_member)])
-def plan_summary(project_id: str, plan_id: str, refresh: bool = False):
-    """Agent summary of one plan. Reads the PDF with the model the first time, then serves the cached copy."""
+def plan_summary(project_id: str, plan_id: str):
+    """The stored agent summary of one plan (or `all`). Never calls the model: 404 with generate=true when there is
+    none yet, so the client can ask for one with POST."""
+    if plan_id != "all":
+        _plan_path(project_id, plan_id)
+    hit = plans.cached_summary(project_id, plan_id)
+    if hit is None:
+        raise HTTPException(404, {"message": "No summary yet", "generate": True})
+    return hit
+
+
+@router.post("/plans/{plan_id}/summary")
+def write_plan_summary(project_id: str, plan_id: str, refresh: bool = False,
+                       member=Depends(require_roles("manager", "approver"))):
+    """Read the plan with the model (first time or refresh=true) and store the summary."""
     from documents.llm import ModelUnavailable
-    path = plans.find_plan(plan_id) if plan_id != "all" else None
-    if path is None and plan_id != "all":
-        raise HTTPException(404, "Plan not found")
+    path = _plan_path(project_id, plan_id) if plan_id != "all" else None
     try:
-        return plans.summarise_all(refresh=refresh) if plan_id == "all" else plans.summarise(path, refresh=refresh)
+        return (plans.summarise_all(project_id, refresh=refresh) if plan_id == "all"
+                else plans.summarise(project_id, path, refresh=refresh))
     except (ModelUnavailable, ValueError) as exc:
         raise HTTPException(503, f"The summary could not be written right now: {exc}") from None
 
@@ -217,7 +237,7 @@ def upload_baseline(project_id: str, background: BackgroundTasks, files: list[Up
         created = bl.create_baseline(conn, project_id, {"activities": [], "milestones": []}, [], source_ids, as_of=when,
                                      member_id=member["member_id"], title=title, extraction_status="queued")
         row = bl.get_baseline(conn, project_id, created["id"])
-    background.add_task(run_extraction, project_id, created["id"])
+    durable(background, project_id, "plan_extract", {"baseline_id": created["id"]}, {"baseline_id": created["id"]})
     return _baseline_view(conn, row, full=False)
 
 
@@ -332,7 +352,7 @@ def retry_extraction(project_id: str, baseline_id: str, background: BackgroundTa
             raise HTTPException(409, "Only a draft baseline can be re-extracted")
         conn.execute(text("UPDATE sitemate.plan_baselines SET extraction_status='queued', error=NULL "
                           "WHERE project_id=:p AND id=CAST(:b AS uuid)"), {"p": project_id, "b": baseline_id})
-    background.add_task(run_extraction, project_id, baseline_id)
+    durable(background, project_id, "plan_extract", {"baseline_id": baseline_id}, {"baseline_id": baseline_id})
     return {"id": baseline_id, "extraction_status": "queued"}
 
 
@@ -379,10 +399,12 @@ def recompute_day(project_id: str, work_date: str, background: BackgroundTasks, 
     """Queue a run (agent_jobs kind daily_eval) and start it in the background. The worker can pick it up too."""
     check_cutoff(as_of)
     day = _day(work_date)
-    with writer_engine().begin() as conn:
-        if not daily.queue_day(conn, project_id, day, "manual", as_of=as_of, delay_seconds=0, force=force):
-            raise HTTPException(503, "Performance tables are not installed")
-    background.add_task(daily.run_queued_day, writer_engine(), project_id, day)
+    try:
+        durable(background, project_id, "daily_eval",
+                {"work_date": day.isoformat(), "as_of": as_of, "force": force, "trigger": "manual"},
+                {"work_date": day.isoformat()})
+    except Exception as exc:  # noqa: BLE001 - say what went wrong instead of guessing
+        raise HTTPException(503, f"The evaluation could not be queued: {type(exc).__name__}: {str(exc)[:200]}") from None
     return {"work_date": day.isoformat(), "queued": True}
 
 
@@ -413,7 +435,10 @@ def regenerate_narrative(project_id: str, background: BackgroundTasks, date_: st
                          as_of: datetime | None = None, member=Depends(require_roles("manager"))):
     """Write the cited narrative (P4) for the snapshot of this date (new version)."""
     check_cutoff(as_of)
-    background.add_task(_snapshot, project_id, _day(date_), as_of, use_llm=True, force=True)
+    day = _day(date_)
+    durable(background, project_id, "overall_eval",
+            {"work_date": day.isoformat(), "as_of": as_of, "force": True, "trigger": "narrative"},
+            {"work_date": day.isoformat()})
     return {"date": date_, "queued": True}
 
 

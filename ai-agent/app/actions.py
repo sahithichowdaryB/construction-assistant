@@ -90,6 +90,24 @@ Return JSON: {"actions":[{"action_type","title","rationale","owner_role","contra
 "priority" (low|medium|high|urgent),"evidence_refs":[{"source_id","locator"}]}]}. Output only JSON."""
 
 
+_NULL_STR = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+ACTIONS_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["actions"],
+    "properties": {"actions": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["action_type", "title", "rationale", "owner_role", "contractor_id", "due_in_hours", "priority",
+                     "evidence_refs"],
+        "properties": {
+            "action_type": {"type": "string", "enum": list(ACTION_TYPES)}, "title": {"type": "string"},
+            "rationale": {"type": "string"}, "owner_role": _NULL_STR,
+            "contractor_id": _NULL_STR, "due_in_hours": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+            "priority": _NULL_STR,  # set from the incident severity by the guardrails
+            "evidence_refs": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False, "required": ["source_id", "locator"],
+                "properties": {"source_id": {"type": "string"}, "locator": {"type": "string"}}}}}}}},
+}
+
+
 def _synth(action_type, title, rationale, priority, owner="site_manager", hours=4):
     return RecommendedAction(action_type=action_type, title=title, rationale=rationale, priority=priority,
                              owner_role=owner, due_in_hours=hours)
@@ -152,7 +170,7 @@ def plan_actions(ctx: ActionContext, llm: LLMClient, as_of: datetime) -> ActionP
                                       ("status", "confidence", "headline_cause", "reasoning", "gaps", "factual_evidence")},
         "playbook": ctx.playbook, "allowed_owner_roles": sorted(ctx.allowed_roles), "contractors": ctx.contractors,
         "activities_at_risk": ctx.successors_at_risk, "open_actions": ctx.open_actions}, default=str, ensure_ascii=False)
-    out = llm.generate_json(SYSTEM, user)
+    out = llm.generate_json(SYSTEM, user, schema=ACTIONS_SCHEMA)
     actions, dropped = apply_guardrails(out.get("actions"), ctx)
     return ActionPlan(incident_id=ctx.incident["id"], analysis_id=(ctx.analysis or {}).get("id"), actions=actions,
                       dropped=dropped, model=llm.model, as_of=as_of)

@@ -177,11 +177,32 @@ export const readingsSchema = z.object({
       locator: z.string(),
       page: z.number().nullable(),
       planned_on_report: num.nullable(),
-      review_status: z.enum(["proposed", "accepted", "conflict"]),
+      review_status: z.enum(["proposed", "accepted", "conflict", "corrected", "rejected"]),
       accepted_value: num.nullable(),
+      review: z
+        .object({
+          decision: z.enum(["accepted", "corrected", "rejected"]),
+          quantity: num.nullable(),
+          reason: z.string().nullable(),
+          reviewer: z.string().nullable(),
+          decided_at: z.string(),
+        })
+        .nullable()
+        .optional(),
       ref,
     }),
   ),
+  pending: z.number().optional(),
+});
+
+export const confirmReadingsSchema = z.object({
+  source_id: z.string(),
+  reviews: z.array(z.object({ id: z.string(), locator: z.string(), decision: z.string(), quantity: num.nullable() })),
+  observations: z.array(
+    z.object({ activity_code: z.string(), work_date: z.string(), quantity: num, basis: z.string(), locator: z.string() }),
+  ),
+  unchanged: z.array(z.string()),
+  queued_days: z.array(z.string()),
 });
 
 export const searchSchema = z.object({
@@ -504,3 +525,27 @@ export const recapsSchema = z.array(
     cards: z.array(recapCardSchema),
   }),
 );
+
+export const askResponseSchema = z.object({
+  thread_id: z.string(),
+  seq: z.number(),
+  status: z.enum(["ok", "no_evidence", "refused"]),
+  answer: z.array(z.object({ text: z.string(), refs: z.array(z.string()) }).passthrough()),
+  unknowns: z.array(z.string()),
+  suggested_actions: z.array(
+    z.object({ kind: z.enum(["open_source", "open_alert", "draft_notice"]), target: z.string(), label: z.string() }),
+  ),
+  citations: z.array(
+    z.object({
+      source_id: z.string(),
+      locator: z.string(),
+      passage_id: z.string(),
+      excerpt: z.string(),
+      title: z.string().nullable(),
+      untrusted: z.boolean(),
+    }),
+  ),
+  tools_used: z.array(z.string()),
+  as_of: z.string(),
+  disclaimer: z.string(),
+});

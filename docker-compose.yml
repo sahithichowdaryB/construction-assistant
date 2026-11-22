@@ -1,0 +1,80 @@
+# SiteMate: API, worker and web app; optional local speech-to-text and a local database.
+#
+#   docker compose up --build                          # hosted DB (Supabase) from backend/.env
+#   docker compose --profile voice up --build          # + local Whisper on :8001
+#   docker compose --profile localdb up --build        # + local Postgres, migrated and seeded with Riverside
+#
+# Secrets come from backend/.env (never baked into an image). With the localdb profile, `migrate` creates and seeds
+# the local database; point the api and worker at it by setting in backend/.env:
+#   MIGRATION_DATABASE_URL=DATABASE_URL=postgresql+psycopg://postgres:sitemate-local@db:5432/sitemate (each key)
+x-backend: &backend
+  build: { context: ., dockerfile: backend/Dockerfile }
+  env_file: [{ path: backend/.env, required: false }]
+  environment: &backend-env
+    SITEMATE_STORAGE: /app/backend/storage
+    AGENT_IMAGE_DIR: /app/backend/storage/images
+    AGENT_UPLOAD_DIR: /app/backend/storage/voice
+  volumes: [storage:/app/backend/storage]
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *backend
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/db', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    <<: *backend
+    build: { context: ., dockerfile: ai-agent/Dockerfile }
+    command: ["python", "worker.py"]
+
+  web:
+    build:
+      context: frontend
+      args: { NEXT_PUBLIC_USE_FIXTURES: "false" }
+    environment:
+      SITEMATE_API_URL: http://api:8000
+    env_file: [{ path: frontend/.env.local, required: false }]
+    ports: ["3000:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
+  whisper:
+    profiles: [voice]
+    build: backend/whisper-server
+    environment: { WHISPER_LOCAL_MODEL: base.en }
+    ports: ["8001:8001"]
+    volumes: [whisper-models:/home/whisper/.cache]
+    restart: unless-stopped
+
+  db:
+    profiles: [localdb]
+    image: postgres:15
+    environment: { POSTGRES_PASSWORD: sitemate-local, POSTGRES_DB: sitemate }
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./backend/docker/local-db-init.sql:/docker-entrypoint-initdb.d/01-supabase-stub.sql:ro
+    ports: ["54330:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    profiles: [localdb]
+    <<: *backend
+    restart: "no"
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      <<: *backend-env
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:sitemate-local@db:5432/sitemate
+    command: ["sh", "-c", "alembic upgrade head && python seed_riverside.py"]
+
+volumes:
+  storage:
+  whisper-models:
+  db:

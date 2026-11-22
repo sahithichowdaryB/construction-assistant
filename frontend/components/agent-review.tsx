@@ -302,6 +302,9 @@ export function AgentReview({
     return <FactsReview key={result.thread_id} events={result.events} facts={result.facts} gaps={result.gaps} pending={pending} onSubmit={onReview} />;
   }
 
+  // The capture page handles needs_transcript itself (the speaker types the recording); nothing to show here.
+  if (result.status !== "needs_input") return null;
+
   return (
     <form
       className="flex flex-col gap-4"

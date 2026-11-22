@@ -3,7 +3,7 @@
 import { Camera, Keyboard, Megaphone, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AgentReview, SavedNoteDetails } from "@/components/agent-review";
 import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   answerQuestions,
   confirmCategories,
+  provideTranscript,
   submitCapture,
   submitReview,
   type AddedEvent,
@@ -23,7 +24,7 @@ import {
   type CategoryDecision,
   type ReviewDecision,
 } from "@/lib/agent";
-import { useCapturePrompts, useEventCategories, useInvalidateProject } from "@/lib/queries";
+import { useCapabilities, useCapturePrompts, useEventCategories, useInvalidateProject } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { useSession } from "@/lib/auth";
 import { AUTH_REQUIRED } from "@/lib/session";
@@ -41,9 +42,10 @@ const DEMO_NOTES = [
   { id: "V01", label: "Excavator", text: "The excavator broke down at ten. Hydraulic hose burst. Three workers can't continue digging in Zone B." },
 ];
 
-// Recordings need a speech-to-text service behind the API (WHISPER_BASE_URL or OPENAI_API_KEY in backend/.env).
-// Until then the mic is disabled and notes are typed or dictated. Set NEXT_PUBLIC_VOICE_TRANSCRIPTION=true to enable it.
-const VOICE_READY = process.env.NEXT_PUBLIC_VOICE_TRANSCRIPTION === "true";
+// Recordings need a speech-to-text service behind the API (WHISPER_BASE_URL or OPENAI_API_KEY in backend/.env). The mic
+// turns on when GET /health/capabilities reports it (or NEXT_PUBLIC_VOICE_TRANSCRIPTION=true forces it). If speech-to-text
+// fails on a recording, the recording is kept and the speaker types what they said (status needs_transcript).
+const VOICE_FLAG = process.env.NEXT_PUBLIC_VOICE_TRANSCRIPTION === "true";
 const VOICE_OFF_REASON = "Voice recording isn't set up. Tap “Type instead” and dictate (Mac: press the dictation key).";
 
 export default function CapturePage() {
@@ -60,13 +62,19 @@ export default function CapturePage() {
 function ForemanCapture() {
   const { role, projectId } = useApp();
   const blocked = denyReason(role, "capture");
+  const caps = useCapabilities();
+  const VOICE_READY = VOICE_FLAG || !!caps.data?.stt;
   const micBlocked = blocked ?? (VOICE_READY ? null : VOICE_OFF_REASON);
   const queryClient = useQueryClient();
   const invalidateProject = useInvalidateProject();
   const categories = useEventCategories();
   const prompts = useCapturePrompts();
 
-  const [typing, setTyping] = useState(!VOICE_READY);
+  const [typing, setTyping] = useState(!VOICE_FLAG);
+  // Start on the mic once the server reports speech-to-text, unless the person already typed something.
+  useEffect(() => {
+    if (caps.data?.stt) setTyping((t) => (t ? false : t));
+  }, [caps.data?.stt]);
   const [text, setText] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState("");
@@ -116,6 +124,13 @@ function ForemanCapture() {
     onSuccess: showResult,
   });
   // The speaker's last look at the extracted facts, just before anything is saved.
+  const transcriptMut = useMutation({
+    mutationFn: (typed: string) => {
+      if (agentResult?.status !== "needs_transcript") throw new Error("No recording is waiting for a transcript");
+      return provideTranscript(projectId, agentResult.thread_id, typed);
+    },
+    onSuccess: showResult,
+  });
   const review = useMutation({
     mutationFn: (d: ReviewDecision) => {
       if (agentResult?.status !== "needs_review") throw new Error("No capture is waiting for review");
@@ -124,7 +139,7 @@ function ForemanCapture() {
     onSuccess: showResult,
   });
 
-  const stepPending = categoriesMut.isPending || answers.isPending || review.isPending;
+  const stepPending = categoriesMut.isPending || answers.isPending || review.isPending || transcriptMut.isPending;
   const busy = capture.isPending || stepPending;
   const send = (input: CaptureInput) => {
     if (busy) return;
@@ -375,6 +390,14 @@ function ForemanCapture() {
                 <Quote text={quoteText} label={wasRecorded ? "What was heard" : "Your note"} />
               )}
               {(categoriesMut.isError || answers.isError || review.isError) && <ErrorState error={categoriesMut.error ?? answers.error ?? review.error} />}
+              {agentResult.status === "needs_transcript" ? (
+                <TranscriptForm
+                  reason={agentResult.reason}
+                  pending={transcriptMut.isPending}
+                  error={transcriptMut.error}
+                  onSubmit={(typed) => transcriptMut.mutate(typed)}
+                />
+              ) : (
               <AgentReview
                 key={agentResult.status === "needs_input" ? `${agentResult.thread_id}-${agentResult.round}` : agentResult.status}
                 result={agentResult}
@@ -385,6 +408,7 @@ function ForemanCapture() {
                 onReview={(d) => review.mutate(d)}
                 onReset={reset}
               />
+              )}
               {reviewing && <Button variant="ghost" size="sm" disabled={busy} onClick={reset}>Leave review and start another note</Button>}
               {agentResult.status === "needs_category" && categories.isError && <ErrorState error={categories.error} onRetry={() => void categories.refetch()} />}
             </div>
@@ -461,5 +485,33 @@ function HowItWorks() {
         </dl>
       </div>
     </div>
+  );
+}
+
+/** The recording is saved, but speech-to-text was unavailable: the speaker types what they said. */
+function TranscriptForm({ reason, pending, error, onSubmit }: {
+  reason: string | null;
+  pending: boolean;
+  error: Error | null;
+  onSubmit: (text: string) => void;
+}) {
+  const [typed, setTyped] = useState("");
+  return (
+    <form
+      className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(typed.trim());
+      }}
+    >
+      <p className="text-sm font-semibold">Your recording is saved, but it could not be turned into text.</p>
+      {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
+      <Label htmlFor="typed-transcript">Type what you said</Label>
+      <Textarea id="typed-transcript" rows={4} value={typed} onChange={(e) => setTyped(e.target.value)} maxLength={5000} />
+      <Button type="submit" size="touch" className="self-start" disabled={pending || typed.trim().length < 3}>
+        <Send aria-hidden /> {pending ? "Reading your note…" : "Continue"}
+      </Button>
+      {error && <ErrorState error={error} />}
+    </form>
   );
 }

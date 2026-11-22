@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, Files, Gauge, HardHat, PenLine, Siren, TrendingUp, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Clapperboard, ClipboardList, ClipboardPen, CloudOff, Files, Gauge, HardHat, MessageCircleQuestion, PenLine, Search, Siren, TrendingUp, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -10,8 +10,10 @@ import { EvidenceSheet } from "@/components/evidence-viewer";
 import { useApp } from "@/components/providers/app-context";
 import { AccountMenu, initials, SessionSync, useIdentity } from "@/components/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { USE_FIXTURES } from "@/lib/endpoints";
-import { useProject } from "@/lib/queries";
+import { useCapabilities, useProject } from "@/lib/queries";
+import { can } from "@/lib/roles";
 import { AUTH_REQUIRED, ROLE_HOME } from "@/lib/session";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/performance", label: "Performance", Icon: TrendingUp },
     { href: "/documents", label: "Documents", Icon: Files },
     { href: "/incidents", label: "Incident insights", Icon: Siren },
+    { href: "/search", label: "Search records", Icon: Search },
   ],
   approver: [{ href: ROLE_HOME.approver, label: "Review queue", Icon: BadgeCheck }],
 };
@@ -72,6 +75,31 @@ function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
       <Icon className={cn("size-[18px]", active && "text-foreground")} aria-hidden />
       <span className="flex-1">{item.label}</span>
     </Link>
+  );
+}
+
+/** Opens the Ask SiteMate drawer (every role that may ask). */
+function AskButton({ compact = false }: { compact?: boolean }) {
+  const { setAskOpen, role } = useApp();
+  if (!can(role, "ask")) return null;
+  return (
+    <Button type="button" size="sm" variant="outline" onClick={() => setAskOpen(true)} aria-label="Ask SiteMate">
+      <MessageCircleQuestion aria-hidden /> {compact ? "Ask" : "Ask SiteMate"}
+    </Button>
+  );
+}
+
+/** Live mode, managers: say so when no worker has polled recently (evaluations, auto-drafts and reports wait). */
+function WorkerOffline() {
+  const { role } = useApp();
+  const caps = useCapabilities();
+  if (USE_FIXTURES || role !== "site_manager" || !caps.data || caps.data.worker) return null;
+  return (
+    <p className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 lg:mx-8">
+      <CloudOff className="size-3.5 shrink-0" aria-hidden />
+      Background processing is offline: daily evaluations, automatic drafts and reports run once the worker is started
+      (python worker.py).
+    </p>
   );
 }
 
@@ -126,14 +154,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               {showClock && <AsOfControl />}
             </div>
             <div className="hidden md:block">
+              <AskButton />
+            </div>
+            <div className="hidden md:block">
               <AccountMenu />
             </div>
             <ThemeToggle />
           </div>
           <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 md:hidden">
             {showClock && <AsOfControl />}
+            <AskButton compact />
             <AccountMenu />
           </div>
+          <WorkerOffline />
         </header>
 
         <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pt-2 pb-32 md:px-8 md:pt-4 md:pb-12">

@@ -140,9 +140,13 @@ def parse_source(project_id, source_id):
                                                for c in conflicts]
             status = "needs_review" if reasons else "done"
             if work_date and any(p.get("basis") == "signed" for p in result.proposals):
-                # A signed daily report is the primary trigger of that day's performance evaluation.
-                from performance.daily import queue_day
-                queue_day(conn, project_id, work_date, "signed_report")
+                # A signed report triggers that day's evaluation once its quantities are confirmed
+                # (POST /sources/{id}/readings/confirm queues it). A re-read of an already confirmed report
+                # (or a seeded one) is evaluated straight away.
+                from .readings import all_confirmed
+                if all_confirmed(conn, project_id, source_id, result.proposals):
+                    from performance.daily import queue_day
+                    queue_day(conn, project_id, work_date, "signed_report")
             summary = {"passages_written": written, "passages_parsed": len(result.passages),
                        "proposals": result.proposals, "review_reasons": reasons, "conflicts": conflicts,
                        "title": result.title}

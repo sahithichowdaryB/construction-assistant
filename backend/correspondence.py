@@ -28,10 +28,11 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
 import workflow as wf
+from notice_templates import template, title_line
 from database import writer_engine
 from deps import check_cutoff, connection, require_roles
 
@@ -43,13 +44,15 @@ KINDS = {
               "purpose": "A short, direct email: the facts, a clear request with a deadline if the manager gave one, a polite close."},
     "delay_notice": {"label": "Delay notice", "formal": True, "costs": False,
                      "purpose": "A formal notice that work is delayed: the event, the effect on progress and on follow-on work, and that an updated programme will follow."},
-    "additional_cost": {"label": "Additional cost notice", "formal": True, "costs": True,
+    "additional_cost_notice": {"label": "Additional cost notice", "formal": True, "costs": True,
                         "purpose": "A formal notice that additional cost is being incurred: the event, the standing time and resources affected, refer to the cost breakdown below, and reserve the right to claim."},
     "notice_of_concern": {"label": "Notice of concern", "formal": True, "costs": False,
                           "purpose": "A formal notice to a party that has not met an obligation: what was agreed, what is outstanding, the consequences so far, and what is required by when."},
     "defect_notice": {"label": "Defect notice", "formal": True, "costs": False,
                       "purpose": "A formal notice of a defect: what was found, where and when, its effect, and the remedy requested."},
 }
+# Write with SiteMate used to call the additional-cost notice "additional_cost"; it is now one type everywhere.
+KIND_ALIASES = {"additional_cost": "additional_cost_notice"}
 NUMBER = re.compile(r"\d+(?:[.,:]\d+)*")
 PARAGRAPH_KINDS = ("fact", "request", "reservation", "closing")
 
@@ -698,7 +701,7 @@ def _write(conn, project, member, kind, recipient, analysis, request, instructio
     if KINDS[kind]["formal"]:
         today = (analysis["as_of"] or datetime.now(timezone.utc)).astimezone(tz)
         blocks.append("\n".join([
-            f"{KINDS[kind]['label'].upper()} (DRAFT FOR REVIEW)", f"{today:%d %B %Y} | {project['name']}",
+            title_line(kind, project.get("settings")), f"{today:%d %B %Y} | {project['name']}",
             f"From: {sender}", f"To: {to_line}",
             f"Contract reference: {project['contract_reference'] or '[MISSING: contract reference]'}",
             f"Applicable clause: {project['contract_clause'] or '[MISSING: contract clause]'}"]))
@@ -731,8 +734,10 @@ def _write(conn, project, member, kind, recipient, analysis, request, instructio
             blocks.append("Cost breakdown:\n" + "\n".join(rows))
         else:
             blocks.append("Cost breakdown: [MISSING: standing time and resources; no start time or idle resources on record]")
+    if not analysis.get("records_found", True):
+        blocks.append("Supporting records: [MISSING: supporting records]")
     blocks += [p["text"] for p in paragraphs if p["kind"] == "closing"]
-    blocks.append(("Kind regards,\n" if not KINDS[kind]["formal"] else "Yours faithfully,\n") + "\n".join(signature))
+    blocks.append(template(kind, project.get("settings"))["closing"] + "\n" + "\n".join(signature))
     body = "\n\n".join(blocks)
     refs = []
     for p in paragraphs:
@@ -752,10 +757,16 @@ class RecipientIn(BaseModel):
 
 class WriteIn(BaseModel):
     what_happened: str = Field(min_length=5, max_length=3000)
-    kind: Literal["email", "delay_notice", "additional_cost", "notice_of_concern", "defect_notice"]
+    kind: Literal["email", "delay_notice", "additional_cost_notice", "additional_cost", "notice_of_concern",
+                  "defect_notice"]
     recipient: RecipientIn | None = None
     emphasis: str | None = Field(None, max_length=1000)
     work_date: str | None = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+    @field_validator("kind")
+    @classmethod
+    def _one_name(cls, value):
+        return KIND_ALIASES.get(value, value)
 
 
 class RegenerateIn(BaseModel):
@@ -809,9 +820,14 @@ def _generate(conn, project_id, member, kind, request, chosen, day, when, instru
     if not request.get("work_date") and u.get("work_date"):
         day = calendar_date.fromisoformat(u["work_date"])
     analysis = _analyse(conn, project_id, project, u, day, when, kind)
-    if not any(f["source"] in ("record", "document", "calculated") for f in analysis["facts"]):
-        raise HTTPException(422, "Nothing in the records matches this description yet. Name the work, the machine or the "
-                                 "contractor, or move the clock to after the reports arrived.")
+    analysis["records_found"] = any(f["source"] in ("record", "document", "calculated") for f in analysis["facts"])
+    if not analysis["records_found"]:
+        # Keyword-only drafting: nothing on record matches yet. The letter is written from the manager's own words
+        # (attributed as reported, never as established fact) and carries [MISSING: supporting records], so it cannot
+        # be approved until the manager cites the records or omits them with a reason.
+        if not any(f["source"] == "your request" for f in analysis["facts"]):
+            analysis["facts"].append({"id": f"F{len(analysis['facts']) + 1}", "source": "your request", "refs": [],
+                                      "text": f"According to the site manager: {request['what_happened']}"})
     recipient = chosen if isinstance(chosen, dict) else _choose_recipient(conn, project, kind, chosen, analysis)
     try:
         result = _write(conn, project, member, kind, recipient, analysis, request, instruction)
@@ -930,6 +946,13 @@ def email_file(body, sender, at):
     head, _, rest = body.partition("\n\n")
     to = re.search(r"^To: (.+)$", head, re.M)
     subject = re.search(r"^Subject: (.+)$", head, re.M)
+    if not subject:
+        # A formal letter: the header block, a blank line, then "Subject: ..." before the salutation. The whole letter
+        # is the message body, so nothing the approver saw is dropped.
+        letter_head = re.split(r"^Dear\b", body, maxsplit=1, flags=re.M)[0]
+        to = to or re.search(r"^To: (.+)$", letter_head, re.M)
+        subject = re.search(r"^Subject: (.+)$", letter_head, re.M)
+        rest = body
     message = EmailMessage()
     message["From"] = sender or "Site manager"
     message["To"] = to[1] if to else ""

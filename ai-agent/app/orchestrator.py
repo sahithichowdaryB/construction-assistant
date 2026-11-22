@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from .llm import LLMClient, LLMError
 from .models import (Claim, EvidenceItem, Hypothesis, IncidentAnalysis, Passage, ScoreCard, Verdict)
-from .prompts import DECIDE_SYSTEM, EXTRACT_SYSTEM
+from .prompts import DECIDE_SCHEMA, DECIDE_SYSTEM, EXTRACT_SCHEMA, EXTRACT_SYSTEM
 from .scoring import DEFAULT_ROLE_WEIGHTS, SUPERVISOR_ROLES, claim_weight, score_cards
 from .tools import EvidenceStore, default_as_of
 
@@ -179,7 +179,8 @@ def analyze_incident(store: EvidenceStore, llm: LLMClient, incident_id: str,
                              "No dated records about this incident were available at this time.",
                              ["No voice note, diary, report or email is available yet."])
     tz = store.timezone()
-    extracted = llm.generate_json(EXTRACT_SYSTEM, _extract_payload(incident, passages, store.rules(incident), tz))
+    extracted = llm.generate_json(EXTRACT_SYSTEM, _extract_payload(incident, passages, store.rules(incident), tz),
+                                  schema=EXTRACT_SCHEMA)
     claims, dropped = validate_claims(extracted.get("claims"), passages)
     hypotheses = validate_hypotheses(extracted.get("hypotheses"), claims)
     if not hypotheses:
@@ -194,7 +195,7 @@ def analyze_incident(store: EvidenceStore, llm: LLMClient, incident_id: str,
     for _ in range(2):  # one retry with validator feedback
         try:
             verdict = Verdict(**llm.generate_json(DECIDE_SYSTEM, _decide_payload(
-                incident, claims, hypotheses, cards, tz, errors or None)))
+                incident, claims, hypotheses, cards, tz, errors or None), schema=DECIDE_SCHEMA))
             errors = verdict_errors(verdict, hypotheses, claims, cards)
         except (ValidationError, TypeError) as exc:
             verdict, errors = None, [f"invalid verdict shape: {exc}"]

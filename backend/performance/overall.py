@@ -69,7 +69,8 @@ def ensure_days(conn, project_id, to: date, when, cal, plans) -> int:
     # Days before the first signed report are outside tracking (metrics.carry_in), so they are not evaluated.
     tracking = conn.scalar(text("""SELECT min(o.work_date) FROM sitemate.observations o
         JOIN sitemate.sources s ON (s.project_id, s.id) = (o.project_id, o.source_id)
-        WHERE o.project_id = :p AND o.basis = 'signed' AND s.available_at <= :at"""), {"p": project_id, "at": when})
+        WHERE o.project_id = :p AND o.basis = 'signed' AND s.available_at <= :at
+          AND (o.accepted_at IS NULL OR o.accepted_at <= :at)"""), {"p": project_id, "at": when})
     first = max(min(starts), tracking or min(starts), to - timedelta(days=MAX_BACKFILL_DAYS))
     have = set(conn.execute(text("""SELECT DISTINCT work_date FROM sitemate.daily_evaluations
         WHERE project_id=:p AND work_date BETWEEN :a AND :b AND as_of <= :at"""),

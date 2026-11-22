@@ -2,8 +2,11 @@
 
 import { ExternalLink, FileText, Layers, Loader2, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { BaselineManager } from "@/components/performance/baseline-review";
 import { PerfTabs } from "@/components/performance/perf-tabs";
+import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
+import { denyReason } from "@/lib/roles";
 import { EmptyState, ErrorState, LoadingSkeleton, PageHeader } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -113,6 +116,7 @@ function Summary({ id, title, onSelect }: { id: string; title: string; onSelect:
 }
 
 function UploadButton({ onDone }: { onDone: (id: string) => void }) {
+  const { role } = useApp();
   const upload = useUploadPlan();
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -123,9 +127,9 @@ function UploadButton({ onDone }: { onDone: (id: string) => void }) {
                if (f) upload.mutate(f, { onSuccess: (p) => onDone(p.id) });
                e.target.value = "";
              }} />
-      <Button className="w-full" disabled={upload.isPending} onClick={() => ref.current?.click()}>
+      <GatedButton reason={denyReason(role, "manage_baseline")} className="w-full" disabled={upload.isPending} onClick={() => ref.current?.click()}>
         {upload.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Upload aria-hidden />} {upload.isPending ? "Uploading…" : "Upload a new plan"}
-      </Button>
+      </GatedButton>
       <p className="text-xs text-muted-foreground">PDF, up to 25 MB. Managers only.</p>
       {upload.isError && <p className="text-xs text-red-700">{(upload.error as Error).message}</p>}
     </div>
@@ -176,6 +180,9 @@ export default function PlansPage() {
           </div>
         </div>
       )}
+      <div className="mt-6">
+        <BaselineManager />
+      </div>
     </>
   );
 }

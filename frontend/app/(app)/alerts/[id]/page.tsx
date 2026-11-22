@@ -16,11 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { USE_FIXTURES } from "@/lib/endpoints";
 import { basisLabel, fmtPct, fmtQty } from "@/lib/format";
 import { useActivities, useAlertContext, useAlerts, useCreateDraft, useDismissAlert, useProgress } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime, fmtLocalDate, localDateOf } from "@/lib/time";
 import type { Alert } from "@/lib/types";
+import { useDraftNotice } from "@/lib/workflow";
 
 /** Display-only rendering of the server's calculation; the result is never recomputed here. */
 function CalculationLine({ alert }: { alert: Alert }) {
@@ -48,6 +50,7 @@ export default function AlertDetailPage() {
   const progress = useProgress(alert?.kind === "incident" ? null : (alert?.activity_code ?? null), workDate ?? null);
   const context = useAlertContext(alert?.kind === "incident" ? undefined : alert, workDate);
   const createDraft = useCreateDraft();
+  const liveDraft = useDraftNotice();
   const dismiss = useDismissAlert();
   const [dismissOpen, setDismissOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -152,12 +155,14 @@ export default function AlertDetailPage() {
               <GatedButton
                 reason={draftReason}
                 size="touch"
-                disabled={createDraft.isPending}
+                disabled={createDraft.isPending || liveDraft.isPending}
                 onClick={() =>
-                  createDraft.mutate(
-                    { type: "delay", alert_id: alert.id, incident_id: context.data?.incident_id ?? null },
-                    { onSuccess: (d) => router.push(`/drafts/${d.id}`) },
-                  )
+                  USE_FIXTURES
+                    ? createDraft.mutate(
+                        { type: "delay", alert_id: alert.id, incident_id: context.data?.incident_id ?? null },
+                        { onSuccess: (d) => router.push(`/drafts/${d.id}`) },
+                      )
+                    : liveDraft.mutate({ alert_id: alert.id }, { onSuccess: (d) => router.push(`/manager?notice=${encodeURIComponent(d.id)}`) })
                 }
               >
                 <FilePen aria-hidden /> Create delay notice

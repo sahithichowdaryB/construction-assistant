@@ -71,8 +71,13 @@ def test_auth_and_validation(client):
     assert r.status_code == 422 and "transcript" in r.json()["detail"]
     r = client.post(url, headers=AUTH, files=[("images", ("a.txt", b"hi", "text/plain"))])
     assert r.status_code == 422 and "JPEG" in r.json()["detail"]
+    # Speech-to-text off: the recording is kept and the speaker is asked to type what they said.
     r = client.post(url, headers=AUTH, files=[("audio", ("n.webm", b"x", "audio/webm"))])
-    assert r.status_code == 422 and "not configured" in r.json()["detail"]
+    assert r.status_code == 202 and r.json()["status"] == "needs_transcript", r.text
+    thread = r.json()["thread_id"]
+    assert client.post(f"{url}/{thread}/transcript", headers={"Authorization": "Bearer tok-manager"},
+                       json={"text": "EX-02 hose burst"}).status_code == 403
+    assert client.post(f"{url}/{thread}/transcript", headers=AUTH, json={"text": "x"}).status_code == 422
     r = client.post(url, headers={"Authorization": "Bearer tok-manager"}, files=[("audio", ("n.webm", b"x", "audio/webm"))])
     assert r.status_code == 403
     assert client.post(url, headers={"Authorization": "Bearer tok-manager"}, data={"transcript": "A typed note"}).status_code == 403

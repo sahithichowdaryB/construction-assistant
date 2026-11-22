@@ -55,6 +55,16 @@ def main():
                                  sitemate.performance_snapshots TO sitemate_reader;
                              END IF;
                            END $$""")
+            # Migrations 0010-0015: reading reviews, gap resolutions and exports, worker heartbeats, appointments,
+            # Ask threads. Read-only here as well; granted only for the tables that exist.
+            for table in ("reading_reviews", "draft_gap_resolutions", "exports", "worker_heartbeats", "appointments",
+                          "ask_threads", "ask_messages", "cost_settings", "cost_rates"):
+                cur.execute(sql.SQL("""DO $$ BEGIN
+                                         IF to_regclass({}) IS NOT NULL THEN
+                                           EXECUTE 'GRANT SELECT ON ' || {} || ' TO sitemate_reader';
+                                         END IF;
+                                       END $$""").format(sql.Literal(f"sitemate.{table}"),
+                                                         sql.Literal(f"sitemate.{table}")))
             # Document search calls pg_trgm functions that live in Supabase's `extensions` schema.
             cur.execute("GRANT USAGE ON SCHEMA extensions TO sitemate_reader")
     print("Database reader provisioned.")

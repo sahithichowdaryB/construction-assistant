@@ -33,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   money,
+  kindKeys,
   useCorrespondence,
   useCorrespondenceList,
   useCreateDraft,
@@ -76,6 +77,13 @@ function RequestForm({ onCreated }: { onCreated: (id: string) => void }) {
   const clockDay = localDateOf(asOf);
   const [what, setWhat] = useState("");
   const [kind, setKind] = useState<Kind>("email");
+  // Ask SiteMate links here with ?kind=…&what=… to start a draft from a question.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const k = q.get("kind");
+    if (k && (kindKeys as readonly string[]).includes(k)) setKind(k as Kind);
+    if (q.get("what")) setWhat(q.get("what")!.slice(0, 3000));
+  }, []);
   const [recipient, setRecipient] = useState("suggest");
   const [emphasis, setEmphasis] = useState("");
   const [day, setDay] = useState("");

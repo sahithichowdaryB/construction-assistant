@@ -394,10 +394,22 @@ export interface ReportReading {
   locator: string;
   page: number | null;
   planned_on_report: number | null;
-  /** accepted = already an observation with the same value; conflict = stored value differs */
-  review_status: "proposed" | "accepted" | "conflict";
+  /**
+   * proposed = waiting for the manager; accepted = an observation with the same value; corrected = the manager's
+   * value replaced the parsed one; rejected = not used; conflict = a stored value differs from the report
+   */
+  review_status: "proposed" | "accepted" | "conflict" | "corrected" | "rejected";
   accepted_value: number | null;
+  review?: ReadingReview | null;
   ref: EvidenceRef;
+}
+
+export interface ReadingReview {
+  decision: "accepted" | "corrected" | "rejected";
+  quantity: number | null;
+  reason: string | null;
+  reviewer: string | null;
+  decided_at: string;
 }
 
 export interface ReportReadings {
@@ -405,6 +417,24 @@ export interface ReportReadings {
   job_status: string;
   review_reasons: string[];
   readings: ReportReading[];
+  /** rows still waiting for a decision */
+  pending?: number;
+}
+
+export interface ReadingDecision {
+  locator: string;
+  decision: "accepted" | "corrected" | "rejected";
+  quantity?: number | null;
+  reason?: string | null;
+}
+
+/** POST /projects/{pid}/sources/{sid}/readings/confirm */
+export interface ConfirmReadingsResult {
+  source_id: string;
+  reviews: { id: string; locator: string; decision: string; quantity: number | null }[];
+  observations: { activity_code: string; work_date: LocalDate; quantity: number; basis: string; locator: string }[];
+  unchanged: string[];
+  queued_days: LocalDate[];
 }
 
 /** GET /projects/{pid}/sources/{sid}/storage: where the original and everything derived from it is stored. */
@@ -512,11 +542,28 @@ export interface TodayBriefing {
   drafts_awaiting_review: DraftSummary[];
 }
 
+export interface AskCitation {
+  n: number;
+  ref: EvidenceRef;
+  label: string;
+  excerpt?: string;
+  untrusted?: boolean;
+}
+
 export interface AskAnswer {
   question: string;
+  /** All paragraphs joined (fixtures and history) */
   answer: string;
-  citations: { n: number; ref: EvidenceRef; label: string }[];
+  status?: "ok" | "no_evidence" | "refused";
+  paragraphs?: { text: string; refs: string[] }[];
+  unknowns?: string[];
+  suggested_actions?: { kind: "open_source" | "open_alert" | "draft_notice"; target: string; label: string }[];
+  citations: AskCitation[];
   as_of: IsoInstant;
+  thread_id?: string | null;
+  disclaimer?: string;
+  /** 503 from the live API: the model was unavailable; these passages match the question */
+  fallback?: { ref: string; text: string; kind: string; untrusted: boolean }[];
 }
 
 export interface HealthStatus {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, ChevronRight, Database, FileSearch, Info, RefreshCw, Ruler, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCheck, ChevronRight, Database, FileSearch, Info, Pencil, RefreshCw, Ruler, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useState } from "react";
@@ -11,6 +11,8 @@ import { GatedButton } from "@/components/gated-button";
 import { useApp } from "@/components/providers/app-context";
 import { SourceIcon } from "@/components/source-icon";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/states";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api";
@@ -20,6 +22,7 @@ import {
   useDocumentJob,
   useInvalidateOnJobDone,
   useRegenerateSummary,
+  useConfirmReadings,
   useReportReadings,
   useSource,
   useSourceStorage,
@@ -27,7 +30,7 @@ import {
 } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/time";
-import type { Passage, ReportReading, SourceSummary } from "@/lib/types";
+import type { Passage, ReadingDecision, ReportReading, SourceSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -69,12 +72,118 @@ function RegenerateSummary({ sourceId, label }: { sourceId: string; label: strin
 
 const READING_STATUS: Record<ReportReading["review_status"], { label: string; cls: string }> = {
   accepted: { label: "Accepted", cls: "bg-emerald-50 text-emerald-800 ring-emerald-200" },
+  corrected: { label: "Corrected", cls: "bg-sky-50 text-sky-900 ring-sky-200" },
   proposed: { label: "Awaiting confirmation", cls: "bg-amber-50 text-amber-900 ring-amber-200" },
   conflict: { label: "Differs from accepted", cls: "bg-red-50 text-red-800 ring-red-200" },
+  rejected: { label: "Rejected", cls: "bg-muted text-muted-foreground ring-border" },
 };
 
+type Pending = { locator: string; mode: "corrected" | "rejected" };
+
+function ReadingCard({
+  r,
+  editing,
+  onEdit,
+  onDecide,
+  busy,
+  deny,
+}: {
+  r: ReportReading;
+  editing: Pending | null;
+  onEdit: (p: Pending | null) => void;
+  onDecide: (d: ReadingDecision) => void;
+  busy: boolean;
+  deny: string | null;
+}) {
+  const [qty, setQty] = useState<string>(String(r.accepted_value ?? r.value));
+  const [reason, setReason] = useState("");
+  const open = editing?.locator === r.locator ? editing.mode : null;
+  const decidable = r.review_status === "proposed" || r.review_status === "conflict";
+  const shown = r.review_status === "corrected" && r.accepted_value !== null ? r.accepted_value : r.value;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-background p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">{r.activity_code}</span>
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", READING_STATUS[r.review_status].cls)}>
+          {READING_STATUS[r.review_status].label}
+        </span>
+      </div>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums">
+        {fmtQty(shown, r.unit)} <span className="text-xs font-normal text-muted-foreground">{basisLabel(r.basis)}</span>
+      </p>
+      {r.review_status === "corrected" && (
+        <p className="text-xs text-muted-foreground">Report read {fmtQty(r.value, r.unit)}; corrected by the site manager.</p>
+      )}
+      {r.review_status === "conflict" && r.accepted_value !== null && (
+        <p className="text-xs text-red-800">
+          Stored value is {fmtQty(r.accepted_value, r.unit)}. Accept the report only as a correction, with a reason.
+        </p>
+      )}
+      {r.review && (
+        <p className="text-xs text-muted-foreground">
+          {r.review.decision === "accepted" ? "Accepted" : r.review.decision === "corrected" ? "Corrected" : "Rejected"}
+          {r.review.reviewer ? ` by ${r.review.reviewer}` : ""} · {fmtDateTime(r.review.decided_at)}
+          {r.review.reason ? ` · “${r.review.reason}”` : ""}
+        </p>
+      )}
+      <CitationChip refData={r.ref} className="self-start" />
+      {decidable && !open && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {r.review_status === "proposed" && (
+            <GatedButton reason={deny} size="sm" disabled={busy} onClick={() => onDecide({ locator: r.locator, decision: "accepted" })}>
+              <Check aria-hidden /> Accept
+            </GatedButton>
+          )}
+          <GatedButton reason={deny} size="sm" variant="outline" disabled={busy} onClick={() => onEdit({ locator: r.locator, mode: "corrected" })}>
+            <Pencil aria-hidden /> Correct
+          </GatedButton>
+          <GatedButton reason={deny} size="sm" variant="ghost" disabled={busy} onClick={() => onEdit({ locator: r.locator, mode: "rejected" })}>
+            <X aria-hidden /> Reject
+          </GatedButton>
+        </div>
+      )}
+      {open && (
+        <form
+          className="flex flex-col gap-2 border-t pt-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onDecide({
+              locator: r.locator,
+              decision: open,
+              quantity: open === "corrected" ? Number(qty) : null,
+              reason: reason.trim(),
+            });
+          }}
+        >
+          {open === "corrected" && (
+            <label className="flex flex-col gap-1 text-xs font-medium">
+              Correct quantity ({r.unit})
+              <Input type="number" min={0} step="any" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} required />
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-xs font-medium">
+            {open === "corrected" ? "Why is the report value wrong?" : "Why is this reading not used?"}
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000} placeholder="Required" />
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={busy || !reason.trim() || (open === "corrected" && qty === "")}>
+              {open === "corrected" ? "Save correction" : "Reject reading"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => onEdit(null)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function QuantitiesPanel({ sourceId }: { sourceId: string }) {
+  const { role } = useApp();
   const readings = useReportReadings(sourceId);
+  const confirm = useConfirmReadings(sourceId);
+  const [editing, setEditing] = useState<Pending | null>(null);
   if (readings.isPending) return <LoadingSkeleton rows={3} />;
   if (readings.isError)
     return readings.error instanceof ApiError && readings.error.status === 404 ? (
@@ -82,11 +191,20 @@ function QuantitiesPanel({ sourceId }: { sourceId: string }) {
     ) : (
       <ErrorState error={readings.error} onRetry={() => void readings.refetch()} />
     );
-  const rows = readings.data.readings.filter((r) => !r.locator.startsWith("zero-"));
-  const zeroRows = readings.data.readings.some((r) => r.locator.startsWith("zero-"));
+  const deny = denyReason(role, "confirm_readings");
+  const all = readings.data.readings;
+  const rows = all.filter((r) => !r.locator.startsWith("zero-"));
+  const zeroRows = all.filter((r) => r.locator.startsWith("zero-"));
+  const waiting = all.filter((r) => r.review_status === "proposed" && r.basis === "signed").length;
+  const conflicts = all.filter((r) => r.review_status === "conflict").length;
+  const decide = (d: ReadingDecision) =>
+    confirm.mutate({ decisions: [d] }, { onSuccess: () => setEditing(null) });
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">Measured shift quantities read from the report and how they compare with accepted values.</p>
+      <p className="text-sm text-muted-foreground">
+        Measured shift quantities read from the report. They count in progress, alerts and the daily evaluation only after the
+        site manager confirms them.
+      </p>
       {!!readings.data.review_reasons.length && (
         <ul className="list-disc rounded-lg border border-amber-300 bg-amber-50 p-3 pl-7 text-sm text-amber-900">
           {readings.data.review_reasons.map((r) => (
@@ -94,30 +212,39 @@ function QuantitiesPanel({ sourceId }: { sourceId: string }) {
           ))}
         </ul>
       )}
+      {(waiting > 0 || conflicts > 0) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3">
+          <p className="flex-1 text-sm">
+            {waiting > 0 && `${waiting} signed reading${waiting === 1 ? "" : "s"} waiting for confirmation.`}{" "}
+            {conflicts > 0 && `${conflicts} differ${conflicts === 1 ? "s" : ""} from a stored value and need a correction or rejection.`}
+          </p>
+          {waiting > 0 && (
+            <GatedButton reason={deny} size="sm" disabled={confirm.isPending} onClick={() => confirm.mutate({ all_signed: true })}>
+              <CheckCheck aria-hidden /> {confirm.isPending ? "Confirming…" : `Confirm ${waiting} signed`}
+            </GatedButton>
+          )}
+        </div>
+      )}
+      {confirm.isError && <p className="text-sm text-red-800" role="alert">{confirm.error.message}</p>}
+      {confirm.isSuccess && !!confirm.data.queued_days.length && (
+        <p className="text-sm text-emerald-800" role="status">
+          Saved. The daily evaluation for {confirm.data.queued_days.join(", ")} is queued and updates within about two minutes.
+        </p>
+      )}
       {rows.length ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {rows.map((r) => (
-            <div key={r.locator} className="flex flex-col gap-2 rounded-xl border bg-background p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold">{r.activity_code}</span>
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", READING_STATUS[r.review_status].cls)}>
-                  {READING_STATUS[r.review_status].label}
-                </span>
-              </div>
-              <p className="text-2xl font-semibold tracking-tight tabular-nums">
-                {fmtQty(r.value, r.unit)} <span className="text-xs font-normal text-muted-foreground">{basisLabel(r.basis)}</span>
-              </p>
-              <CitationChip refData={r.ref} className="self-start" />
-            </div>
+            <ReadingCard key={r.locator} r={r} editing={editing} onEdit={setEditing} onDecide={decide} busy={confirm.isPending} deny={deny} />
           ))}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">No quantity rows were read from this report.</p>
       )}
-      {zeroRows && (
+      {!!zeroRows.length && (
         <p className="flex gap-1.5 text-xs text-muted-foreground">
           <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-          The report states that other scheduled activities recorded zero production this shift; those are recorded as 0.
+          The report states that other scheduled activities recorded zero production this shift ({zeroRows.length} row
+          {zeroRows.length === 1 ? "" : "s"}); confirming the signed rows records those as 0.
         </p>
       )}
     </div>

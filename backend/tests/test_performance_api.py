@@ -88,6 +88,10 @@ def test_csv_plan_to_client_caused_delay_notice(api):
     bid = r.json()["id"]
     b = client.get(f"/projects/{PID}/baselines/{bid}", headers=H).json()
     assert b["extraction_status"] == "done" and b["counts"]["activities"] == 3 and b["status"] == "draft", b
+    with eng.connect() as c:  # the extraction ran as a durable job row, claimed and finished by the API process
+        job = c.execute(text("SELECT status, locked_by FROM sitemate.agent_jobs WHERE project_id=:p AND kind='plan_extract'"),
+                        {"p": PID}).one()
+        assert job.status == "done" and job.locked_by is None
     assert client.get(f"/projects/{PID}/daily-evaluations/2026-11-03", headers=H).json()["activities"] == []  # not active
     act = client.post(f"/projects/{PID}/baselines/{bid}/activate?as_of=2026-11-01T09:00:00%2B01:00", headers=H)
     assert act.status_code == 200, act.text
@@ -148,6 +152,26 @@ def test_csv_plan_to_client_caused_delay_notice(api):
     draft = client.post(f"/projects/{PID}/drafts", headers=H, json={"alert_id": kinds["delay_notice"]["alert_id"]})
     assert draft.status_code == 201, draft.text
     assert draft.json()["notice_type"] == "delay_notice" and "DELAY NOTICE" in draft.json()["latest"]["body"]
+    assert draft.json()["origin"] == "manual" and draft.json()["status"] == "awaiting_review"
+
+    # Automatic correspondence: the evaluation queued one auto_draft job per suggestion; the worker writes private
+    # drafts. The manager's delay notice above already exists for that alert, so only the concern notice is new.
+    assert out["auto_drafts_queued"] == len(kinds) and kinds["notice_of_concern"]["alert_id"]
+    from app import worker
+    while worker.process_one(eng, lambda: None):
+        pass
+    with eng.connect() as c:
+        failed = c.execute(text("SELECT kind, last_error FROM sitemate.agent_jobs WHERE project_id=:p AND status='failed'"),
+                           {"p": PID}).all()
+        assert not failed, failed
+        drafts = {r.notice_type: r for r in c.execute(text(
+            "SELECT notice_type, origin, submitted_at FROM sitemate.drafts WHERE project_id=:p"), {"p": PID})}
+    assert drafts["delay_notice"].origin == "manual"
+    concern = drafts["notice_of_concern"]
+    assert concern.origin == "alert_auto" and concern.submitted_at is None
+    listed = {d["notice_type"]: d for d in client.get(f"/projects/{PID}/drafts", headers=H).json()}
+    assert listed["notice_of_concern"]["status"] == "draft"  # private until the manager submits it
+    assert "revised drawing" in listed["notice_of_concern"]["latest"]["body"]
 
     entry = ledger[("B1", "day.shortfall_red")]
     assert client.patch(f"/projects/{PID}/performance/ledger/{entry['id']}", headers=H,
@@ -197,3 +221,20 @@ def test_daily_jobs_are_debounced_and_run_by_the_worker(api, monkeypatch):
                               "AND status <> 'queued'"), {"p": PID}).mappings().all()
         assert done and done[0]["status"] == "done", done
         assert c.scalar(text("SELECT count(*) FROM sitemate.daily_evaluations WHERE project_id=:p"), {"p": PID}) == 1
+
+
+def test_activation_refuses_an_activity_without_a_citation(api):
+    client, eng = api
+    r = client.post(f"/projects/{PID}/baselines", headers=H,
+                    files=[("files", ("schedule.csv", CSV.encode(), "text/csv"))],
+                    data={"available_at": "2026-11-01T08:00:00+01:00"})
+    bid = r.json()["id"]
+    detail = client.get(f"/projects/{PID}/baselines/{bid}", headers=H).json()
+    rows = detail["extracted"]["activities"]
+    rows.append({**rows[0], "code": "NEW", "refs": []})  # a row the manager typed in, citing nothing
+    edited = client.patch(f"/projects/{PID}/baselines/{bid}", headers=H, json={"activities": rows})
+    assert edited.status_code == 200, edited.text
+    act = client.post(f"/projects/{PID}/baselines/{bid}/activate", headers=H)
+    assert act.status_code == 409 and "NEW" in act.json()["detail"], act.text
+    with eng.connect() as c:  # nothing was written
+        assert c.scalar(text("SELECT count(*) FROM sitemate.plan_targets WHERE project_id=:p"), {"p": PID}) == 0

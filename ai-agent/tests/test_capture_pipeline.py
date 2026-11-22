@@ -263,8 +263,24 @@ def test_validation_and_failures_are_reported_and_leave_a_retryable_state(svc):
     with pytest.raises(CaptureError):
         service.start(PID, member("m1"), text_="x", images=[], audio=None, recorded_at="2026-01-01T00:00:00")  # no time zone
     service.transcription_on = lambda: False
-    with pytest.raises(CaptureError, match="not configured"):
-        service.start(PID, member("m1"), text_=None, images=[], audio=(b"x", "n.webm", "audio/webm"), recorded_at=None)
+    status, body = service.start(PID, member("m1"), text_=None, images=[], audio=(b"x", "n.webm", "audio/webm"),
+                                 recorded_at=None)
+    assert status == 202 and body["status"] == "needs_transcript" and "not configured" in body["reason"]
+    with pytest.raises(CaptureError) as err:  # only the speaker transcribes their recording
+        service.provide_transcript(PID, member("m2"), body["thread_id"], "Crane fault on the north side")
+    assert err.value.status == 403
+    status, typed = service.provide_transcript(PID, member("m1"), body["thread_id"], "Crane fault on the north side")
+    assert status == 202 and typed["status"] == "needs_category" and typed["transcript"] == "Crane fault on the north side"
+    with pytest.raises(CaptureError):  # resumed once only
+        service.provide_transcript(PID, member("m1"), body["thread_id"], "again")
+    # Speech-to-text failing with text alongside: processing goes ahead on the typed text, the audio is kept.
+    service.transcription_on = lambda: True
+    real = service.transcribe
+    service.transcribe = lambda *a: (_ for _ in ()).throw(LLMError("whisper down"))
+    status, body = service.start(PID, member("m1"), text_="Crane fault, typed", images=[],
+                                 audio=(b"x", "n.webm", "audio/webm"), recorded_at=None)
+    assert status == 202 and body["status"] == "needs_category"
+    service.transcribe = real
     # LLM down on upload: the capture is recorded as failed
     llm.fail = "model down"
     with pytest.raises(LLMError):

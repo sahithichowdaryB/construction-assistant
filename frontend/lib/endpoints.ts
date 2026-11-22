@@ -30,7 +30,7 @@ export const ENDPOINTS = {
 
   // Planned in the workplan, not built yet
   today: { route: "GET /projects/{pid}/today?as_of", implemented: false },
-  ask: { route: "POST /projects/{pid}/ask", implemented: false },
+  ask: { route: "POST /projects/{pid}/ask (Ask SiteMate, cited answers)", implemented: true },
   uploadSource: { route: "POST /projects/{pid}/sources (capture: typed or voice note)", implemented: false },
   job: { route: "GET /projects/{pid}/jobs/{id} (capture)", implemented: false },
   proposals: { route: "GET /projects/{pid}/sources/{sid}/proposals", implemented: false },
@@ -42,15 +42,15 @@ export const ENDPOINTS = {
   export: { route: "POST /drafts/{id}/versions/{v}/export", implemented: false },
 
   // Proposed by the frontend (not yet in the workplan): list and context reads the screens need
-  project: { route: "GET /projects/{pid}", implemented: false },
-  activities: { route: "GET /projects/{pid}/activities", implemented: false },
+  project: { route: "GET /projects/{pid}", implemented: true },
+  activities: { route: "GET /projects/{pid}/activities?as_of", implemented: true },
   incidents: { route: "GET /projects/{pid}/incidents (as_of optional; omitted = all incidents)", implemented: true },
   incident: { route: "GET /projects/{pid}/incidents/{id}?as_of", implemented: true },
   // Reasoning always comes from the backend (database + LLM); there are no fixtures for it.
   reasoning: { route: "GET /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
   runReasoning: { route: "POST /projects/{pid}/incidents/{id}/reasoning?as_of", implemented: true },
-  alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: false },
-  dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: false },
+  alertContext: { route: "GET /projects/{pid}/alerts/{id}/context?as_of", implemented: true },
+  dismissAlert: { route: "POST /projects/{pid}/alerts/{id}/dismiss", implemented: true },
   drafts: { route: "GET /projects/{pid}/drafts?as_of", implemented: false },
   // Daily recap stories built from action items (backend/recaps.py), published 06:00 the next morning.
   recaps: { route: "GET /projects/{pid}/recaps?as_of (available_at <= as_of)", implemented: true },

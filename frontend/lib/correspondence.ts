@@ -12,7 +12,7 @@ import { draftSchema } from "@/lib/workflow";
 
 const refSchema = z.object({ source_id: z.string(), locator: z.string(), passage_id: z.string() });
 
-export const kindKeys = ["email", "delay_notice", "additional_cost", "notice_of_concern", "defect_notice"] as const;
+export const kindKeys = ["email", "delay_notice", "additional_cost_notice", "notice_of_concern", "defect_notice"] as const;
 export type Kind = (typeof kindKeys)[number];
 
 const optionsSchema = z.object({

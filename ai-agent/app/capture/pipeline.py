@@ -19,7 +19,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from ..llm import LLMClient
+from ..llm import LLMClient, LLMError
 from . import steps
 from .context import category_rules, load_business_rules, load_project_context, match_relationships, search_database
 from .persist import persist_capture, source_kind
@@ -134,13 +134,21 @@ class CaptureService:
                 raise CaptureError(422, "Photos must be JPEG, PNG, WebP or GIF")
             if len(data) > MAX_IMAGE_BYTES:
                 raise CaptureError(422, "Each photo must be 5 MB or smaller")
-        if audio and not self.transcription_on():
-            raise CaptureError(422, "Audio transcription is not configured; send a `transcript` text field instead")
         typed = (text_ or "").strip() or None
-        spoken = self.transcribe(*audio) if audio else None
+        spoken, stt_problem = None, None
+        if audio:
+            if not self.transcription_on():
+                stt_problem = "Speech-to-text is not configured"
+            else:
+                try:
+                    spoken = self.transcribe(*audio) or None
+                except LLMError as exc:  # a speech-to-text outage must not lose the recording
+                    stt_problem = f"Speech-to-text failed: {exc}"[:300]
         transcript = "\n\n".join(x for x in (spoken, typed) if x) or None
-        if not transcript and not images:
+        if not transcript and not images and not audio:
             raise CaptureError(422, "Send an `audio` file, `images` or a `transcript`")
+        # Audio alone without a transcript: keep the recording and ask the speaker to type what they said.
+        waiting_for_text = bool(audio) and not transcript and not images
 
         source_id, thread_id = f"CAP-{uuid.uuid4().hex[:8].upper()}", str(uuid.uuid4())
         stored = []
@@ -153,6 +161,31 @@ class CaptureService:
         kinds = [k for k, on in (("voice", audio), ("photo", images), ("text", typed)) if on]
         channel = "mixed" if len(kinds) > 1 else kinds[0]
 
+        try:
+            self._store_capture(project_id, member, source_id, thread_id, channel, stored, typed, spoken, recorded_at,
+                                zone_hint, audio, images)
+        except Exception:
+            for a in stored:  # nothing in the database refers to them: remove the files again
+                (self.audio if a["kind"] == "audio" else self.images).delete(a["key"])
+            raise
+        capture_id = self._capture_id(project_id, source_id)
+        if waiting_for_text:
+            state = {"project_id": project_id, "capture_id": capture_id, "source_id": source_id, "thread_id": thread_id,
+                     "captured_by": member["member_id"], "recorded_at": recorded_at, "attachments": [],
+                     "stt_problem": stt_problem}
+            self._set(project_id, capture_id, "needs_transcript", state)
+            return 202, {"status": "needs_transcript", "thread_id": thread_id, "capture_id": capture_id,
+                         "reason": stt_problem, "message": "The recording is saved. Type what you said to continue."}
+        return self._classify(project_id, member, capture_id, source_id, thread_id, images, stored, transcript,
+                              recorded_at)
+
+    def _capture_id(self, project_id, source_id) -> str:
+        with self.engine.connect() as conn:
+            return conn.scalar(text("SELECT id::text FROM sitemate.captures WHERE project_id=:p AND source_id=:s"),
+                               {"p": project_id, "s": source_id})
+
+    def _store_capture(self, project_id, member, source_id, thread_id, channel, stored, typed, spoken, recorded_at,
+                       zone_hint, audio, images):
         with self.engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO sitemate.sources (project_id, id, kind, path, available_at, author, author_role)
@@ -172,6 +205,23 @@ class CaptureService:
                              {"p": project_id, "c": capture_id, "s": source_id, "k": a["kind"], "key": a["key"], "mime": a["mime"],
                               "b": a["bytes"], "h": a["sha256"], "loc": a.get("locator")})
 
+    def provide_transcript(self, project_id: str, member: dict, thread_id: str, transcript: str) -> tuple[int, dict]:
+        """The speaker types what a recording said (speech-to-text was unavailable); classification continues."""
+        typed = (transcript or "").strip()
+        if len(typed) < 3:
+            raise CaptureError(422, "Type what you said (at least a few words)")
+        claimed = self._claim(project_id, thread_id, "needs_transcript", "a typed transcript")
+        state, capture_id = claimed["state"], claimed["capture_id"]
+        if state.get("captured_by") != member["member_id"]:
+            self._set(project_id, capture_id, "needs_transcript")
+            raise CaptureError(403, "Only the person who recorded the note can transcribe it")
+        with self.engine.begin() as conn:
+            conn.execute(text("UPDATE sitemate.captures SET raw_text=:t WHERE project_id=:p AND id=CAST(:c AS uuid)"),
+                         {"t": typed, "p": project_id, "c": capture_id})
+        return self._classify(project_id, member, capture_id, state["source_id"], thread_id, [], [], typed,
+                              state["recorded_at"])
+
+    def _classify(self, project_id, member, capture_id, source_id, thread_id, images, stored, transcript, recorded_at):
         auditor = steps.Auditor(project_id, capture_id, getattr(self.llm, "model", None))
         try:
             with self.engine.connect() as conn:

@@ -317,3 +317,19 @@ projects but toggle triggers on the history tables.
 
 Business rules are rows in `sitemate.business_rules` (seeded from `rules/business_rules.json`); categories without a
 type-specific rule use the category's `required_fields`.
+
+## Added after the gap analysis (migrations 0010–0016)
+
+| Area | Routes (under `/projects/{pid}`) | Notes |
+|---|---|---|
+| Report readings | `GET /sources/{id}/readings`, `POST /sources/{id}/readings/confirm` | Parsed quantities count only once a manager accepts/corrects them (`reading_reviews`) |
+| Drafting | `POST /drafts/{id}/versions/{v}/gaps`, `POST /drafts/{id}/submit`, `POST /drafts/{id}/versions/{v}/exports` | Fill or omit `[MISSING]` fields; private drafts; stored exports with SHA-256 (`exports`) |
+| Auto-correspondence | worker job `auto_draft` | One private draft per qualifying alert and notice type; `projects.settings.auto_draft=false` turns it off |
+| Ask SiteMate | `POST /ask`, `GET /ask/threads[/{id}]` | Read-only tools, cited answers, as-of scoped (`ask_threads`, `ask_messages`) |
+| Daily report | `POST/GET /daily-reports`, `GET/POST /appointments`, `/appointments/{id}/supersede`, `/appointments/extract` | Drafter P5; reviewed and exported like a notice |
+| Voice | `POST /transcribe`, `POST /captures/{thread}/transcript` | Without speech-to-text a recording waits as `needs_transcript` |
+| Reads | `GET /projects/{pid}`, `GET /activities`, `GET /alerts/{id}/context`, `GET /health/capabilities` | |
+
+Document parsing, summaries, plan extraction, recompute and narratives are durable `agent_jobs` rows (`jobs.py`); the
+worker re-queues jobs left `running` (`AGENT_STUCK_JOB_SECONDS`). Without `OPS_DATABASE_URL` the ops routes and the worker
+use the writer login and log a warning. The legacy Node agent in `src/` and `ai-agent/sitemate-n8n.json` are unused.

@@ -1,15 +1,19 @@
 "use client";
 
-import { Loader2, MessageCircleQuestion, Send } from "lucide-react";
+import { FilePen, Loader2, MessageCircleQuestion, Mic, RotateCcw, Send, Siren } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { CitationChip } from "@/components/citation-chip";
+import { DisclaimerBanner } from "@/components/disclaimer-banner";
 import { GapHighlighter } from "@/components/gap-highlighter";
+import { MicButton, type Recording } from "@/components/mic-button";
 import { useApp } from "@/components/providers/app-context";
 import { ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { useAsk } from "@/lib/queries";
+import { USE_FIXTURES } from "@/lib/endpoints";
+import { useAsk, useCapabilities, useTranscribe } from "@/lib/queries";
 import { denyReason } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/time";
 import type { AskAnswer } from "@/lib/types";
@@ -22,23 +26,121 @@ const SUGGESTIONS = [
   "Is the foundation handover at risk?",
 ];
 
+function Answer({ a }: { a: AskAnswer }) {
+  const byRef = new Map(a.citations.map((c) => [c.ref.passage_id, c]));
+  if (a.fallback) {
+    return (
+      <div className="mt-2 flex flex-col gap-2 text-sm">
+        <p className="text-amber-900">{a.answer}</p>
+        <ul className="flex flex-col gap-1.5">
+          {a.fallback.map((f) => {
+            const cut = f.ref.indexOf(":");
+            const source_id = f.ref.slice(0, cut);
+            const locator = f.ref.slice(cut + 1);
+            return (
+              <li key={f.ref} className="flex flex-col gap-1 rounded-md bg-muted/50 p-2 text-xs">
+                <CitationChip refData={{ source_id, locator, passage_id: f.ref }} className="self-start" />
+                <span className="line-clamp-3">{f.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {a.paragraphs ? (
+        a.paragraphs.map((p, i) => (
+          <p key={i} className="text-sm">
+            {p.text}{" "}
+            {p.refs.map((r) => {
+              const c = byRef.get(r);
+              return c ? <CitationChip key={r} refData={c.ref} n={c.n} className="ml-0.5 align-baseline" /> : null;
+            })}
+          </p>
+        ))
+      ) : (
+        <GapHighlighter text={a.answer} sources={a.citations} />
+      )}
+      {!!a.unknowns?.length && (
+        <ul className="flex flex-col gap-1 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+          {a.unknowns.map((u) => (
+            <li key={u}>{u}</li>
+          ))}
+        </ul>
+      )}
+      {a.citations.length > 0 ? (
+        <ul className="flex flex-col gap-1 text-xs">
+          {a.citations.map((c) => (
+            <li key={c.n} className="flex items-center gap-2">
+              <CitationChip refData={c.ref} n={c.n} /> {c.label}
+              {c.untrusted && <span className="rounded bg-amber-100 px-1.5 text-amber-900">external text</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">No sources cited.</p>
+      )}
+      {!!a.suggested_actions?.length && (
+        <div className="flex flex-wrap gap-1.5">
+          {a.suggested_actions.map((s) =>
+            s.kind === "draft_notice" ? (
+              <Button key={s.kind + s.target} asChild size="sm" variant="outline">
+                <Link href={`/manager/write?kind=${encodeURIComponent(s.target)}&what=${encodeURIComponent(a.question)}`}>
+                  <FilePen aria-hidden /> {s.label || "Draft a notice"}
+                </Link>
+              </Button>
+            ) : s.kind === "open_alert" ? (
+              <Button key={s.kind + s.target} asChild size="sm" variant="outline">
+                <Link href={`/alerts/${encodeURIComponent(s.target)}`}>
+                  <Siren aria-hidden /> {s.label || "Open the alert"}
+                </Link>
+              </Button>
+            ) : null,
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AskDrawer() {
   const { askOpen, setAskOpen, asOf, role } = useApp();
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<AskAnswer[]>([]);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [dictating, setDictating] = useState(false);
   const ask = useAsk();
+  const transcribe = useTranscribe();
+  const caps = useCapabilities();
   const blocked = denyReason(role, "ask");
+  const voice = !USE_FIXTURES && !!caps.data?.stt;
 
   const submit = (q: string) => {
     const text = q.trim();
     if (!text || blocked) return;
-    ask.mutate(text, {
-      onSuccess: (a) => {
-        setHistory((h) => [a, ...h]);
-        setQuestion("");
+    ask.mutate(
+      { question: text, threadId },
+      {
+        onSuccess: (a) => {
+          setHistory((h) => [a, ...h]);
+          if (a.thread_id) setThreadId(a.thread_id);
+          setQuestion("");
+        },
       },
-    });
+    );
   };
+  const dictate = (rec: Recording) =>
+    transcribe.mutate(
+      { blob: rec.blob, filename: rec.mimeType.includes("mp4") ? "question.m4a" : "question.webm" },
+      {
+        onSuccess: (text) => {
+          setDictating(false);
+          setQuestion((q) => (q ? `${q} ${text}` : text));
+        },
+      },
+    );
 
   return (
     <Sheet open={askOpen} onOpenChange={setAskOpen}>
@@ -47,7 +149,7 @@ export function AskDrawer() {
           <SheetTitle className="flex items-center gap-2">
             <MessageCircleQuestion className="size-5" aria-hidden /> Ask SiteMate
           </SheetTitle>
-          <SheetDescription>Answers cite Riverside records available as of {fmtDateTime(asOf)}.</SheetDescription>
+          <SheetDescription>Answers cite only the project records available as of {fmtDateTime(asOf)}.</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-6">
           {blocked && <p className="rounded-md bg-muted p-2 text-sm text-muted-foreground">{blocked}</p>}
@@ -75,9 +177,29 @@ export function AskDrawer() {
                 }
               }}
             />
-            <Button type="submit" size="touch" disabled={!!blocked || ask.isPending || !question.trim()} className="self-end">
-              {ask.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />} Ask
-            </Button>
+            {dictating && voice && (
+              <div className="rounded-md border p-2">
+                <MicButton onSubmit={dictate} disabled={transcribe.isPending} />
+                {transcribe.isPending && <p className="mt-1 text-xs text-muted-foreground">Turning speech into text…</p>}
+                {transcribe.isError && <p className="mt-1 text-xs text-red-800">{transcribe.error.message}</p>}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {threadId && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setThreadId(null); setHistory([]); }}>
+                  <RotateCcw aria-hidden /> New conversation
+                </Button>
+              )}
+              {voice && !dictating && (
+                <Button type="button" variant="outline" size="touch" disabled={!!blocked} onClick={() => setDictating(true)}>
+                  <Mic aria-hidden /> Speak
+                </Button>
+              )}
+              <Button type="submit" size="touch" disabled={!!blocked || ask.isPending || !question.trim()}>
+                {ask.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}{" "}
+                {ask.isPending ? "Looking it up…" : "Ask"}
+              </Button>
+            </div>
           </form>
           <div className="flex flex-wrap gap-1.5" aria-label="Suggested questions">
             {SUGGESTIONS.map((s) => (
@@ -86,29 +208,17 @@ export function AskDrawer() {
               </Button>
             ))}
           </div>
-          {ask.isError && <ErrorState error={ask.error} onRetry={() => submit(ask.variables ?? question)} />}
+          {ask.isError && <ErrorState error={ask.error} onRetry={() => submit(ask.variables?.question ?? question)} />}
           <ol className="flex flex-col gap-3" aria-live="polite">
             {history.map((a, i) => (
               <li key={`${a.question}-${i}`} className="rounded-lg border p-3">
                 <p className="text-sm font-medium">{a.question}</p>
-                <div className="mt-2">
-                  <GapHighlighter text={a.answer} sources={a.citations} />
-                </div>
-                {a.citations.length > 0 ? (
-                  <ul className="mt-2 flex flex-col gap-1 text-xs">
-                    {a.citations.map((c) => (
-                      <li key={c.n} className="flex items-center gap-2">
-                        <CitationChip refData={c.ref} n={c.n} /> {c.label}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">No sources cited.</p>
-                )}
+                <Answer a={a} />
                 <p className="mt-2 text-[11px] text-muted-foreground">As of {fmtDateTime(a.as_of)}</p>
               </li>
             ))}
           </ol>
+          {history.length > 0 && <DisclaimerBanner text={history[0].disclaimer} />}
         </div>
       </SheetContent>
     </Sheet>

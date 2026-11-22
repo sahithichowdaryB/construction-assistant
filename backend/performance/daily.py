@@ -96,6 +96,7 @@ def load_series(conn, project_id, when):
                o.source_id, o.locator, s.available_at
         FROM sitemate.observations o JOIN sitemate.sources s ON (s.project_id, s.id) = (o.project_id, o.source_id)
         WHERE o.project_id = :p AND s.available_at <= :cutoff
+          AND (o.accepted_at IS NULL OR o.accepted_at <= :cutoff)
         ORDER BY o.activity_code, o.work_date, o.basis, s.available_at DESC, o.source_id, o.locator"""), params).mappings():
         item = {"quantity": float(r["quantity"]), "ref": _ref(r["source_id"], r["locator"]),
                 "available_at": r["available_at"], "source_id": r["source_id"]}
@@ -755,7 +756,9 @@ def evaluate_day(conn, project_id, work_date: date, as_of: datetime | None = Non
                       "sev": r["severity"], "esc": r["escalated"], "late": r["days_late"], "est": _j(r["estimate"]),
                       "attr": _j(r["attribution"]), "refs": _j(r["refs"])})
     write_ledger(conn, project_id, work_date, version, entries, when)
-    return {"reused": False, "version": version, "work_date": work_date.isoformat(), "status": status}
+    queued = queue_auto_drafts(conn, {**bundle, "when": when}, suggestions)
+    return {"reused": False, "version": version, "work_date": work_date.isoformat(), "status": status,
+            "auto_drafts_queued": queued}
 
 
 def _j(value):
@@ -920,10 +923,12 @@ def write_alerts(conn, bundle, rows, ind, suggestions, version, when):
     if missing and missing["after_sweep"]:
         produced.add(("missing_report", None))
     produced |= {("quality_hold", q["activity_code"]) for q in ind["quality_holds"] if q["failed"]}
+    produced |= {("instruction_concern", s.get("activity_code")) for s in suggestions if s["type"] == "notice_of_concern"}
     for a in conn.execute(text("""SELECT a.id::text AS id, a.kind, a.activity_code FROM sitemate.alerts a
         WHERE a.project_id=:p AND a.checkpoint_at=:cp AND a.kind = ANY(:kinds)"""),
                           {"p": pid, "cp": checkpoint, "kinds": ["shortfall", "late_start", "equipment_idle",
-                                                                 "missing_report", "quality_hold"]}).mappings().all():
+                                                                 "missing_report", "quality_hold",
+                                                                 "instruction_concern"]}).mappings().all():
         if (a["kind"], a["activity_code"]) in produced:
             continue
         current = conn.execute(text("""SELECT severity, calculation, evidence_refs FROM sitemate.alert_revisions
@@ -940,6 +945,37 @@ def write_alerts(conn, bundle, rows, ind, suggestions, version, when):
                 suggestion["alert_id"] = alert_id
             _revise(conn, pid, alert_id, when, "high", {"text": q["text"], "work_date": wd.isoformat(),
                                                         "daily_version": version}, _ref_objects(q["refs"]), suggestion, reason)
+    # An instruction or design concern from the day summary (P2) gets its own alert, so a notice of concern can be
+    # drafted (and auto-drafted) from an alert like every other suggestion (migration 0013, alert kind instruction_concern).
+    for s in suggestions:
+        if s["type"] != "notice_of_concern":
+            continue
+        text_ = s["reason"].removeprefix("Instruction or design concern: ")
+        alert_id = _upsert_alert(conn, pid, s.get("activity_code"), checkpoint, "instruction_concern", text_[:120])
+        s["alert_id"] = alert_id
+        _revise(conn, pid, alert_id, when, "medium", {"text": text_, "work_date": wd.isoformat(), "daily_version": version},
+                _ref_objects(s.get("refs") or []), s, reason)
+
+
+AUTO_DRAFT_TYPES = ("delay_notice", "additional_cost_notice", "defect_notice", "notice_of_concern")
+
+
+def queue_auto_drafts(conn, bundle, suggestions) -> int:
+    """Automatic correspondence (G9): every suggestion that has an alert gets a private draft, written by the worker
+    (job auto_draft, one per alert and notice type). Projects can switch it off with settings.auto_draft = false.
+    Nothing is sent; the manager edits, then submits the draft for approval."""
+    settings = bundle["project"].get("settings") or {}
+    if settings.get("auto_draft") is False:
+        return 0
+    worker, queued = _worker(), 0
+    for s in suggestions:
+        if s["type"] in AUTO_DRAFT_TYPES and s.get("alert_id"):
+            with conn.begin_nested():
+                worker.enqueue_job(conn, bundle["project"]["id"], "auto_draft",
+                                   {"alert_id": s["alert_id"], "notice_type": s["type"],
+                                    "work_date": None, "as_of": bundle["when"].isoformat() if bundle.get("when") else None})
+            queued += 1
+    return queued
 
 
 # ------------------------------------------------------------------ jobs
@@ -1026,7 +1062,8 @@ def daily_view(conn, project_id, work_date: date, *, version: int | None = None,
         WHERE a.project_id=:p AND (a.checkpoint_at AT TIME ZONE (SELECT timezone FROM sitemate.projects WHERE id=:p))::date = :d"""),
         {"p": project_id, "d": work_date}).mappings()}
     for s in suggestions:
-        kind = {"delay_notice": "shortfall", "additional_cost_notice": "equipment_idle", "defect_notice": "quality_hold"}.get(s["type"])
+        kind = {"delay_notice": "shortfall", "additional_cost_notice": "equipment_idle", "defect_notice": "quality_hold",
+                "notice_of_concern": "instruction_concern"}.get(s["type"])
         s["alert_id"] = s.get("alert_id") or alerts.get((kind, s.get("activity_code"))) or \
             (alerts.get(("late_start", s.get("activity_code"))) if s["type"] == "delay_notice" else None)
     return {"work_date": work_date.isoformat(), "version": row["version"], "as_of": row["as_of"],

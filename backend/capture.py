@@ -3,6 +3,7 @@
 Runs the pipeline in ai-agent/app/capture as the `sitemate_agent` database role (AGENT_DATABASE_URL), which has the
 insert rights the read-only API role deliberately lacks."""
 
+import os
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -47,6 +48,34 @@ def _respond(call):
     return JSONResponse(body, status_code=status)
 
 
+MAX_AUDIO_BYTES = int(os.environ.get("AGENT_MAX_AUDIO_BYTES") or 25 * 1024 * 1024)
+
+
+def _read_audio(upload: UploadFile | None):
+    """(bytes, filename, mime) of an uploaded recording, or None. Larger than AGENT_MAX_AUDIO_BYTES -> 413."""
+    if not upload or not upload.filename:
+        return None
+    data = upload.file.read(MAX_AUDIO_BYTES + 1)
+    if len(data) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, f"The recording is larger than {MAX_AUDIO_BYTES // (1024 * 1024)} MB")
+    return data, upload.filename or "audio.webm", upload.content_type or ""
+
+
+@router.post("/projects/{project_id}/transcribe", dependencies=[Depends(check_member)])
+def transcribe_audio(project_id: str, audio: UploadFile = File(...)):
+    """Speech to text only (dictating a question to Ask SiteMate, or a note before it is sent). Nothing is stored."""
+    from app.capture.transcription import transcribe, transcription_enabled
+    recording = _read_audio(audio)
+    if recording is None:
+        raise HTTPException(422, "Send the recording in the `audio` field")
+    if not transcription_enabled():
+        raise HTTPException(503, "Speech-to-text is not configured (WHISPER_BASE_URL or OPENAI_API_KEY); type instead")
+    try:
+        return {"text": transcribe(*recording)}
+    except LLMError as exc:
+        raise HTTPException(502, f"Speech-to-text failed: {exc}") from None
+
+
 @router.post("/projects/{project_id}/captures")
 def create_capture(project_id: str, member=Depends(require_roles("contributor")), service: CaptureService = Depends(get_capture_service),
                    audio: UploadFile | None = File(None), images: list[UploadFile] = File(default_factory=list),
@@ -55,7 +84,7 @@ def create_capture(project_id: str, member=Depends(require_roles("contributor"))
     Replies 202 `needs_category` with one suggestion per event; the person confirms via /categories."""
     return _respond(lambda: service.start(
         project_id, member, text_=transcript,
-        audio=(audio.file.read(), audio.filename or "audio.webm", audio.content_type or "") if audio and audio.filename else None,
+        audio=_read_audio(audio),
         images=[(i.file.read(), i.filename or "photo", i.content_type or "") for i in images if i.filename],
         recorded_at=recorded_at, zone_hint=zone_hint))
 
@@ -76,6 +105,18 @@ class AddedEvent(BaseModel):
 class CategoriesBody(BaseModel):
     events: list[CategoryDecision] = Field(default_factory=list)
     added: list[AddedEvent] = Field(default_factory=list)
+
+
+class TranscriptBody(BaseModel):
+    text: str = Field(max_length=5000)
+
+
+@router.post("/projects/{project_id}/captures/{thread_id}/transcript")
+def provide_transcript(project_id: str, thread_id: str, body: TranscriptBody,
+                       member=Depends(require_roles("contributor")),
+                       service: CaptureService = Depends(get_capture_service)):
+    """Speech-to-text was unavailable (status needs_transcript): the speaker types what the recording said."""
+    return _respond(lambda: service.provide_transcript(project_id, member, thread_id, body.text))
 
 
 @router.post("/projects/{project_id}/captures/{thread_id}/categories")

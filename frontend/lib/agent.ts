@@ -84,6 +84,7 @@ export type AgentResult =
   | { status: "needs_category"; thread_id: string; capture_id: string; transcript: string | null; photo_descriptions: { n: number; passage: string }[]; events: CategorySuggestion[] }
   | { status: "needs_input"; thread_id: string; capture_id?: string; transcript: string | null; events: AgentEvent[]; questions: AgentQuestion[]; round: number }
   | { status: "needs_review"; thread_id: string; capture_id?: string; transcript: string | null; events: AgentEvent[]; facts: ReviewFact[]; gaps: ReviewGap[] }
+  | { status: "needs_transcript"; thread_id: string; capture_id: string; reason: string | null; message: string }
   | { status: "discarded" }
   | { status: "no_events"; capture_id?: string; transcript: string | null }
   | {
@@ -155,6 +156,10 @@ export const confirmCategories = (projectId: string, threadId: string, events: C
 
 export const answerQuestions = (projectId: string, threadId: string, answers: { id: string; answer: string }[]) =>
   postJson(`${base(projectId)}/${encodeURIComponent(threadId)}/answers`, { answers });
+
+/** Speech-to-text was unavailable: the speaker types what the recording said, and the capture continues. */
+export const provideTranscript = (projectId: string, threadId: string, text: string) =>
+  postJson(`${base(projectId)}/${encodeURIComponent(threadId)}/transcript`, { text });
 
 /** The speaker's last look before saving: corrected values, removed facts, or discard the whole note. */
 export const submitReview = (projectId: string, threadId: string, decision: ReviewDecision) =>

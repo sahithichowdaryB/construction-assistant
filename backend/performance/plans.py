@@ -1,7 +1,12 @@
-"""The project's reference plans (the PDFs in mock_data) and an agent-written summary of each.
+"""Each project's reference plans and an agent-written summary of each.
 
-Summaries are produced on demand by Claude reading the PDF itself, then cached on disk keyed by the file's SHA-256,
-so a plan is read once and re-reading is instant.
+Plans are scoped to one project:
+- the PDFs in mock_data belong to the project named by PLAN_FILES_PROJECT (default RIV), together with any file in
+  the legacy flat storage/uploaded_plans folder (uploads made before plans were scoped);
+- uploads go to storage/uploaded_plans/<project_id>/.
+
+Summaries are written on an explicit request (POST) by Claude reading the PDF itself, then cached on disk per project,
+keyed by the file's SHA-256, so a plan is read once and re-reading is instant.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ CACHE_DIR = STORAGE / "plan_summaries"
 UPLOAD_DIR = STORAGE / "uploaded_plans"
 PAGE_DIR = STORAGE / "plan_pages"
 PDF_LIMIT = 32 * 1024 * 1024
+REFERENCE_PROJECT = os.environ.get("PLAN_FILES_PROJECT", "RIV")
 
 SYSTEM = (
     "You summarise construction project plan documents for a busy site manager. Use plain, short sentences. "
@@ -49,30 +55,51 @@ def _title(path: Path) -> str:
     return re.sub(r"^Plan_(\d+)_", r"Plan \1: ", path.stem).replace("_", " ")
 
 
-def list_plans() -> list[dict]:
+def _safe(project_id: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", project_id or ""):
+        raise ValueError("Invalid project id")
+    return project_id
+
+
+def _upload_dir(project_id: str) -> Path:
+    return UPLOAD_DIR / _safe(project_id)
+
+
+def _cache_dir(project_id: str) -> Path:
+    return CACHE_DIR / _safe(project_id)
+
+
+def list_plans(project_id: str) -> list[dict]:
     out = []
-    for path in _files():
+    for path in _files(project_id):
         out.append({"id": _plan_id(path), "title": _title(path), "filename": path.name,
-                    "size_kb": round(path.stat().st_size / 1024), "summarised": _cached(path) is not None})
+                    "size_kb": round(path.stat().st_size / 1024),
+                    "summarised": _cached(project_id, path) is not None})
     return out
 
 
-def find_plan(plan_id: str) -> Path | None:
-    return next((p for p in _files() if _plan_id(p) == plan_id), None)
+def find_plan(project_id: str, plan_id: str) -> Path | None:
+    return next((p for p in _files(project_id) if _plan_id(p) == plan_id), None)
 
 
-def _files() -> list[Path]:
-    """The reference plans in mock_data, then any plans uploaded since."""
-    return sorted(PLAN_DIR.glob("*.pdf")) + sorted(UPLOAD_DIR.glob("*.pdf"))
+def _files(project_id: str) -> list[Path]:
+    """This project's plans: the reference plans (reference project only), then its uploads."""
+    _safe(project_id)
+    reference = []
+    if project_id == REFERENCE_PROJECT:
+        reference = sorted(PLAN_DIR.glob("*.pdf")) + sorted(UPLOAD_DIR.glob("*.pdf"))
+    return reference + sorted(_upload_dir(project_id).glob("*.pdf"))
 
 
-def save_upload(filename: str, data: bytes) -> Path:
+def save_upload(project_id: str, filename: str, data: bytes) -> Path:
     stem = re.sub(r"[^A-Za-z0-9]+", "_", Path(filename).stem).strip("_")[:60] or "Plan"
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    path = UPLOAD_DIR / f"{stem}.pdf"
+    folder = _upload_dir(project_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    taken = {_plan_id(p) for p in _files(project_id)}
+    path = folder / f"{stem}.pdf"
     n = 2
-    while path.exists() or any(_plan_id(p) == _plan_id(path) for p in PLAN_DIR.glob("*.pdf")):
-        path = UPLOAD_DIR / f"{stem}_{n}.pdf"
+    while path.exists() or _plan_id(path) in taken:
+        path = folder / f"{stem}_{n}.pdf"
         n += 1
     path.write_bytes(data)
     return path
@@ -98,18 +125,44 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _cached(path: Path) -> dict | None:
-    f = CACHE_DIR / f"{_plan_id(path)}.json"
-    try:
-        data = json.loads(f.read_text())
-    except (OSError, ValueError):
+def _read_cache(project_id: str, name: str) -> dict | None:
+    """A cached JSON file for this project. The reference project also reads the legacy flat cache folder."""
+    places = [_cache_dir(project_id) / name]
+    if project_id == REFERENCE_PROJECT:
+        places.append(CACHE_DIR / name)
+    for f in places:
+        try:
+            return json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _cached(project_id: str, path: Path) -> dict | None:
+    data = _read_cache(project_id, f"{_plan_id(path)}.json")
+    if data is None:
         return None
     return data if data.get("sha256") == _digest(path) and "key_pages" in data else None
 
 
-def summarise(path: Path, *, refresh: bool = False) -> dict:
+def cached_summary(project_id: str, plan_id: str) -> dict | None:
+    """The stored summary (one plan, or 'all'), or None when it has not been written yet or is out of date."""
+    if plan_id == "all":
+        hit = _read_cache(project_id, "all.json")
+        if hit is None:
+            return None
+        parts = [_cached(project_id, p) for p in _files(project_id)]
+        if any(p is None for p in parts):
+            return None
+        key = hashlib.sha256("".join(p["sha256"] for p in parts).encode()).hexdigest()
+        return hit if hit.get("key") == key else None
+    path = find_plan(project_id, plan_id)
+    return _cached(project_id, path) if path else None
+
+
+def summarise(project_id: str, path: Path, *, refresh: bool = False) -> dict:
     """Return the plan's summary, reading the PDF with Claude when no current cached copy exists."""
-    if not refresh and (hit := _cached(path)):
+    if not refresh and (hit := _cached(project_id, path)):
         return hit
     from documents.llm import complete_json
 
@@ -128,8 +181,8 @@ def summarise(path: Path, *, refresh: bool = False) -> dict:
     summary["key_pages"] = [k for k in summary.get("key_pages", []) if 1 <= k.get("page", 0) <= count][:4]
     result = {"id": _plan_id(path), "title": _title(path), "filename": path.name, "sha256": _digest(path),
               "model": model, **summary}
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    (CACHE_DIR / f"{_plan_id(path)}.json").write_text(json.dumps(result, indent=2))
+    _cache_dir(project_id).mkdir(parents=True, exist_ok=True)
+    (_cache_dir(project_id) / f"{_plan_id(path)}.json").write_text(json.dumps(result, indent=2))
     return result
 
 
@@ -154,23 +207,22 @@ ALL_SCHEMA = {
 }
 
 
-def summarise_all(*, refresh: bool = False) -> dict:
+def summarise_all(project_id: str, *, refresh: bool = False) -> dict:
     """One briefing over every plan. Builds on the per-plan summaries (reading any plan that has none yet)."""
     from concurrent.futures import ThreadPoolExecutor
 
     from documents.llm import complete_json
 
-    files = _files()
+    files = _files(project_id)
+    if not files:
+        raise ValueError("This project has no plans yet")
     with ThreadPoolExecutor(max_workers=4) as pool:
-        parts = list(pool.map(lambda p: summarise(p), files))
+        parts = list(pool.map(lambda p: summarise(project_id, p), files))
     key = hashlib.sha256("".join(p["sha256"] for p in parts).encode()).hexdigest()
-    cache = CACHE_DIR / "all.json"
-    try:
-        hit = json.loads(cache.read_text())
-        if not refresh and hit.get("key") == key:
-            return hit
-    except (OSError, ValueError):
-        pass
+    cache = _cache_dir(project_id) / "all.json"
+    hit = _read_cache(project_id, "all.json")
+    if not refresh and hit and hit.get("key") == key:
+        return hit
     material = "\n\n".join(
         f"PLAN id={p['id']} title={p['title']}\nOverview: {p['overview']}\nKey points: {'; '.join(p['key_points'])}\n"
         f"Key dates: {'; '.join(p['key_dates'])}\nWatch points: {'; '.join(p['watch_points'])}" for p in parts)
@@ -178,6 +230,6 @@ def summarise_all(*, refresh: bool = False) -> dict:
     titles = {p["id"]: p["title"] for p in parts}
     summary["plans"] = [{"id": x["id"], "title": titles[x["id"]], "role": x["role"]} for x in summary["plans"] if x["id"] in titles]
     result = {"id": "all", "title": "All plans", "filename": "", "key": key, "model": model, "key_pages": [], **summary}
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _cache_dir(project_id).mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(result, indent=2))
     return result

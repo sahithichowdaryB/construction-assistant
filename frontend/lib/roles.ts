@@ -31,12 +31,22 @@ export type Action =
   | "run_reasoning"
   | "act_on_alert"
   | "approve_action"
-  | "merge_incident";
+  | "merge_incident"
+  | "confirm_readings"
+  | "recompute"
+  | "review_ledger"
+  | "manage_baseline"
+  | "draft_report"
+  | "manage_appointments";
 
 const PERMISSIONS: Record<Role, Action[]> = {
   // Contributors capture and confirm categories; managers merge incidents and act on alerts; approvers approve actions.
-  foreman: ["capture", "confirm_capture", "upload"],
-  site_manager: ["upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning", "act_on_alert", "approve_action", "merge_incident"],
+  foreman: ["capture", "confirm_capture", "upload", "ask", "manage_appointments"],
+  site_manager: [
+    "upload", "dismiss_alert", "link_incident", "ask", "create_draft", "edit_draft", "submit_review", "run_reasoning",
+    "act_on_alert", "approve_action", "merge_incident", "confirm_readings", "recompute", "review_ledger",
+    "manage_baseline", "draft_report", "manage_appointments",
+  ],
   approver: ["ask", "approve", "request_changes", "export", "run_reasoning", "act_on_alert", "approve_action"],
 };
 
@@ -46,7 +56,7 @@ const WHO: Record<Action, string> = {
   upload: "the foreman or site manager",
   dismiss_alert: "the site manager",
   link_incident: "the site manager",
-  ask: "the site manager or approver",
+  ask: "a project member",
   create_draft: "the site manager",
   edit_draft: "the site manager",
   submit_review: "the site manager",
@@ -57,6 +67,12 @@ const WHO: Record<Action, string> = {
   act_on_alert: "the site manager or approver",
   approve_action: "the site manager or approver",
   merge_incident: "the site manager",
+  confirm_readings: "the site manager",
+  recompute: "the site manager",
+  review_ledger: "the site manager",
+  manage_baseline: "the site manager",
+  draft_report: "the site manager",
+  manage_appointments: "the foreman or site manager",
 };
 
 export function can(role: Role, action: Action): boolean {
