@@ -51,13 +51,20 @@ def _captured_media(project_id: str, key: str) -> Path | None:
             path = store.path(key)
         except ValueError:
             continue
-        if path.is_file():
+        if path.is_file() or mirror.fetch_to(_supabase_name(store, key), path):
             return path
     return None
 
 
 def _remote_name(project_id: str, path: Path) -> str:
     return f"uploads/{project_id}/{path.name}"
+
+
+def _supabase_name(store, key: str) -> str:
+    """Construct Supabase object name for captured media (voice or image)."""
+    if hasattr(store, 'remote') and store.remote:
+        return f"{store.remote}/{key}"
+    return f"uploads/{key}"
 
 
 def _capture_stores():
